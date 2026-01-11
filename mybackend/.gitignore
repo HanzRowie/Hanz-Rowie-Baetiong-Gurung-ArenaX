@@ -1,0 +1,51 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django migrations (optional: you might want to track initial migrations)
+*/migrations/*.pyc
+*/migrations/*.py[cod]
+*/migrations/__pycache__/
+
+# Environment variables
+.env
+*.env
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Database files
+db.sqlite3
+*.sqlite3
+
+# Logs
+*.log
+logs/
+*.out
+*.err
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Static/media files (if you collect them or have uploads)
+staticfiles/
+media/
+
+# Python test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Others
+*.bak
+*.swp

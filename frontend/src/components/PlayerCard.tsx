@@ -7,6 +7,9 @@ interface PlayerCardProps {
     full_name: string;
     gender?: string;
     profile_picture?: string;
+    country?: string;
+    date_of_birth?: string;
+    phone_number?: string;
   };
   profile: PlayerProfile | null;
   stats?: {
@@ -34,8 +37,41 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
     }
   };
 
-  const isFemale = (profile?.gender || user.gender) === 'FEMALE';
-  const isProfileComplete = profile?.birthDate && profile?.country && profile?.gender;
+  const calculateAge = (dateString?: string) => {
+    if (!dateString) return null;
+    try {
+      const birthDate = new Date(dateString);
+      if (isNaN(birthDate.getTime())) return null;
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    } catch {
+      return null;
+    }
+  };
+
+  // Use profile data first, then fallback to user data
+  const displayCountry = profile?.country || user.country;
+  const displayBirthDate = profile?.birthDate || user.date_of_birth;
+  const displayAge = profile?.age || calculateAge(displayBirthDate);
+  const displayGender = profile?.gender || user.gender;
+
+  const isFemale = displayGender === 'FEMALE';
+  const isProfileComplete = (profile?.birthDate || user.date_of_birth) && (profile?.country || user.country) && (profile?.gender || user.gender);
+
+  // Debug logging to help troubleshoot
+  console.log('PlayerCard data:', {
+    user,
+    profile,
+    displayCountry,
+    displayBirthDate,
+    displayAge,
+    displayGender
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
@@ -62,10 +98,10 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
             <h3 className="text-lg font-bold text-gray-900 truncate mb-1">
               {user.full_name || 'Complete Your Profile'}
             </h3>
-            {profile?.country ? (
+            {displayCountry ? (
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{profile.country}</span>
+                <span className="text-sm text-gray-600">{displayCountry}</span>
               </div>
             ) : (
               <span className="text-sm text-gray-400">Country not set</span>
@@ -87,7 +123,7 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
           <div className="flex items-center justify-between py-1">
             <span className="text-sm text-gray-600">Age</span>
             <span className="text-sm font-semibold text-gray-900">
-              {profile?.age ? `${profile.age}` : <span className="text-gray-400">Not set</span>}
+              {displayAge ? `${displayAge}` : <span className="text-gray-400">Not set</span>}
             </span>
           </div>
 
@@ -95,7 +131,7 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
           <div className="flex items-center justify-between py-1">
             <span className="text-sm text-gray-600">Birth</span>
             <span className="text-sm font-semibold text-gray-900">
-              {formatDate(profile?.birthDate) || <span className="text-gray-400">Not set</span>}
+              {formatDate(displayBirthDate) || <span className="text-gray-400">Not set</span>}
             </span>
           </div>
 
@@ -103,7 +139,7 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
           <div className="flex items-center justify-between py-1">
             <span className="text-sm text-gray-600">Sex</span>
             <span className="text-sm font-semibold text-gray-900">
-              {profile?.gender || user.gender || <span className="text-gray-400">Not specified</span>}
+              {displayGender || <span className="text-gray-400">Not specified</span>}
             </span>
           </div>
 

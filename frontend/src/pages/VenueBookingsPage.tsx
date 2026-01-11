@@ -75,8 +75,6 @@ const VenueBookingsPage: React.FC = () => {
     switch (status.toUpperCase()) {
       case 'CONFIRMED':
         return 'bg-green-100 text-green-800';
-      case 'CONFIRMED':
-        return 'bg-green-100 text-green-800';
       case 'PENDING':
         return 'bg-orange-100 text-orange-800';
       case 'REJECTED':

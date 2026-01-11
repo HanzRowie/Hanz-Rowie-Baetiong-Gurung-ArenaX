@@ -49,7 +49,7 @@ export interface VenueBooking {
   end_time: string;
   total_hours: number;
   total_cost: number;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'REJECTED';
   purpose: string;
   notes?: string;
   payment_status?: 'PENDING' | 'PAID' | 'REFUNDED';
