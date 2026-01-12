@@ -95,7 +95,6 @@ export const ROUTES = {
 export const USER_ROLES = {
   PLAYER: 'PLAYER',
   ORGANIZER: 'ORGANIZER',
-  REFEREE: 'REFEREE',
   VENUE_OWNER: 'VENUE_OWNER',
 } as const;
 

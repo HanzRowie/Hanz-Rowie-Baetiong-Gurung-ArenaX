@@ -402,7 +402,7 @@ def get_user_profile_data(user):
 
     elif user.role == 'REFEREE':
         # Referee-specific statistics
-        from referees.models import RefereeBooking
+        from tournaments.models import RefereeBooking
         total_bookings = RefereeBooking.objects.filter(referee=user).count()
         completed_bookings = RefereeBooking.objects.filter(
             referee=user,

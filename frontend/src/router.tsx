@@ -9,9 +9,6 @@ import {
   ResetPasswordPage,
   CreateTournamentPage,
   MyTournamentsPage,
-  RefereeAvailabilityPage,
-  RefereeBookingsPage,
-  RefereeSchedulePage,
   VenueListPage,
   VenueManagementPage,
   VenueBookingsPage,
@@ -116,19 +113,6 @@ export const router = createBrowserRouter([
       {
         path: 'account-settings',
         element: <AccountSettingsPage />,
-      },
-      // Referee routes
-      {
-        path: 'referee/availability',
-        element: <RefereeAvailabilityPage />,
-      },
-      {
-        path: 'referee/bookings',
-        element: <RefereeBookingsPage />,
-      },
-      {
-        path: 'referee/schedule',
-        element: <RefereeSchedulePage />,
       },
       // Venue routes
       {

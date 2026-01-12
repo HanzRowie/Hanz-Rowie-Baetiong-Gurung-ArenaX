@@ -193,8 +193,6 @@ export default function NotificationsPage() {
         return <UserPlus className="h-5 w-5 text-purple-600" />;
       case 'MESSAGE':
         return <MessageSquare className="h-5 w-5 text-indigo-600" />;
-      case 'REFEREE_BOOKING':
-        return <Users className="h-5 w-5 text-orange-600" />;
       case 'SYSTEM':
         return <AlertCircle className="h-5 w-5 text-red-600" />;
       default:
