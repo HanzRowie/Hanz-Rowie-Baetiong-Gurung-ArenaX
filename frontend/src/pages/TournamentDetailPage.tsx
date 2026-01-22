@@ -235,7 +235,10 @@ export default function TournamentDetailPage() {
                   Edit
                 </button>
                 
-                <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100">
+                <button 
+                  onClick={() => navigate(`/tournaments/${tournament.id}/manage`)}
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+                >
                   <Settings className="h-4 w-4" />
                   Manage
                 </button>
@@ -510,7 +513,10 @@ export default function TournamentDetailPage() {
 
                             <div className="flex items-center gap-2">
                               {user?.role === 'PLAYER' && player.id !== user.id && (
-                                <button className="flex items-center gap-2 px-3 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors">
+                                <button 
+                                  onClick={() => navigate('/chats', { state: { startChatWith: player.id } })}
+                                  className="flex items-center gap-2 px-3 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors"
+                                >
                                   <MessageCircle className="h-4 w-4" />
                                   Message
                                 </button>

@@ -5,6 +5,7 @@ import { tournamentService } from '@/services/tournamentService';
 import { venueService, type Venue } from '@/services/venueService';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
+import TimePicker from '@/components/TimePicker';
 
 export default function CreateTournamentPage() {
   const navigate = useNavigate();
@@ -38,8 +39,8 @@ export default function CreateTournamentPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const sportTypes = [
-    'Futsal',
-    'Badminton',
+    'FUTSAL',
+    'BADMINTON',
   ];
 
   const tournamentTypes = [
@@ -69,6 +70,17 @@ export default function CreateTournamentPage() {
   // Load available venues when date, time, or sport changes
   useEffect(() => {
     const loadAvailableVenues = async () => {
+      console.log('Loading venues with params:', {
+        date: formData.date,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
+        sport_type: formData.sport_type,
+        useCustomVenue,
+        dateCheck: !!formData.date,
+        startTimeCheck: !!formData.start_time,
+        customVenueCheck: !useCustomVenue
+      });
+      
       if (formData.date && formData.start_time && !useCustomVenue) {
         setLoadingVenues(true);
         try {
@@ -79,6 +91,7 @@ export default function CreateTournamentPage() {
             end_time: endTime,
             sport_type: formData.sport_type || undefined
           });
+          console.log('Venues loaded:', response);
           setAvailableVenues(response.venues);
         } catch (error) {
           console.error('Error loading available venues:', error);
@@ -87,6 +100,15 @@ export default function CreateTournamentPage() {
           setLoadingVenues(false);
         }
       } else {
+        console.log('Not loading venues - missing required fields or using custom venue');
+        console.log('Detailed checks:', {
+          'formData.date exists': !!formData.date,
+          'formData.date value': formData.date,
+          'formData.start_time exists': !!formData.start_time, 
+          'formData.start_time value': formData.start_time,
+          'useCustomVenue': useCustomVenue,
+          'condition result': !!(formData.date && formData.start_time && !useCustomVenue)
+        });
         setAvailableVenues([]);
       }
     };
@@ -359,38 +381,34 @@ export default function CreateTournamentPage() {
               </div>
 
               <div>
-                <label htmlFor="start_time" className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Start Time <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="time"
-                    id="start_time"
-                    value={formData.start_time}
-                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
+                <TimePicker
+                  value={formData.start_time}
+                  onChange={(value) => {
+                    console.log('Start time changed:', value);
+                    setFormData({ ...formData, start_time: value });
+                  }}
+                  placeholder="Select start time"
+                  required
+                  disabled={isLoading}
+                />
               </div>
 
               <div>
-                <label htmlFor="end_time" className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   End Time (Optional)
                 </label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="time"
-                    id="end_time"
-                    value={formData.end_time}
-                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
-                    disabled={isLoading}
-                  />
-                </div>
+                <TimePicker
+                  value={formData.end_time}
+                  onChange={(value) => {
+                    console.log('End time changed:', value);
+                    setFormData({ ...formData, end_time: value });
+                  }}
+                  placeholder="Select end time"
+                  disabled={isLoading}
+                />
               </div>
             </div>
 

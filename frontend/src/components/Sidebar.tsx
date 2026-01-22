@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -21,13 +21,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         icon: Home,
         path: '/dashboard',
         active: location.pathname === '/dashboard',
-      },
-      {
-        id: 'chats',
-        label: 'Chats',
-        icon: MessageCircle,
-        path: '/chats',
-        active: location.pathname === '/chats',
       },
       {
         id: 'profile',
@@ -55,8 +48,106 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           path: '/venue-bookings',
           active: location.pathname.startsWith('/venue-bookings'),
         },
-        commonItems[1], // Chats
-        commonItems[2], // Profile
+        commonItems[1], // Profile
+      ];
+    }
+
+    if (user?.role === UserRole.REFEREE) {
+      return [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: Home,
+          path: '/referee/dashboard',
+          active: location.pathname === '/referee/dashboard' || location.pathname === '/dashboard',
+        },
+        {
+          id: 'management',
+          label: 'Assignments',
+          icon: Gavel,
+          path: '/referee/management',
+          active: location.pathname.startsWith('/referee/management') || location.pathname.startsWith('/referee/bookings'),
+        },
+        {
+          id: 'availability',
+          label: 'Availability',
+          icon: Calendar,
+          path: '/referee/availability',
+          active: location.pathname.startsWith('/referee/availability'),
+        },
+        commonItems[1], // Profile
+      ];
+    }
+
+    // Navigation for ORGANIZER role
+    if (user?.role === UserRole.ORGANIZER) {
+      return [
+        commonItems[0], // Dashboard
+        {
+          id: 'tournaments',
+          label: 'Tournaments',
+          icon: Trophy,
+          path: '/tournaments',
+          active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
+        },
+        {
+          id: 'my-tournaments',
+          label: 'My Tournaments',
+          icon: Settings,
+          path: '/my-tournaments',
+          active: location.pathname === '/my-tournaments',
+        },
+        {
+          id: 'venues',
+          label: 'Find Venues',
+          icon: Building2,
+          path: '/venues',
+          active: location.pathname.startsWith('/venues') && !location.pathname.includes('/management'),
+        },
+        commonItems[1], // Profile
+      ];
+    }
+
+    // Navigation for PLAYER role
+    if (user?.role === UserRole.PLAYER) {
+      return [
+        commonItems[0], // Dashboard
+        {
+          id: 'tournaments',
+          label: 'Tournaments',
+          icon: Trophy,
+          path: '/tournaments',
+          active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
+        },
+        {
+          id: 'venues',
+          label: 'Find Venues',
+          icon: Building2,
+          path: '/venues',
+          active: location.pathname.startsWith('/venues') && !location.pathname.includes('/management'),
+        },
+        {
+          id: 'find',
+          label: 'Find Players',
+          icon: Search,
+          path: '/player-finder',
+          active: location.pathname === '/player-finder',
+        },
+        {
+          id: 'connections',
+          label: 'My Connections',
+          icon: Users,
+          path: '/player-connections',
+          active: location.pathname === '/player-connections',
+        },
+        {
+          id: 'chats',
+          label: 'Chats',
+          icon: MessageCircle,
+          path: '/chats',
+          active: location.pathname === '/chats',
+        },
+        commonItems[1], // Profile
       ];
     }
 
@@ -91,8 +182,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         path: '/player-connections',
         active: location.pathname === '/player-connections',
       },
-      commonItems[1], // Chats
-      commonItems[2], // Profile
+      {
+        id: 'chats',
+        label: 'Chats',
+        icon: MessageCircle,
+        path: '/chats',
+        active: location.pathname === '/chats',
+      },
+      commonItems[1], // Profile
     ];
   };
 

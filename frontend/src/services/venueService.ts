@@ -310,7 +310,11 @@ class VenueService {
       searchParams.append('sport_type', params.sport_type);
     }
 
-    const response = await api.get(`/api/available-venues/?${searchParams.toString()}`);
+    console.log('Making venue request with params:', params);
+    console.log('URL:', `/api/venues/available-venues/?${searchParams.toString()}`);
+
+    const response = await api.get(`/api/venues/available-venues/?${searchParams.toString()}`);
+    console.log('Venue response:', response.data);
     return response.data;
   }
 }

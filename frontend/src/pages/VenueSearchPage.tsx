@@ -44,7 +44,18 @@ export default function VenueSearchPage() {
       console.log('Loading venues with filters:', filters);
       const response = await venueService.getVenues(filters);
       console.log('Venues API response:', response);
-      setVenues(response.venues || []); // Handle the nested structure
+      
+      // Handle different response structures
+      if (Array.isArray(response)) {
+        setVenues(response);
+      } else if (response && Array.isArray(response.venues)) {
+        setVenues(response.venues);
+      } else if (response && Array.isArray(response.data)) {
+        setVenues(response.data);
+      } else {
+        console.warn('Unexpected venues response structure:', response);
+        setVenues([]);
+      }
     } catch (error) {
       console.error('Error loading venues:', error);
       toastService.error('Failed to load venues');
@@ -70,11 +81,11 @@ export default function VenueSearchPage() {
     );
   };
 
-  const filteredVenues = (venues || []).filter(venue =>
-    venue.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    venue.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredVenues = Array.isArray(venues) ? venues.filter(venue =>
+    venue.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    venue.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     venue.sport_types?.some((sport: string) => sport.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ) : [];
 
   if (loading) {
     return <DashboardSkeleton />;

@@ -42,16 +42,16 @@ class VenueAvailabilityAdmin(admin.ModelAdmin):
 
 @admin.register(VenueBooking)
 class VenueBookingAdmin(admin.ModelAdmin):
-    list_display = ('user', 'venue', 'date', 'start_time', 'end_time', 'status', 'payment_status', 'amount')
+    list_display = ('user', 'venue', 'date', 'start_time', 'end_time', 'purpose', 'status', 'payment_status', 'amount')
     list_filter = ('status', 'payment_status', 'date', 'venue__sport_type')
-    search_fields = ('user__full_name', 'user__email', 'venue__name', 'venue__location')
+    search_fields = ('user__full_name', 'user__email', 'venue__name', 'venue__location', 'purpose')
     readonly_fields = ('created_at',)
     ordering = ('-created_at',)
     date_hierarchy = 'date'
 
     fieldsets = (
         ('Booking Details', {
-            'fields': ('venue', 'user', 'date', 'start_time', 'end_time')
+            'fields': ('venue', 'user', 'date', 'start_time', 'end_time', 'purpose')
         }),
         ('Status & Payment', {
             'fields': ('status', 'payment_status', 'amount')

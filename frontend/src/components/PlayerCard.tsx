@@ -54,14 +54,30 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
     }
   };
 
-  // Use profile data first, then fallback to user data
-  const displayCountry = profile?.country || user.country;
-  const displayBirthDate = profile?.birthDate || user.date_of_birth;
-  const displayAge = profile?.age || calculateAge(displayBirthDate);
-  const displayGender = profile?.gender || user.gender;
+  // Format gender for display
+  const formatGender = (gender?: string) => {
+    if (!gender) return null;
+    switch (gender.toUpperCase()) {
+      case 'MALE':
+        return 'Male';
+      case 'FEMALE':
+        return 'Female';
+      case 'OTHER':
+        return 'Other';
+      default:
+        return gender;
+    }
+  };
 
-  const isFemale = displayGender === 'FEMALE';
-  const isProfileComplete = (profile?.birthDate || user.date_of_birth) && (profile?.country || user.country) && (profile?.gender || user.gender);
+  // Use user data first (from Redux auth store which gets updated), then fallback to profile data
+  // This ensures we always show the most up-to-date information after profile updates
+  const displayCountry = user.country || profile?.country;
+  const displayBirthDate = user.date_of_birth || profile?.birthDate;
+  const displayAge = calculateAge(displayBirthDate) || profile?.age;
+  const displayGender = formatGender(user.gender || profile?.gender);
+
+  const isFemale = (user.gender || profile?.gender) === 'FEMALE';
+  const isProfileComplete = displayBirthDate && displayCountry && (user.gender || profile?.gender);
 
   // Debug logging to help troubleshoot
   console.log('PlayerCard data:', {
@@ -70,7 +86,14 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
     displayCountry,
     displayBirthDate,
     displayAge,
-    displayGender
+    displayGender,
+    rawUserGender: user.gender,
+    rawUserDOB: user.date_of_birth,
+    rawUserCountry: user.country,
+    profileGender: profile?.gender,
+    profileBirthDate: profile?.birthDate,
+    profileCountry: profile?.country,
+    isProfileComplete
   });
 
   return (
@@ -137,7 +160,7 @@ export default function PlayerCard({ user, profile, stats }: PlayerCardProps) {
 
           {/* Gender */}
           <div className="flex items-center justify-between py-1">
-            <span className="text-sm text-gray-600">Sex</span>
+            <span className="text-sm text-gray-600">Gender</span>
             <span className="text-sm font-semibold text-gray-900">
               {displayGender || <span className="text-gray-400">Not specified</span>}
             </span>

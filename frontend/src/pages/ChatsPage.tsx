@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
   Search, MessageCircle, User, Send, ArrowLeft, Archive,
   MoreVertical, Trash2, Paperclip,
@@ -15,6 +15,7 @@ export default function ChatsPage() {
   const { user } = useAuth();
   const location = useLocation();
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [view, setView] = useState<'conversations' | 'chat' | 'archived'>('conversations');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([]);
@@ -471,6 +472,28 @@ export default function ChatsPage() {
   );
 
   if (!user) return null;
+
+  // Only allow players to access chat
+  if (user.role !== 'PLAYER') {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
+        <div className="text-center">
+          <MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Chat Not Available</h2>
+          <p className="text-gray-600 mb-4">
+            Chat functionality is only available for players.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+        <BottomNavigation />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">

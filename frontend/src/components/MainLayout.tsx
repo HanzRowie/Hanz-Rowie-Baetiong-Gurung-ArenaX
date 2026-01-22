@@ -54,6 +54,52 @@ export default function MainLayout() {
     if (user?.role === UserRole.VENUE_OWNER) {
       return (
         <>
+          {/* Settings Icon */}
+          <button 
+            onClick={() => navigate('/profile')}
+            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        </>
+      );
+    }
+
+    if (user?.role === UserRole.REFEREE) {
+      return (
+        <>
+          {/* Settings Icon */}
+          <button 
+            onClick={() => navigate('/profile')}
+            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        </>
+      );
+    }
+
+    if (user?.role === UserRole.ORGANIZER) {
+      return (
+        <>
+          {/* Settings Icon */}
+          <button 
+            onClick={() => navigate('/profile')}
+            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
+        </>
+      );
+    }
+
+    // Player role - includes chat and search
+    if (user?.role === UserRole.PLAYER) {
+      return (
+        <>
           {/* Chat Icon */}
           <button 
             onClick={() => navigate('/chats')}
@@ -61,6 +107,15 @@ export default function MainLayout() {
             title="Chats"
           >
             <MessageCircle className="h-5 w-5" />
+          </button>
+          
+          {/* Search Icon */}
+          <button 
+            onClick={() => navigate('/player-finder')}
+            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            title="Find Players"
+          >
+            <Search className="h-5 w-5" />
           </button>
           
           {/* Settings Icon */}
@@ -75,27 +130,9 @@ export default function MainLayout() {
       );
     }
 
-    // Default actions for other roles
+    // Default fallback - minimal actions
     return (
       <>
-        {/* Chat Icon */}
-        <button 
-          onClick={() => navigate('/chats')}
-          className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-          title="Chats"
-        >
-          <MessageCircle className="h-5 w-5" />
-        </button>
-        
-        {/* Search Icon */}
-        <button 
-          onClick={() => navigate('/players')}
-          className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-          title="Find Players"
-        >
-          <Search className="h-5 w-5" />
-        </button>
-        
         {/* Settings Icon */}
         <button 
           onClick={() => navigate('/profile')}
@@ -134,15 +171,17 @@ export default function MainLayout() {
               <div className="hidden md:flex items-center space-x-2">
                 {getHeaderActions()}
                 
-                {/* Notifications */}
-                <button 
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors relative"
-                  title="Notifications"
-                >
-                  <Bell className="h-5 w-5" />
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-                </button>
+                {/* Notifications - Only for players and organizers */}
+                {(user?.role === UserRole.PLAYER || user?.role === UserRole.ORGANIZER) && (
+                  <button 
+                    onClick={() => setNotificationsOpen(!notificationsOpen)}
+                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors relative"
+                    title="Notifications"
+                  >
+                    <Bell className="h-5 w-5" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
+                  </button>
+                )}
                 
                 {/* Profile */}
                 <button

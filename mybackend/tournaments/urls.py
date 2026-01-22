@@ -10,14 +10,17 @@ router.register(r'referee-bookings', views.RefereeBookingViewSet)
 
 # URL patterns for tournaments app
 urlpatterns = [
-    # Specific patterns first (before router)
-    path('tournaments/my/', views.my_tournaments, name='my_tournaments'),
-    path('tournaments/my', views.my_tournaments, name='my_tournaments_no_slash'),  # Without trailing slash
-    path('tournaments/create/', views.create_tournament, name='create_tournament'),
-    path('tournaments/<uuid:tournament_id>/register/', views.register_for_tournament, name='register_tournament'),
-    path('tournaments/<uuid:tournament_id>/withdraw/', views.withdraw_from_tournament, name='withdraw_tournament'),
-    path('my/', views.my_tournaments, name='my_tournaments_short'),  # Alternative shorter URL
-    path('my', views.my_tournaments, name='my_tournaments_short_no_slash'),  # Alternative shorter URL without slash
+    # Specific patterns first (before router) - these must come before any router patterns
+    path('create/', views.create_tournament, name='create_tournament'),
+    path('my/', views.my_tournaments, name='my_tournaments'),
+    path('my', views.my_tournaments, name='my_tournaments_no_slash'),  # Without trailing slash
+    path('<uuid:tournament_id>/register/', views.register_for_tournament, name='register_tournament'),
+    path('<uuid:tournament_id>/withdraw/', views.withdraw_from_tournament, name='withdraw_tournament'),
+    path('<uuid:tournament_id>/participants/', views.tournament_participants, name='tournament_participants'),
+    path('<uuid:tournament_id>/referees/', views.tournament_referees, name='tournament_referees'),
+    path('<uuid:tournament_id>/participants/<uuid:participant_id>/', views.remove_tournament_participant, name='remove_tournament_participant'),
+    path('<uuid:tournament_id>/referees/<uuid:referee_id>/', views.remove_tournament_referee, name='remove_tournament_referee'),
+    
     # Router patterns last
     path('', include(router.urls)),
 ]

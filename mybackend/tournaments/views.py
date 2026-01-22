@@ -7,8 +7,10 @@ from accounts.decorators import jwt_required
 from accounts.models import CustomUser
 from accounts.utils import decode_jwt
 
-from .models import Tournament, TournamentRegistration, Match, RefereeBooking
-from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer, RefereeBookingSerializer
+from .models import Tournament, TournamentRegistration, Match
+from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer
+from referees.models import RefereeBooking
+from referees.serializers import RefereeBookingSerializer
 
 class TournamentViewSet(viewsets.ModelViewSet):
     queryset = Tournament.objects.all().order_by('-created_at')
@@ -272,3 +274,92 @@ class RefereeBookingViewSet(viewsets.ModelViewSet):
         elif self.request.user.role == 'ORGANIZER':
             return RefereeBooking.objects.filter(requested_by=self.request.user)
         return RefereeBooking.objects.none()
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tournament_participants(request, tournament_id):
+    """Get participants for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can view participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    registrations = TournamentRegistration.objects.filter(tournament=tournament).select_related('player')
+    participants = []
+    
+    for registration in registrations:
+        participants.append({
+            'id': str(registration.id),
+            'user': {
+                'id': str(registration.player.id),
+                'full_name': registration.player.full_name,
+                'email': registration.player.email
+            },
+            'registration_date': registration.created_at,
+            'payment_status': 'paid'  # Simplified for now
+        })
+    
+    return Response(participants, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tournament_referees(request, tournament_id):
+    """Get referee assignments for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can view referee assignments'}, status=status.HTTP_403_FORBIDDEN)
+    
+    referee_bookings = RefereeBooking.objects.filter(tournament=tournament).select_related('referee')
+    referees = []
+    
+    for booking in referee_bookings:
+        referees.append({
+            'id': str(booking.id),
+            'referee': {
+                'id': str(booking.referee.id),
+                'full_name': booking.referee.full_name,
+                'email': booking.referee.email
+            },
+            'match_date': booking.match_date,
+            'fee': float(booking.fee) if booking.fee else 0.0,
+            'status': booking.status
+        })
+    
+    return Response(referees, status=status.HTTP_200_OK)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def remove_tournament_participant(request, tournament_id, participant_id):
+    """Remove a participant from a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can remove participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
+        registration.delete()
+        return Response({'message': 'Participant removed successfully'}, status=status.HTTP_200_OK)
+    except TournamentRegistration.DoesNotExist:
+        return Response({'error': 'Participant not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def remove_tournament_referee(request, tournament_id, referee_id):
+    """Remove a referee assignment from a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can remove referee assignments'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        referee_booking = RefereeBooking.objects.get(id=referee_id, tournament=tournament)
+        referee_booking.delete()
+        return Response({'message': 'Referee assignment removed successfully'}, status=status.HTTP_200_OK)
+    except RefereeBooking.DoesNotExist:
+        return Response({'error': 'Referee assignment not found'}, status=status.HTTP_404_NOT_FOUND)

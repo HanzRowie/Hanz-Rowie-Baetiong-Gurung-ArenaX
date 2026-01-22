@@ -79,6 +79,24 @@ export const roleColors = {
     900: '#581c87',
     950: '#3b0764',
   },
+  referee: {
+    primary: '#f59e0b',    // Amber for authority
+    secondary: '#fbbf24',
+    accent: '#fcd34d',
+    light: '#fef3c7',
+    dark: '#d97706',
+    50: '#fffbeb',
+    100: '#fef3c7',
+    200: '#fde68a',
+    300: '#fcd34d',
+    400: '#fbbf24',
+    500: '#f59e0b',
+    600: '#d97706',
+    700: '#b45309',
+    800: '#92400e',
+    900: '#78350f',
+    950: '#451a03',
+  },
   venue_owner: {
     primary: '#ef4444',    // Red for business
     secondary: '#f87171',

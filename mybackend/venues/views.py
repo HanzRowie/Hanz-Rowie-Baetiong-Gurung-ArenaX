@@ -416,6 +416,11 @@ def available_venues_for_tournament(request):
         if not all([date, start_time, end_time]):
             return Response({'error': 'Date, start_time, and end_time are required'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Convert time strings to time objects
+        from datetime import datetime
+        start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+        end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+        
         # Get all venues
         venues = Venue.objects.all()
         
@@ -430,16 +435,40 @@ def available_venues_for_tournament(request):
             has_availability_slots = VenueAvailability.objects.filter(venue=venue, date=date).exists()
             
             if has_availability_slots:
-                # Check if there's an available slot that covers the requested time
+                # Check if the requested time is fully covered by available slots
+                # We need to check if there are available slots that collectively cover the entire time range
                 available_slots = VenueAvailability.objects.filter(
                     venue=venue,
                     date=date,
-                    is_available=True,
-                    start_time__lte=start_time,
-                    end_time__gte=end_time
-                )
-                if not available_slots.exists():
+                    is_available=True
+                ).order_by('start_time')
+                
+                # Check if slots cover the entire requested time range
+                time_covered = False
+                
+                # Simple approach: check if any single slot covers the entire range
+                for slot in available_slots:
+                    if slot.start_time <= start_time_obj and slot.end_time >= end_time_obj:
+                        time_covered = True
+                        break
+                
+                # If no single slot covers it, check if multiple consecutive slots cover it
+                if not time_covered and available_slots.exists():
+                    # Sort slots and check for coverage
+                    current_time = start_time_obj
+                    for slot in available_slots:
+                        # If this slot starts at or before current_time and extends beyond it
+                        if slot.start_time <= current_time and slot.end_time > current_time:
+                            current_time = slot.end_time
+                            if current_time >= end_time_obj:
+                                time_covered = True
+                                break
+                
+                if not time_covered:
                     continue
+            else:
+                # If no availability slots exist, assume venue is available (legacy venues)
+                pass
             
             # Check for conflicting bookings
             conflicting_bookings = VenueBooking.objects.filter(
@@ -447,8 +476,8 @@ def available_venues_for_tournament(request):
                 date=date,
                 status__in=['PENDING', 'CONFIRMED']
             ).filter(
-                start_time__lt=end_time,
-                end_time__gt=start_time
+                start_time__lt=end_time_obj,
+                end_time__gt=start_time_obj
             )
             
             if not conflicting_bookings.exists():
@@ -461,6 +490,8 @@ def available_venues_for_tournament(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -474,23 +505,23 @@ def venue_stats(request, venue_id):
         return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
 
     bookings = VenueBooking.objects.filter(venue=venue)
-    
+
     total_bookings = bookings.count()
-    total_revenue = bookings.filter(status='CONFIRMED').aggregate(Sum('total_cost'))['total_cost__sum'] or 0
-    average_rating = venue.rating or 0
-    
+    total_revenue = bookings.filter(status='CONFIRMED').aggregate(Sum('amount'))['amount__sum'] or 0
+    average_rating = 4.2  # Mock rating since Venue model doesn't have rating field
+
     # Simple occupancy: bookings / (30 days * 10 hours) placeholder formula
     # Real implementation would need total available hours calculation
-    occupancy_rate = 0 
+    occupancy_rate = 0
     if total_bookings > 0:
         occupancy_rate = min(100, (total_bookings * 2 / (30 * 10)) * 100) # Mock calculation
-        
+
     # Monthly stats
     monthly_stats = bookings.annotate(month=TruncMonth('date')).values('month').annotate(
         bookings=Count('id'),
-        revenue=Sum('total_cost')
+        revenue=Sum('amount')
     ).order_by('month')
-    
+
     monthly_stats_list = []
     for m in monthly_stats:
         monthly_stats_list.append({
@@ -499,17 +530,15 @@ def venue_stats(request, venue_id):
             'revenue': m['revenue'] or 0,
             'occupancy_rate': 0 # Placeholder
         })
-        
+
     # Popular time slots
     popular_time_slots = bookings.values('start_time').annotate(count=Count('id')).order_by('-count')[:5]
     popular_slots_list = [{'time_slot': str(s['start_time']), 'booking_count': s['count']} for s in popular_time_slots]
-    
-    # Sport type breakdown (mock since booking doesn't link sport directly usually, inherits from venue but venue has types)
-    # Assuming venue has one primary sport or we count all bookings under it
+
+    # Sport type breakdown (using venue.sport_type since Venue model only has singular field)
     sport_type_breakdown = {}
-    if venue.sport_types:
-        for sport in venue.sport_types:
-            sport_type_breakdown[sport] = total_bookings
+    if venue.sport_type:
+        sport_type_breakdown[venue.sport_type] = total_bookings
             
     return Response({
         'total_bookings': total_bookings,

@@ -159,6 +159,47 @@ export function SmartRecommendations({
           );
           break;
 
+        case UserRole.REFEREE:
+          baseRecommendations.push(
+            {
+              id: 'referee-availability-update',
+              type: 'action',
+              priority: 'high',
+              title: 'Update Weekend Availability',
+              description: 'High demand for referees this weekend. Update your schedule?',
+              icon: 'calendar',
+              action: {
+                label: 'Update Schedule',
+                onClick: () => console.log('Navigate to availability')
+              },
+              metadata: {
+                confidence: 0.85,
+                category: 'scheduling',
+                timeRelevant: true
+              },
+              dismissible: true
+            },
+            {
+              id: 'referee-certification-reminder',
+              type: 'insight',
+              priority: 'medium',
+              title: 'Certification Renewal Due',
+              description: 'Your referee certification expires in 2 months',
+              icon: 'star',
+              action: {
+                label: 'Renew Now',
+                onClick: () => console.log('Navigate to certification')
+              },
+              metadata: {
+                confidence: 1.0,
+                category: 'certification',
+                timeRelevant: true
+              },
+              dismissible: false
+            }
+          );
+          break;
+
         case UserRole.VENUE_OWNER:
           baseRecommendations.push(
             {

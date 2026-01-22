@@ -9,6 +9,9 @@ import {
   ResetPasswordPage,
   CreateTournamentPage,
   MyTournamentsPage,
+  RefereeAvailabilityPage,
+  RefereeBookingsPage,
+  RefereeSchedulePage,
   VenueListPage,
   VenueManagementPage,
   VenueBookingsPage,
@@ -16,10 +19,14 @@ import {
   EditVenuePage,
   VenueDetailsPage,
   NotificationsPage,
-  GlobalSearchPage
+  GlobalSearchPage,
+  TournamentManagementPage
 } from './pages';
 import TournamentsPage from './pages/TournamentsPage';
 import TournamentDetailPage from './pages/TournamentDetailPage';
+import RefereeSelectionPage from './pages/RefereeSelectionPage';
+import RefereeDashboardPage from './pages/RefereeDashboardPage';
+import RefereeManagementPage from './pages/RefereeManagementPage';
 import ProfilePage from './pages/ProfilePage';
 import PlayersPage from './pages/PlayersPage';
 import ChatsPage from './pages/ChatsPage';
@@ -85,6 +92,10 @@ export const router = createBrowserRouter([
         element: <TournamentDetailPage />,
       },
       {
+        path: 'tournaments/:tournamentId/manage',
+        element: <TournamentManagementPage />,
+      },
+      {
         path: 'my-tournaments',
         element: <MyTournamentsPage />,
       },
@@ -113,6 +124,31 @@ export const router = createBrowserRouter([
       {
         path: 'account-settings',
         element: <AccountSettingsPage />,
+      },
+      // Referee routes
+      {
+        path: 'referee/dashboard',
+        element: <RefereeDashboardPage />,
+      },
+      {
+        path: 'referee/management',
+        element: <RefereeManagementPage />,
+      },
+      {
+        path: 'referee/availability',
+        element: <RefereeAvailabilityPage />,
+      },
+      {
+        path: 'referee/bookings',
+        element: <RefereeBookingsPage />,
+      },
+      {
+        path: 'referee/schedule',
+        element: <RefereeSchedulePage />,
+      },
+      {
+        path: 'tournaments/:tournamentId/select-referee',
+        element: <RefereeSelectionPage />,
       },
       // Venue routes
       {

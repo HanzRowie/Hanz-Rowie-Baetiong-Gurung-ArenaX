@@ -18,11 +18,13 @@ urlpatterns = [
     path('api/', api_home),
 
     # Include URLs from all apps
-    path('api/', include('accounts.urls')),
-    path('api/', include('tournaments.urls')),
-    path('api/', include('chat.urls')),
-    path('api/', include('organizers.urls')),
-    path('api/', include('venues.urls')),
+    path('api/accounts/', include('accounts.urls')),
+    path('api/tournaments/', include('tournaments.urls')),
+    path('api/chat/', include('chat.urls')),
+    path('api/organizers/', include('organizers.urls')),
+    path('api/referees/', include('referees.urls')),
+    path('api/venues/', include('venues.urls')),
+    path('api/payments/', include('payments.urls')),
 ]
 
 # Serve media files in development

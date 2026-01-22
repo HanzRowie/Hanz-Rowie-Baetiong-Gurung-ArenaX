@@ -176,6 +176,24 @@ export default function LandingPage() {
                   </div>
                 </div>
 
+                {/* Hire Referees */}
+                <div className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow group cursor-pointer">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-shrink-0">
+                        <svg className="w-8 h-8 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 01 3.138-3.138z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        Hire Referees
+                      </h3>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -210,7 +228,7 @@ export default function LandingPage() {
                       Create Your Account
                     </h3>
                     <p className="text-gray-600 leading-relaxed">
-                      Sign up in seconds and choose your role - player, organizer, or venue owner.
+                      Sign up in seconds and choose your role - player, organizer, venue owner, or referee.
                     </p>
                   </div>
                 </div>
@@ -227,7 +245,7 @@ export default function LandingPage() {
                       Browse & Discover
                     </h3>
                     <p className="text-gray-600 leading-relaxed">
-                      Explore tournaments, venues, and players. Find exactly what you need with smart filters.
+                      Explore tournaments, venues, players, and referees. Find exactly what you need with smart filters.
                     </p>
                   </div>
                 </div>

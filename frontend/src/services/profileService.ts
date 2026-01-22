@@ -54,7 +54,7 @@ export interface JoinRequestResponse {
 
 class ProfileService {
   async getUserProfile(userId?: string): Promise<{ profile: ExtendedUserProfile }> {
-    const url = userId ? `/api/users/profile/${userId}` : API_ENDPOINTS.USERS.ME;
+    const url = userId ? `/api/accounts/users/profile/${userId}` : API_ENDPOINTS.USERS.ME;
     const response = await api.get(url);
 
     // Backend consistently returns { profile: profile_data } for all cases
@@ -76,7 +76,7 @@ class ProfileService {
       }
     });
 
-    const response = await api.put('/api/users/profile', formData, {
+    const response = await api.put(API_ENDPOINTS.USERS.PROFILE_UPDATE, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -98,28 +98,40 @@ class ProfileService {
   }
 
   async getUserMatches(): Promise<{ matches: Match[]; count: number }> {
-    const response = await api.get('/api/users/matches');
-    return response.data;
+    // Note: This endpoint may not be implemented in backend yet
+    try {
+      const response = await api.get('/api/accounts/users/matches/');
+      return response.data;
+    } catch (error) {
+      console.warn('User matches endpoint not implemented');
+      return { matches: [], count: 0 };
+    }
   }
 
   async sendJoinRequest(userId: string): Promise<{ message: string; request: JoinRequest }> {
-    const response = await api.post(`/api/users/${userId}/send-request`);
+    const response = await api.post(`/api/accounts/users/${userId}/send-request/`);
     return response.data;
   }
 
   async respondJoinRequest(requestId: string, action: 'accept' | 'decline'): Promise<{ message: string; request: { id: string; status: string } }> {
-    const response = await api.put(`/api/join-requests/${requestId}/respond`, { action });
+    const response = await api.put(`/api/accounts/join-requests/${requestId}/respond/`, { action });
     return response.data;
   }
 
   async getMyJoinRequests(): Promise<JoinRequestResponse> {
-    const response = await api.get('/api/join-requests/my');
+    const response = await api.get('/api/accounts/join-requests/my/');
     return response.data;
   }
 
   async cancelJoinRequest(requestId: string): Promise<{ message: string }> {
-    const response = await api.delete(`/api/join-requests/${requestId}/cancel`);
-    return response.data;
+    // Note: This endpoint may not be implemented in backend yet
+    try {
+      const response = await api.delete(`/api/accounts/join-requests/${requestId}/cancel/`);
+      return response.data;
+    } catch (error) {
+      console.warn('Cancel join request endpoint not implemented');
+      throw error;
+    }
   }
 
   // Enhanced activity history and statistics endpoints
@@ -150,9 +162,19 @@ class ProfileService {
     }>;
     total_activities: number;
   }> {
-    const url = userId ? `/api/users/${userId}/activity` : '/api/users/activity';
-    const response = await api.get(url);
-    return response.data;
+    if (userId) {
+      // Note: User activity history by ID endpoint may not be implemented in backend yet
+      try {
+        const response = await api.get(`/api/accounts/users/${userId}/activity/`);
+        return response.data;
+      } catch (error) {
+        console.warn('User activity history by ID endpoint not implemented');
+        return { tournaments: [], matches: [], join_requests: [], total_activities: 0 };
+      }
+    } else {
+      const response = await api.get(API_ENDPOINTS.USERS.ACTIVITY);
+      return response.data;
+    }
   }
 
   async getUserStatistics(userId?: string): Promise<{
@@ -168,9 +190,31 @@ class ProfileService {
     total_connections: number;
     profile_completion: number;
   }> {
-    const url = userId ? `/api/users/${userId}/statistics` : '/api/users/statistics';
-    const response = await api.get(url);
-    return response.data;
+    if (userId) {
+      // Note: User statistics by ID endpoint may not be implemented in backend yet
+      try {
+        const response = await api.get(`/api/accounts/users/${userId}/statistics/`);
+        return response.data;
+      } catch (error) {
+        console.warn('User statistics by ID endpoint not implemented');
+        return {
+          tournaments_participated: 0,
+          tournaments_organized: 0,
+          matches_played: 0,
+          matches_won: 0,
+          matches_lost: 0,
+          win_rate: 0,
+          favorite_sports: [],
+          recent_achievements: [],
+          activity_streak: 0,
+          total_connections: 0,
+          profile_completion: 0,
+        };
+      }
+    } else {
+      const response = await api.get(API_ENDPOINTS.USERS.STATISTICS);
+      return response.data;
+    }
   }
 
   async getUserAchievements(userId?: string): Promise<{
@@ -190,9 +234,23 @@ class ProfileService {
       target: number;
     };
   }> {
-    const url = userId ? `/api/users/${userId}/achievements` : '/api/users/achievements';
-    const response = await api.get(url);
-    return response.data;
+    if (userId) {
+      // Note: User achievements by ID endpoint may not be implemented in backend yet
+      try {
+        const response = await api.get(`/api/accounts/users/${userId}/achievements/`);
+        return response.data;
+      } catch (error) {
+        console.warn('User achievements by ID endpoint not implemented');
+        return {
+          achievements: [],
+          total_points: 0,
+          rank: 'Unranked',
+        };
+      }
+    } else {
+      const response = await api.get(API_ENDPOINTS.USERS.ACHIEVEMENTS);
+      return response.data;
+    }
   }
 
   async getPlayerConnections(userId?: string): Promise<{
@@ -201,9 +259,19 @@ class ProfileService {
     recent_connections: ExtendedUserProfile[];
     mutual_connections?: ExtendedUserProfile[];
   }> {
-    const url = userId ? `/api/users/${userId}/connections` : '/api/users/connections';
-    const response = await api.get(url);
-    return response.data;
+    if (userId) {
+      // Note: User connections by ID endpoint may not be implemented in backend yet
+      try {
+        const response = await api.get(`/api/accounts/users/${userId}/connections/`);
+        return response.data;
+      } catch (error) {
+        console.warn('User connections by ID endpoint not implemented');
+        return { connections: [], total_connections: 0, recent_connections: [] };
+      }
+    } else {
+      const response = await api.get('/api/accounts/users/connections/');
+      return response.data;
+    }
   }
 
   async getRecentActivity(userId?: string, limit: number = 10): Promise<{
@@ -217,9 +285,19 @@ class ProfileService {
     }>;
     has_more: boolean;
   }> {
-    const url = userId ? `/api/users/${userId}/recent-activity` : '/api/users/recent-activity';
-    const response = await api.get(`${url}?limit=${limit}`);
-    return response.data;
+    if (userId) {
+      // Note: User recent activity by ID endpoint may not be implemented in backend yet
+      try {
+        const response = await api.get(`/api/accounts/users/${userId}/recent-activity/?limit=${limit}`);
+        return response.data;
+      } catch (error) {
+        console.warn('User recent activity by ID endpoint not implemented');
+        return { activities: [], has_more: false };
+      }
+    } else {
+      const response = await api.get(`/api/accounts/users/recent-activity/?limit=${limit}`);
+      return response.data;
+    }
   }
 
   async getPlayerRankings(sport?: string, location?: string): Promise<{
@@ -233,12 +311,18 @@ class ProfileService {
     user_rank?: number;
     total_players: number;
   }> {
-    const params = new URLSearchParams();
-    if (sport) params.append('sport', sport);
-    if (location) params.append('location', location);
+    // Note: This endpoint may not be implemented in backend yet
+    try {
+      const params = new URLSearchParams();
+      if (sport) params.append('sport', sport);
+      if (location) params.append('location', location);
 
-    const response = await api.get(`/api/users/rankings?${params.toString()}`);
-    return response.data;
+      const response = await api.get(`/api/accounts/users/rankings/?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.warn('Player rankings endpoint not implemented');
+      return { rankings: [], total_players: 0 };
+    }
   }
 }
 

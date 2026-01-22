@@ -30,6 +30,7 @@ const DesignSystemTestPage: React.FC = () => {
                     <Button loading>Loading Button</Button>
                     <Button role="player">Player Button</Button>
                     <Button role="organizer">Organizer Button</Button>
+                    <Button role="referee">Referee Button</Button>
                     <Button role="venue_owner">Venue Owner Button</Button>
                   </div>
                 </CardContent>

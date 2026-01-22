@@ -3,20 +3,25 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Edit3, MapPin, Trophy, Calendar, Award,
   X, Save, Camera, Mail, Phone, MessageCircle,
-  TrendingUp, Target, Users, Clock, ArrowLeft, Settings,
+  Target, Users, Clock, Settings,
   Shield, Activity, BarChart3, Zap, Medal, Crown,
   ChevronRight, ChevronDown, ChevronUp, Globe, Crop, Building2
 } from 'lucide-react';
 import { profileService } from '@/services/profileService';
 import type { ExtendedUserProfile } from '@/types';
+import type { User as UserType } from '@/types/auth.types';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
+import { useDispatch } from 'react-redux';
+import { updateUser } from '@/store/authSlice';
+import type { AppDispatch } from '@/store';
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId?: string }>();
   const navigate = useNavigate();
-  const { user: currentUser, logout } = useAuth();
+  const { user: currentUser } = useAuth();
+  const dispatch = useDispatch<AppDispatch>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -28,11 +33,9 @@ export default function ProfilePage() {
 
   // Statistics and activity data
   const [statistics, setStatistics] = useState<any>(null);
-  const [activityHistory, setActivityHistory] = useState<any>(null);
   const [achievements, setAchievements] = useState<any>(null);
   const [connections, setConnections] = useState<any>(null);
   const [recentActivity, setRecentActivity] = useState<any>(null);
-  const [loadingStats, setLoadingStats] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'achievements' | 'connections'>('overview');
@@ -79,16 +82,8 @@ export default function ProfilePage() {
   // Image cropping state
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [croppedImage, setCroppedImage] = useState<string | null>(null);
-  const [cropData, setCropData] = useState({
-    x: 0,
-    y: 0,
-    width: 200,
-    height: 200,
-    scale: 1
-  });
 
   const [newProfilePicture, setNewProfilePicture] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const isOwnProfile = !userId || userId === currentUser?.id;
 
@@ -100,8 +95,73 @@ export default function ProfilePage() {
   ];
 
   const sportTypes = [
-    'Futsal', 'Badminton'
+    'FUTSAL', 'BADMINTON'
   ];
+
+  const formatSportName = (sport: string) => {
+    return sport.charAt(0).toUpperCase() + sport.slice(1).toLowerCase();
+  };
+
+  // Format gender for display
+  const formatGender = (gender?: string) => {
+    if (!gender) return 'Not specified';
+    switch (gender.toUpperCase()) {
+      case 'MALE':
+        return 'Male';
+      case 'FEMALE':
+        return 'Female';
+      case 'OTHER':
+        return 'Other';
+      default:
+        return gender;
+    }
+  };
+
+  // Calculate age from date of birth
+  const calculateAge = (dateOfBirth?: string) => {
+    if (!dateOfBirth) return null;
+    try {
+      const birthDate = new Date(dateOfBirth);
+      if (isNaN(birthDate.getTime())) return null;
+      
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      return age;
+    } catch {
+      return null;
+    }
+  };
+
+  // List of countries for dropdown
+  const countries = [
+    'Afghanistan', 'Albania', 'Algeria', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
+    'Bahrain', 'Bangladesh', 'Belarus', 'Belgium', 'Bolivia', 'Bosnia and Herzegovina', 'Brazil', 'Bulgaria',
+    'Cambodia', 'Canada', 'Chile', 'China', 'Colombia', 'Croatia', 'Czech Republic',
+    'Denmark', 'Ecuador', 'Egypt', 'Estonia', 'Ethiopia',
+    'Finland', 'France', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Guatemala',
+    'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+    'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait',
+    'Latvia', 'Lebanon', 'Lithuania', 'Luxembourg', 'Malaysia', 'Mexico', 'Morocco',
+    'Nepal', 'Netherlands', 'New Zealand', 'Nigeria', 'Norway',
+    'Pakistan', 'Peru', 'Philippines', 'Poland', 'Portugal',
+    'Qatar', 'Romania', 'Russia', 'Saudi Arabia', 'Singapore', 'Slovakia', 'Slovenia', 'South Africa', 'South Korea', 'Spain', 'Sri Lanka', 'Sweden', 'Switzerland',
+    'Thailand', 'Turkey', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Venezuela', 'Vietnam'
+  ];
+
+  // Normalize and deduplicate sports array
+  const normalizeSports = (sports: string[]) => {
+    if (!sports || !Array.isArray(sports)) return [];
+    
+    // Convert all to uppercase and remove duplicates
+    const normalized = sports.map(sport => sport.toUpperCase());
+    return [...new Set(normalized)];
+  };
 
   const genderOptions = [
     { value: 'MALE', label: 'Male' },
@@ -148,7 +208,7 @@ export default function ProfilePage() {
           phone_number: response.profile.phone_number || '',
           date_of_birth: response.profile.date_of_birth || '',
           gender: response.profile.gender || '',
-          preferred_sports: response.profile.preferred_sports || [],
+          preferred_sports: normalizeSports(response.profile.preferred_sports || []),
           skill_level: response.profile.skill_level || '',
           achievements: response.profile.achievements || '',
           social_links: response.profile.social_links || {},
@@ -170,10 +230,8 @@ export default function ProfilePage() {
     if (!isOwnProfile) return;
 
     try {
-      setLoadingStats(true);
-      const [statsResponse, activityResponse, achievementsResponse, connectionsResponse, recentResponse] = await Promise.allSettled([
+      const [statsResponse, achievementsResponse, connectionsResponse, recentResponse] = await Promise.allSettled([
         profileService.getUserStatistics(),
-        profileService.getUserActivityHistory(),
         profileService.getUserAchievements(),
         profileService.getPlayerConnections(),
         profileService.getRecentActivity()
@@ -181,9 +239,6 @@ export default function ProfilePage() {
 
       if (statsResponse.status === 'fulfilled') {
         setStatistics(statsResponse.value);
-      }
-      if (activityResponse.status === 'fulfilled') {
-        setActivityHistory(activityResponse.value);
       }
       if (achievementsResponse.status === 'fulfilled') {
         setAchievements(achievementsResponse.value);
@@ -196,8 +251,6 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error('Failed to load additional data:', err);
-    } finally {
-      setLoadingStats(false);
     }
   };
 
@@ -238,17 +291,18 @@ export default function ProfilePage() {
       canvas.width = 200;
       canvas.height = 200;
 
-      // Calculate crop dimensions
-      const scaleX = img.width / 400; // Assuming display width of 400px
-      const scaleY = img.height / 400; // Assuming display height of 400px
+      // Calculate crop dimensions (center crop)
+      const size = Math.min(img.width, img.height);
+      const x = (img.width - size) / 2;
+      const y = (img.height - size) / 2;
 
       // Draw cropped image
       ctx.drawImage(
         img,
-        cropData.x * scaleX,
-        cropData.y * scaleY,
-        cropData.width * scaleX,
-        cropData.height * scaleY,
+        x,
+        y,
+        size,
+        size,
         0,
         0,
         200,
@@ -271,7 +325,6 @@ export default function ProfilePage() {
 
   const removeImage = () => {
     setNewProfilePicture(null);
-    setImagePreview(null);
     setCroppedImage(null);
     setOriginalImage(null);
     if (fileInputRef.current) {
@@ -316,14 +369,38 @@ export default function ProfilePage() {
 
       console.log('Saving profile with data:', updateData);
 
-      await profileService.updateProfile(updateData);
+      const response = await profileService.updateProfile(updateData);
+      
+      // Update Redux auth store with updated user data if this is the current user's profile
+      if (isOwnProfile && currentUser && response.profile) {
+        const updatedUser: UserType = {
+          ...currentUser,
+          full_name: response.profile.full_name || currentUser.full_name,
+          profile_picture: response.profile.profile_picture || currentUser.profile_picture,
+          phone_number: response.profile.phone_number || currentUser.phone_number,
+          bio: response.profile.bio,
+          location: response.profile.location,
+          country: response.profile.country,
+          date_of_birth: response.profile.date_of_birth,
+          gender: response.profile.gender,
+          preferred_sports: response.profile.preferred_sports,
+          skill_level: response.profile.skill_level,
+          achievements: response.profile.achievements,
+          social_links: response.profile.social_links,
+          is_available_for_matches: response.profile.is_available_for_matches,
+        };
+        dispatch(updateUser(updatedUser));
+        
+        // Also trigger a custom event to notify other components (like dashboard) to refresh
+        window.dispatchEvent(new CustomEvent('profileUpdated', { detail: updatedUser }));
+      }
+      
       await loadProfile(); // Reload to get updated data
       if (isOwnProfile) {
         await loadAdditionalData(); // Reload additional data
       }
       setIsEditing(false);
       setNewProfilePicture(null);
-      setImagePreview(null);
       setCroppedImage(null);
       toastService.success('Profile updated successfully!');
     } catch (err: any) {
@@ -337,7 +414,6 @@ export default function ProfilePage() {
   const handleCancel = () => {
     setIsEditing(false);
     setNewProfilePicture(null);
-    setImagePreview(null);
     setCroppedImage(null);
     setOriginalImage(null);
     setShowImageCropper(false);
@@ -351,7 +427,7 @@ export default function ProfilePage() {
         phone_number: profile.phone_number || '',
         date_of_birth: profile.date_of_birth || '',
         gender: profile.gender || '',
-        preferred_sports: profile.preferred_sports || [],
+        preferred_sports: normalizeSports(profile.preferred_sports || []),
         skill_level: profile.skill_level || '',
         achievements: profile.achievements || '',
         social_links: profile.social_links || {},
@@ -404,65 +480,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate(-1)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5 text-gray-600" />
-              </button>
-              <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                <div className="grid grid-cols-2 gap-0.5">
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                </div>
-              </div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {isOwnProfile ? 'My Profile' : `${profile?.full_name}'s Profile`}
-              </h1>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {!isOwnProfile && (
-                <button
-                  onClick={() => navigate('/chats')}
-                  className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                >
-                  <MessageCircle className="h-5 w-5" />
-                </button>
-              )}
-
-              {isOwnProfile && (
-                <>
-                  <button
-                    onClick={() => navigate('/account-settings')}
-                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Are you sure you want to logout?')) {
-                        logout();
-                      }
-                    }}
-                    className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-                  >
-                    Logout
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Image Cropper Modal */}
       {showImageCropper && originalImage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -475,16 +492,10 @@ export default function ProfilePage() {
                 alt="Crop preview"
                 className="w-full h-64 object-contain border rounded"
               />
-              {/* Simple crop overlay - in a real app, you'd use a proper cropping library */}
-              <div
-                className="absolute border-2 border-purple-500 bg-purple-500 bg-opacity-20"
-                style={{
-                  left: `${cropData.x}px`,
-                  top: `${cropData.y}px`,
-                  width: `${cropData.width}px`,
-                  height: `${cropData.height}px`,
-                }}
-              />
+              {/* Simple crop overlay - center crop */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="border-2 border-purple-500 bg-purple-500 bg-opacity-20 w-48 h-48 rounded" />
+              </div>
             </div>
 
             <canvas ref={canvasRef} className="hidden" />
@@ -736,13 +747,16 @@ export default function ProfilePage() {
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                          <input
-                            type="text"
+                          <select
                             value={editForm.country}
                             onChange={(e) => setEditForm(prev => ({ ...prev, country: e.target.value }))}
-                            placeholder="Your country"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-                          />
+                          >
+                            <option value="">Select your country</option>
+                            {countries.map((country) => (
+                              <option key={country} value={country}>{country}</option>
+                            ))}
+                          </select>
                         </div>
 
                         <div>
@@ -791,10 +805,18 @@ export default function ProfilePage() {
                             </span>
                           </div>
                         )}
+                        {calculateAge(profile?.date_of_birth) && (
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span className="text-gray-600">
+                              Age {calculateAge(profile?.date_of_birth)} years
+                            </span>
+                          </div>
+                        )}
                         {profile?.gender && (
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-gray-400" />
-                            <span className="text-gray-600">{profile.gender}</span>
+                            <span className="text-gray-600">{formatGender(profile.gender)}</span>
                           </div>
                         )}
                       </div>
@@ -879,7 +901,7 @@ export default function ProfilePage() {
                                       onChange={() => handleSportToggle(sport)}
                                       className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                                     />
-                                    <span className="text-sm">{sport}</span>
+                                    <span className="text-sm">{formatSportName(sport)}</span>
                                   </label>
                                 ))}
                               </div>
@@ -949,7 +971,7 @@ export default function ProfilePage() {
                                 <div className="flex flex-wrap gap-2">
                                   {profile.preferred_sports.map((sport) => (
                                     <span key={sport} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                                      {sport}
+                                      {formatSportName(sport)}
                                     </span>
                                   ))}
                                 </div>
@@ -1406,7 +1428,7 @@ export default function ProfilePage() {
                         <div className="flex flex-wrap gap-1 mt-1">
                           {connection.preferred_sports.slice(0, 2).map((sport: string) => (
                             <span key={sport} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
-                              {sport}
+                              {formatSportName(sport)}
                             </span>
                           ))}
                           {connection.preferred_sports.length > 2 && (

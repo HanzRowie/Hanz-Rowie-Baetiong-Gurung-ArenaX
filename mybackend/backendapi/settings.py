@@ -23,9 +23,11 @@ INSTALLED_APPS = [
     "channels",
     "accounts",
     "organizers",
+    "referees",
     "tournaments",
     "chat",
     "venues",
+    "payments",
 ]
 
 # Middleware
@@ -124,9 +126,9 @@ EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='hanzrowiegurung@gmail.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='ozdv aspr htat jojk')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='ArenaX <hanzrowiegurung@gmail.com>')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='cxij turc lpgi snub')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
 
 # Frontend URL for password reset links
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
@@ -151,4 +153,16 @@ CHANNEL_LAYERS = {
             "hosts": [("127.0.0.1", 6379)],
         },
     },
+}
+
+# Khalti Payment Gateway Configuration
+KHALTI_CONFIG = {
+    'TEST_PUBLIC_KEY': config('KHALTI_TEST_PUBLIC_KEY', default='test_public_key'),
+    'TEST_SECRET_KEY': config('KHALTI_TEST_SECRET_KEY', default='test_secret_key'),
+    'LIVE_PUBLIC_KEY': config('KHALTI_LIVE_PUBLIC_KEY', default='482adc2751a04eee978d023156a36f67'),
+    'LIVE_SECRET_KEY': config('KHALTI_LIVE_SECRET_KEY', default='ac9aa96a1ac046bb8cfde86d475fe133'),
+    'IS_LIVE': config('KHALTI_IS_LIVE', default=False, cast=bool),
+    'WEBSITE_URL': config('WEBSITE_URL', default='http://localhost:3000'),
+    'RETURN_URL': config('KHALTI_RETURN_URL', default='http://localhost:3000/payment/success'),
+    'WEBHOOK_URL': config('KHALTI_WEBHOOK_URL', default='http://localhost:8000/api/webhook/khalti/'),
 }

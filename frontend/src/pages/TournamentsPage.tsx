@@ -24,7 +24,6 @@ import type { Tournament, TournamentFilters } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
-import { logout } from '@/store/authSlice';
 
 // Debounce utility function
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -65,8 +64,12 @@ export default function TournamentsPage() {
   const [hasMore, setHasMore] = useState(true);
 
   const sportTypes = [
-    'Futsal', 'Badminton'
+    'FUTSAL', 'BADMINTON'
   ];
+
+  const formatSportName = (sport: string) => {
+    return sport.charAt(0).toUpperCase() + sport.slice(1).toLowerCase();
+  };
 
   const statusOptions = [
     { value: 'UPCOMING', label: 'Upcoming' },
@@ -123,6 +126,8 @@ export default function TournamentsPage() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       };
+
+      console.log('Tournament filters being sent:', filters); // Debug log
 
       const response = await tournamentService.getTournaments({
         ...filters,
@@ -285,58 +290,6 @@ export default function TournamentsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                <div className="grid grid-cols-2 gap-0.5">
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                  <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>
-                </div>
-              </div>
-              <span className="text-2xl font-bold text-gray-900">ArenaX</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              {user?.role === 'ORGANIZER' && (
-                <button
-                  onClick={() => navigate('/tournaments/create')}
-                  className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create Tournament
-                </button>
-              )}
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="text-gray-600 hover:text-gray-900 font-medium"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => navigate('/profile')}
-                className="text-gray-600 hover:text-gray-900 font-medium"
-              >
-                Profile
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to logout?')) {
-                    logout();
-                  }
-                }}
-                className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
@@ -348,6 +301,15 @@ export default function TournamentsPage() {
                 Discover and join {totalCount} tournaments across various sports
               </p>
             </div>
+            {user?.role === 'ORGANIZER' && (
+              <button
+                onClick={() => navigate('/tournaments/create')}
+                className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Create Tournament
+              </button>
+            )}
 
             <div className="flex items-center gap-3">
               {/* View Mode Toggle */}
@@ -417,7 +379,7 @@ export default function TournamentsPage() {
                 >
                   <option value="">All Sports</option>
                   {sportTypes.map((sport) => (
-                    <option key={sport} value={sport}>{sport}</option>
+                    <option key={sport} value={sport}>{formatSportName(sport)}</option>
                   ))}
                 </select>
 
@@ -573,7 +535,7 @@ export default function TournamentsPage() {
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">{tournament.title}</h3>
-                            <p className="text-sm text-gray-500">{tournament.sport_type}</p>
+                            <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)}</p>
                           </div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tournament.status)}`}>
                             {tournament.status}
@@ -669,7 +631,7 @@ export default function TournamentsPage() {
                           <div className="flex items-start justify-between mb-2">
                             <div>
                               <h3 className="text-xl font-semibold text-gray-900 mb-1">{tournament.title}</h3>
-                              <p className="text-sm text-gray-500">{tournament.sport_type} • {tournament.tournament_type.replace('_', ' ')}</p>
+                              <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)} • {tournament.tournament_type.replace('_', ' ')}</p>
                             </div>
                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(tournament.status)}`}>
                               {tournament.status}

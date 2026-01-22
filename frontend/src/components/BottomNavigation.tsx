@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, Building2, Calendar } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, Building2, Calendar, Gavel } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -33,6 +33,106 @@ export default function BottomNavigation() {
           active: location.pathname.startsWith('/venue-bookings'),
         },
         {
+          id: 'profile',
+          label: 'Profile',
+          icon: User,
+          path: '/profile',
+          active: location.pathname === '/profile',
+        },
+      ];
+    }
+
+    if (user?.role === UserRole.REFEREE) {
+      return [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: Home,
+          path: '/referee/dashboard',
+          active: location.pathname === '/referee/dashboard' || location.pathname === '/dashboard',
+        },
+        {
+          id: 'assignments',
+          label: 'Assignments',
+          icon: Gavel,
+          path: '/referee/management',
+          active: location.pathname.startsWith('/referee/management') || location.pathname.startsWith('/referee/bookings'),
+        },
+        {
+          id: 'availability',
+          label: 'Availability',
+          icon: Calendar,
+          path: '/referee/availability',
+          active: location.pathname.startsWith('/referee/availability'),
+        },
+        {
+          id: 'profile',
+          label: 'Profile',
+          icon: User,
+          path: '/profile',
+          active: location.pathname === '/profile',
+        },
+      ];
+    }
+
+    if (user?.role === UserRole.ORGANIZER) {
+      return [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: Home,
+          path: '/dashboard',
+          active: location.pathname === '/dashboard',
+        },
+        {
+          id: 'tournaments',
+          label: 'Tournaments',
+          icon: Trophy,
+          path: '/tournaments',
+          active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
+        },
+        {
+          id: 'my-tournaments',
+          label: 'My Events',
+          icon: Calendar,
+          path: '/my-tournaments',
+          active: location.pathname === '/my-tournaments',
+        },
+        {
+          id: 'profile',
+          label: 'Profile',
+          icon: User,
+          path: '/profile',
+          active: location.pathname === '/profile',
+        },
+      ];
+    }
+
+    // Player role navigation
+    if (user?.role === UserRole.PLAYER) {
+      return [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: Home,
+          path: '/dashboard',
+          active: location.pathname === '/dashboard',
+        },
+        {
+          id: 'tournaments',
+          label: 'Tournaments',
+          icon: Trophy,
+          path: '/tournaments',
+          active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
+        },
+        {
+          id: 'find',
+          label: 'Find',
+          icon: Search,
+          path: '/player-finder',
+          active: location.pathname === '/player-finder',
+        },
+        {
           id: 'chats',
           label: 'Chats',
           icon: MessageCircle,
@@ -49,7 +149,7 @@ export default function BottomNavigation() {
       ];
     }
 
-    // Default navigation for other roles
+    // Default fallback
     return [
       {
         id: 'dashboard',
@@ -57,27 +157,6 @@ export default function BottomNavigation() {
         icon: Home,
         path: '/dashboard',
         active: location.pathname === '/dashboard',
-      },
-      {
-        id: 'tournaments',
-        label: 'Tournaments',
-        icon: Trophy,
-        path: '/tournaments',
-        active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
-      },
-      {
-        id: 'find',
-        label: 'Find',
-        icon: Search,
-        path: '/players',
-        active: location.pathname === '/players',
-      },
-      {
-        id: 'chats',
-        label: 'Chats',
-        icon: MessageCircle,
-        path: '/chats',
-        active: location.pathname === '/chats',
       },
       {
         id: 'profile',

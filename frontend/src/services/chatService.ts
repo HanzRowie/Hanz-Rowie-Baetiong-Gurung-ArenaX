@@ -362,7 +362,7 @@ class ChatService {
 
   async blockUser(userId: string): Promise<{ message: string }> {
     try {
-      const response = await api.post(`/api/users/${userId}/block`);
+      const response = await api.post(`/api/accounts/users/${userId}/block/`);
       return response.data;
     } catch (error) {
       console.error('Error blocking user:', error);
@@ -372,7 +372,7 @@ class ChatService {
 
   async unblockUser(userId: string): Promise<{ message: string }> {
     try {
-      const response = await api.post(`/api/users/${userId}/unblock`);
+      const response = await api.post(`/api/accounts/users/${userId}/unblock/`);
       return response.data;
     } catch (error) {
       console.error('Error unblocking user:', error);
@@ -390,7 +390,7 @@ class ChatService {
     total: number;
   }> {
     try {
-      const response = await api.get('/api/users/blocked');
+      const response = await api.get('/api/accounts/users/blocked/');
       return response.data;
     } catch (error) {
       console.error('Error fetching blocked users:', error);

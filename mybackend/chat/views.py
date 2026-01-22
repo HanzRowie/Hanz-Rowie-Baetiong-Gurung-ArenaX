@@ -15,6 +15,10 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Only allow players to access messages
+        if user.role != 'PLAYER':
+            return Message.objects.none()
+        
         return Message.objects.filter(
             Q(sender=user) | Q(receiver=user)
         ).order_by('-timestamp')
@@ -24,12 +28,27 @@ class ChatMessageViewSet(viewsets.ModelViewSet):
     serializer_class = ChatMessageSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        # Only allow players to access chat messages
+        if user.role != 'PLAYER':
+            return ChatMessage.objects.none()
+        return super().get_queryset()
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_conversation(request, other_user_id):
     """Get conversation between current user and another user"""
+    # Only allow players to access conversations
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     from accounts.models import CustomUser
     other_user = get_object_or_404(CustomUser, id=other_user_id)
+    
+    # Only allow chatting with other players
+    if other_user.role != 'PLAYER':
+        return Response({'error': 'You can only chat with other players'}, status=status.HTTP_403_FORBIDDEN)
 
     messages = Message.objects.filter(
         (Q(sender=request.user) & Q(receiver=other_user)) |
@@ -54,6 +73,10 @@ def get_conversation(request, other_user_id):
 @permission_classes([IsAuthenticated])
 def send_message(request):
     """Send a private message"""
+    # Only allow players to send messages
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     data = request.data
     receiver_id = data.get('receiver_id')
     content = data.get('content', '').strip()
@@ -66,6 +89,10 @@ def send_message(request):
         receiver = CustomUser.objects.get(id=receiver_id)
     except CustomUser.DoesNotExist:
         return Response({'error': 'Receiver not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Only allow sending messages to other players
+    if receiver.role != 'PLAYER':
+        return Response({'error': 'You can only send messages to other players'}, status=status.HTTP_403_FORBIDDEN)
 
     # Create message
     message = Message.objects.create(
@@ -84,6 +111,10 @@ def send_message(request):
 @permission_classes([IsAuthenticated])
 def get_conversations(request):
     """Get list of conversations for current user"""
+    # Only allow players to access conversations
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     user = request.user
 
     # Get all users who have exchanged messages with current user
@@ -127,6 +158,10 @@ def get_conversations(request):
 @permission_classes([IsAuthenticated])
 def get_unread_count(request):
     """Get unread message count"""
+    # Only allow players to access unread count
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     unread_count = Message.objects.filter(
         receiver=request.user,
         read=False
@@ -146,6 +181,10 @@ def get_unread_count(request):
 @permission_classes([IsAuthenticated])
 def mark_conversation_read(request, other_user_id):
     """Mark all messages from a user as read"""
+    # Only allow players to mark conversations as read
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     from accounts.models import CustomUser
     other_user = get_object_or_404(CustomUser, id=other_user_id)
 
@@ -164,6 +203,10 @@ def mark_conversation_read(request, other_user_id):
 @permission_classes([IsAuthenticated])
 def delete_conversation(request, other_user_id):
     """Delete conversation with a user (soft delete by archiving)"""
+    # Only allow players to delete conversations
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     # For now, just return success - in production implement archiving
     return Response({'message': 'Conversation deleted successfully'}, status=status.HTTP_200_OK)
 
@@ -171,6 +214,10 @@ def delete_conversation(request, other_user_id):
 @permission_classes([IsAuthenticated])
 def search_messages(request):
     """Search messages"""
+    # Only allow players to search messages
+    if request.user.role != 'PLAYER':
+        return Response({'error': 'Chat functionality is only available for players'}, status=status.HTTP_403_FORBIDDEN)
+    
     query = request.query_params.get('q', '').strip()
     conversation_id = request.query_params.get('conversation_id')
 

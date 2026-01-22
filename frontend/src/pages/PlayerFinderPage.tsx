@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { profileService } from '@/services/profileService';
 import type { ExtendedUserProfile } from '@/types';
-import { Search, Users, Star, MapPin, Filter, ArrowLeft, UserPlus, CheckCircle, TrendingUp, Award, Calendar, MessageCircle, Zap, Target } from 'lucide-react';
+import { Search, Users, Star, MapPin, Filter, ArrowLeft, UserPlus, CheckCircle, TrendingUp, Award, Calendar, MessageCircle, Target } from 'lucide-react';
 
 export default function PlayerFinderPage() {
   const { user } = useAuth();
@@ -23,8 +23,13 @@ export default function PlayerFinderPage() {
   const [availableOnly, setAvailableOnly] = useState(false);
 
   // Available sports (based on common tournament sports)
-  const sports = ['Futsal', 'Badminton'];
+  const sports = ['FUTSAL', 'BADMINTON'];
   const skillLevels = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'PROFESSIONAL'];
+
+  // Format sport name for display
+  const formatSportName = (sport: string) => {
+    return sport.charAt(0).toUpperCase() + sport.slice(1).toLowerCase();
+  };
 
   useEffect(() => {
     // Load players on mount and when filters change
@@ -180,7 +185,7 @@ export default function PlayerFinderPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && handleFilteredSearch()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleFilteredSearch()}
                 />
               </div>
             </div>
@@ -240,7 +245,7 @@ export default function PlayerFinderPage() {
                   >
                     <option value="">All Sports</option>
                     {sports.map((sport) => (
-                      <option key={sport} value={sport}>{sport}</option>
+                      <option key={sport} value={sport}>{formatSportName(sport)}</option>
                     ))}
                   </select>
                 </div>
@@ -387,7 +392,7 @@ export default function PlayerFinderPage() {
                             {player.preferred_sports && player.preferred_sports.length > 0 && (
                               <div className="flex items-center gap-1">
                                 <span className="text-gray-400">Sports:</span>
-                                <span>{player.preferred_sports.slice(0, 2).join(', ')}
+                                <span>{player.preferred_sports.slice(0, 2).map(formatSportName).join(', ')}
                                   {player.preferred_sports.length > 2 && ` +${player.preferred_sports.length - 2}`}
                                 </span>
                               </div>

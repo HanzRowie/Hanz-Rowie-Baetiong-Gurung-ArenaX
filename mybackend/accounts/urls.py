@@ -11,9 +11,11 @@ urlpatterns = [
     path('auth/resend-verification/', views.resend_verification, name='resend_verification'),
     path('auth/forgot-password/', views.forgot_password, name='forgot_password'),
     path('auth/reset-password/', views.reset_password, name='reset_password'),
+    path('auth/change-password/', views.change_password, name='change_password'),
+    
     # Profile management endpoints
     path('users/me/', views.get_user_profile, name='get_user_profile'),
-    path('users/profile', views.update_user_profile, name='update_profile'),  # PUT endpoint to match frontend (no trailing slash)
+    path('users/profile', views.update_user_profile, name='update_profile'),
     path('users/profile/<uuid:user_id>', views.get_user_profile, name='get_user_profile_by_id'),
     path('users/profile/update/', views.update_user_profile, name='update_user_profile'),
     path('users/statistics/', views.get_user_statistics, name='get_user_statistics'),
@@ -26,11 +28,18 @@ urlpatterns = [
     path('users/<uuid:user_id>/send-request', views.send_join_request, name='send_join_request_no_slash'),
     path('join-requests/<int:request_id>/respond', views.respond_join_request, name='respond_join_request'),
     path('join-requests/<int:request_id>/respond/', views.respond_join_request, name='respond_join_request_slash'),
-    path('users/search/', views.search_players, name='search_users'),  # Alias for search_players
+    path('users/search/', views.search_players, name='search_users'),
     path('players/search/', views.search_players, name='search_players'),
     path('join-requests/my/', views.get_my_join_requests, name='get_my_join_requests'),
     path('join-requests/my', views.get_my_join_requests, name='get_my_join_requests_no_slash'),
     path('users/<uuid:user_id>/online-status/', views.get_user_online_status, name='get_user_online_status'),
+    
+    # Dashboard endpoints (temporary - should be moved to separate app)
+    path('dashboard/stats/', views.dashboard_stats, name='dashboard_stats'),
+    path('dashboard/monthly-stats/', views.dashboard_monthly_stats, name='dashboard_monthly_stats'),
+    path('dashboard/next-tournament/', views.dashboard_next_tournament, name='dashboard_next_tournament'),
+    path('dashboard/profile/', views.dashboard_profile, name='dashboard_profile'),
+    
     # Admin endpoints
     path('admin/users/', views.admin_get_all_users, name='admin_get_all_users'),
     path('admin/users/<uuid:user_id>/', views.admin_get_user_details, name='admin_get_user_details'),

@@ -66,23 +66,157 @@ def register(request):
         try:
             subject = 'Verify Your Email - ArenaX'
             message = f'''
-Hello {user.full_name},
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - ArenaX</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #f8f9fa;
+        }}
+        .container {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }}
+        .header {{
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }}
+        .logo {{
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }}
+        .content {{
+            background: white;
+            padding: 40px 30px;
+        }}
+        .greeting {{
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }}
+        .message {{
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #4b5563;
+        }}
+        .otp-container {{
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin: 30px 0;
+        }}
+        .otp-code {{
+            font-size: 36px;
+            font-weight: bold;
+            color: #dc2626;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }}
+        .expiry {{
+            color: #ef4444;
+            font-weight: 600;
+            margin-top: 15px;
+            font-size: 14px;
+        }}
+        .footer {{
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }}
+        .footer-text {{
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }}
+        .team {{
+            color: #374151;
+            font-weight: 600;
+        }}
+        .warning {{
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }}
+        .warning-text {{
+            color: #92400e;
+            font-size: 14px;
+            margin: 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎾 ArenaX</div>
+            <h1>Welcome to ArenaX!</h1>
+        </div>
 
-Welcome to ArenaX! Please verify your email address to complete your registration.
+        <div class="content">
+            <div class="greeting">Hi {user.full_name},</div>
 
-Your verification code is: {otp.otp}
+            <div class="message">
+                Welcome to ArenaX! We're excited to have you join our sports community.
+                To complete your registration and start connecting with players, please verify your email address.
+            </div>
 
-This code will expire in 10 minutes.
+            <div class="otp-container">
+                <div style="font-size: 18px; color: #374151; margin-bottom: 10px; font-weight: 600;">
+                    Your Verification Code
+                </div>
+                <div class="otp-code">{otp.otp}</div>
+                <div class="expiry">⏰ Expires in 10 minutes</div>
+            </div>
 
-If you didn't create an account with ArenaX, please ignore this email.
+            <div class="warning">
+                <p class="warning-text">
+                    <strong>Security Note:</strong> If you didn't create an account with ArenaX, please ignore this email.
+                    Your account will remain unverified and no further action is needed.
+                </p>
+            </div>
 
-Best regards,
-ArenaX Team
+            <div style="text-align: center; margin-top: 30px;">
+                <p style="color: #6b7280; font-size: 14px;">
+                    Need help? Contact our support team at
+                    <a href="mailto:support@arenax.com" style="color: #4f46e5; text-decoration: none;">support@arenax.com</a>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="footer-text">You're receiving this email because you signed up for ArenaX</p>
+            <p class="team">Best regards,<br>The ArenaX Team</p>
+        </div>
+    </div>
+</body>
+</html>
             '''.strip()
 
             send_mail(
                 subject=subject,
-                message=message,
+                message='',  # Plain text version (empty for now)
+                html_message=message,  # HTML version
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
                 fail_silently=False,
@@ -174,7 +308,7 @@ def login(request):
 def logout(request):
     """User logout - invalidate refresh token by adding it to blacklist"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
         refresh_token = request.data.get('refresh_token')
 
         
@@ -291,23 +425,175 @@ def resend_verification(request):
         try:
             subject = 'Email Verification - ArenaX'
             message = f'''
-Hello {user.full_name},
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - ArenaX</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #f8f9fa;
+        }}
+        .container {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }}
+        .header {{
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }}
+        .logo {{
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }}
+        .content {{
+            background: white;
+            padding: 40px 30px;
+        }}
+        .greeting {{
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }}
+        .message {{
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #4b5563;
+        }}
+        .otp-container {{
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            margin: 30px 0;
+        }}
+        .otp-code {{
+            font-size: 36px;
+            font-weight: bold;
+            color: #dc2626;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }}
+        .expiry {{
+            color: #ef4444;
+            font-weight: 600;
+            margin-top: 15px;
+            font-size: 14px;
+        }}
+        .footer {{
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }}
+        .footer-text {{
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }}
+        .team {{
+            color: #374151;
+            font-weight: 600;
+        }}
+        .warning {{
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }}
+        .warning-text {{
+            color: #92400e;
+            font-size: 14px;
+            margin: 0;
+        }}
+        .highlight {{
+            background: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }}
+        .highlight-text {{
+            color: #1e40af;
+            font-size: 14px;
+            margin: 0;
+            font-weight: 600;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎾 ArenaX</div>
+            <h1>New Verification Code</h1>
+        </div>
 
-You requested a new verification code for your ArenaX account.
+        <div class="content">
+            <div class="greeting">Hi {user.full_name},</div>
 
-Your new verification code is: {otp.otp}
+            <div class="message">
+                We received your request for a new verification code. Here is your updated code to verify your ArenaX account.
+            </div>
 
-This code will expire in 10 minutes.
+            <div class="highlight">
+                <p class="highlight-text">
+                    <strong>Requested:</strong> You asked for a new verification code. This previous code has been invalidated.
+                </p>
+            </div>
 
-If you didn't request this code, please ignore this email.
+            <div class="otp-container">
+                <div style="font-size: 18px; color: #374151; margin-bottom: 10px; font-weight: 600;">
+                    Your New Verification Code
+                </div>
+                <div class="otp-code">{otp.otp}</div>
+                <div class="expiry">⏰ Expires in 10 minutes</div>
+            </div>
 
-Best regards,
-ArenaX Team
+            <div class="warning">
+                <p class="warning-text">
+                    <strong>Security Note:</strong> If you didn't request this new code, someone may be trying to access your account.
+                    Please contact our support team immediately.
+                </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <p style="color: #6b7280; font-size: 14px;">
+                    Need help? Contact our support team at
+                    <a href="mailto:support@arenax.com" style="color: #4f46e5; text-decoration: none;">support@arenax.com</a>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="footer-text">You're receiving this email because you requested a new verification code for ArenaX</p>
+            <p class="team">Best regards,<br>The ArenaX Team</p>
+        </div>
+    </div>
+</body>
+</html>
             '''.strip()
 
             send_mail(
                 subject=subject,
-                message=message,
+                message='',  # Plain text version (empty for now)
+                html_message=message,  # HTML version
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
                 fail_silently=False,
@@ -348,24 +634,185 @@ def forgot_password(request):
             reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token.token}"
             subject = 'Password Reset - ArenaX'
             message = f'''
-Hello {user.full_name},
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Reset - ArenaX</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #f8f9fa;
+        }}
+        .container {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }}
+        .header {{
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }}
+        .logo {{
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }}
+        .content {{
+            background: white;
+            padding: 40px 30px;
+        }}
+        .greeting {{
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }}
+        .message {{
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #4b5563;
+        }}
+        .reset-button {{
+            display: inline-block;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+            transition: transform 0.2s;
+        }}
+        .reset-button:hover {{
+            transform: translateY(-2px);
+        }}
+        .reset-link {{
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 14px;
+            color: #4f46e5;
+        }}
+        .expiry {{
+            color: #ef4444;
+            font-weight: 600;
+            margin-top: 15px;
+            font-size: 14px;
+        }}
+        .footer {{
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e5e7eb;
+        }}
+        .footer-text {{
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }}
+        .team {{
+            color: #374151;
+            font-weight: 600;
+        }}
+        .warning {{
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }}
+        .warning-text {{
+            color: #92400e;
+            font-size: 14px;
+            margin: 0;
+        }}
+        .security-icon {{
+            color: #f59e0b;
+            font-size: 20px;
+            margin-right: 8px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎾 ArenaX</div>
+            <h1>Reset Your Password</h1>
+        </div>
 
-You requested a password reset for your ArenaX account.
+        <div class="content">
+            <div class="greeting">Hi {user.full_name},</div>
 
-Click the link below to reset your password:
-{reset_url}
+            <div class="message">
+                We received a request to reset your password for your ArenaX account.
+                Click the button below to create a new password.
+            </div>
 
-This link will expire in 1 hour.
+            <div style="text-align: center;">
+                <a href="{reset_url}" class="reset-button">
+                    🔐 Reset My Password
+                </a>
+            </div>
 
-If you didn't request this password reset, please ignore this email.
+            <div class="message">
+                If the button doesn't work, copy and paste this link into your browser:
+            </div>
 
-Best regards,
-ArenaX Team
+            <div class="reset-link">
+                {reset_url}
+            </div>
+
+            <div class="expiry">
+                ⏰ <strong>This link will expire in 1 hour</strong> for your security.
+            </div>
+
+            <div class="warning">
+                <p class="warning-text">
+                    <span class="security-icon">⚠️</span>
+                    <strong>Security Notice:</strong> If you didn't request this password reset, please ignore this email.
+                    Your password will remain unchanged and your account is safe.
+                </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <p style="color: #6b7280; font-size: 14px;">
+                    Need help? Contact our support team at
+                    <a href="mailto:support@arenax.com" style="color: #4f46e5; text-decoration: none;">support@arenax.com</a>
+                </p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p class="footer-text">You're receiving this email because a password reset was requested for your ArenaX account</p>
+            <p class="team">Best regards,<br>The ArenaX Team</p>
+        </div>
+    </div>
+</body>
+</html>
             '''.strip()
 
             send_mail(
                 subject=subject,
-                message=message,
+                message='',  # Plain text version (empty for now)
+                html_message=message,  # HTML version
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[email],
                 fail_silently=False,
@@ -411,13 +858,50 @@ def reset_password(request):
     except PasswordResetToken.DoesNotExist:
         return Response({'error': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """Change current user's password"""
+    current_password = request.data.get('current_password')
+    new_password = request.data.get('new_password')
+    confirm_password = request.data.get('confirm_password')
+
+    if not all([current_password, new_password, confirm_password]):
+        return Response({'error': 'Current password, new password, and confirm password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_password != confirm_password:
+        return Response({'error': 'New password and confirm password do not match'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < 8:
+        return Response({'error': 'New password must be at least 8 characters long'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = request.user
+
+        # Verify current password
+        if not user.check_password(current_password):
+            return Response({'error': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if new password is different from current
+        if user.check_password(new_password):
+            return Response({'error': 'New password must be different from current password'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update password
+        user.set_password(new_password)
+        user.save()
+
+        return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'error': 'An error occurred while changing password'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 # Profile management views from core/profile_views.py
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_user_profile(request, user_id=None):
     """Get user profile (own or another user's public profile)"""
     try:
-        current_user = CustomUser.objects.get(id=request.user_id)
+        current_user = request.user
 
         # If no user_id provided, return current user's profile
         if user_id is None:
@@ -489,11 +973,11 @@ def get_user_profile(request, user_id=None):
 
 @api_view(['PUT'])
 @parser_classes([MultiPartParser, FormParser])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def update_user_profile(request):
     """Update current user's profile"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
         data = request.data
 
         # Debug logging
@@ -617,10 +1101,10 @@ def search_players(request):
         current_user = None
 
         # Check if user is authenticated by looking for user_id in request
-        if hasattr(request, 'user_id') and request.user_id:
+        if hasattr(request, 'user') and request.user.is_authenticated:
             try:
-                current_user = CustomUser.objects.get(id=request.user_id)
-                enhanced_players = find_matching_players(current_user, all_players.exclude(id=request.user_id))
+                current_user = request.user
+                enhanced_players = find_matching_players(current_user, all_players.exclude(id=request.user.id))
             except CustomUser.DoesNotExist:
                 pass
 
@@ -1021,11 +1505,11 @@ def find_matching_players(current_user, potential_players):
 
 # Additional user endpoints that the frontend expects
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_user_statistics(request):
     """Get user statistics"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
 
         stats = {
             'tournaments_participated': 0,
@@ -1053,11 +1537,11 @@ def get_user_statistics(request):
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_user_activity(request):
     """Get user recent activity"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
 
         activities = []
 
@@ -1101,11 +1585,11 @@ def get_user_activity(request):
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_user_achievements(request):
     """Get user achievements"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
 
         achievements = []
 
@@ -1159,12 +1643,12 @@ def get_user_achievements(request):
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_user_connections(request):
     """Get user connections/friends (accepted join requests)"""
-    print(f"get_user_connections called for user_id: {request.user_id}")
+    print(f"get_user_connections called for user_id: {request.user.id}")
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
         print(f"User found: {user.full_name}")
 
         # Get accepted connection requests where user is either sender or receiver
@@ -1207,11 +1691,11 @@ def get_user_connections(request):
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
-@jwt_required
+@permission_classes([IsAuthenticated])
 def get_recent_activity(request):
     """Get recent activity across the platform"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
 
         activities = []
 
@@ -1261,7 +1745,7 @@ def get_recent_activity(request):
 def get_my_join_requests(request):
     """Get user's connection requests (both sent and received)"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
 
         # Get connection requests sent by user
         sent_requests = PlayerJoinRequest.objects.filter(
@@ -1326,7 +1810,7 @@ def get_my_join_requests(request):
 def send_join_request(request, user_id):
     """Send a connection request to another player"""
     try:
-        from_user = CustomUser.objects.get(id=request.user_id)
+        from_user = request.user
         if from_user.role != 'PLAYER':
              return Response({'error': 'Only players can send connection requests'}, status=status.HTTP_403_FORBIDDEN)
              
@@ -1385,7 +1869,7 @@ def send_join_request(request, user_id):
 def respond_join_request(request, request_id):
     """Respond to a connection request"""
     try:
-        user = CustomUser.objects.get(id=request.user_id)
+        user = request.user
         action = request.data.get('action') # accept or decline
         
         if action not in ['accept', 'decline']:
@@ -1436,3 +1920,151 @@ def get_user_online_status(request, user_id):
         
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+# Dashboard Views (temporary - should be moved to separate app)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    """Get dashboard statistics for the current user"""
+    try:
+        user = request.user
+        
+        # Basic stats - can be enhanced based on user role
+        stats = {
+            'upcomingMatches': 0,
+            'totalTournaments': 0,
+            'winRate': 0.0,
+            'currentRank': 0
+        }
+        
+        if user.role == 'PLAYER':
+            from tournaments.models import TournamentRegistration
+            registrations = TournamentRegistration.objects.filter(player=user, status='ACCEPTED')
+            stats['totalTournaments'] = registrations.count()
+            stats['winRate'] = user.win_rate
+            
+        elif user.role == 'ORGANIZER':
+            from tournaments.models import Tournament
+            tournaments = Tournament.objects.filter(organizer=user)
+            stats['totalTournaments'] = tournaments.count()
+            
+        elif user.role == 'REFEREE':
+            from referees.models import RefereeBooking
+            bookings = RefereeBooking.objects.filter(referee=user)
+            stats['totalTournaments'] = bookings.count()
+            stats['winRate'] = user.referee_profile.rating if hasattr(user, 'referee_profile') else 0
+            
+        return Response(stats)
+        
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_monthly_stats(request):
+    """Get monthly statistics for the current user"""
+    try:
+        user = request.user
+        year = request.GET.get('year', timezone.now().year)
+        
+        # Return empty stats for now - can be enhanced
+        monthly_stats = []
+        for month in range(1, 13):
+            monthly_stats.append({
+                'month': month,
+                'matches': 0,
+                'wins': 0,
+                'tournaments': 0
+            })
+            
+        return Response(monthly_stats)
+        
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_next_tournament(request):
+    """Get next tournament for the current user"""
+    try:
+        user = request.user
+        
+        next_tournament = None
+        if user.role == 'PLAYER':
+            from tournaments.models import TournamentRegistration
+            registration = TournamentRegistration.objects.filter(
+                player=user, 
+                status='ACCEPTED',
+                tournament__date__gte=timezone.now().date()
+            ).select_related('tournament').first()
+            
+            if registration:
+                tournament = registration.tournament
+                next_tournament = {
+                    'id': str(tournament.id),
+                    'title': tournament.title,
+                    'date': tournament.date.isoformat(),
+                    'time': tournament.start_time.strftime('%H:%M'),
+                    'venue': tournament.venue_name,
+                    'sport': tournament.sport_type
+                }
+                
+        elif user.role == 'ORGANIZER':
+            from tournaments.models import Tournament
+            tournament = Tournament.objects.filter(
+                organizer=user,
+                date__gte=timezone.now().date()
+            ).first()
+            
+            if tournament:
+                next_tournament = {
+                    'id': str(tournament.id),
+                    'title': tournament.title,
+                    'date': tournament.date.isoformat(),
+                    'time': tournament.start_time.strftime('%H:%M'),
+                    'venue': tournament.venue_name,
+                    'sport': tournament.sport_type
+                }
+        
+        return Response({'next_tournament': next_tournament})
+        
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_profile(request):
+    """Get dashboard profile information"""
+    try:
+        user = request.user
+        
+        profile_data = {
+            'id': str(user.id),
+            'full_name': user.full_name,
+            'email': user.email,
+            'role': user.role,
+            'profile_picture': user.profile_picture.url if user.profile_picture else None,
+            'bio': user.bio,
+            'location': user.location,
+            'skill_level': user.skill_level,
+            'preferred_sports': user.preferred_sports,
+            'matches_played': user.matches_played,
+            'matches_won': user.matches_won,
+            'win_rate': user.win_rate
+        }
+        
+        return Response({'profile': profile_data})
+        
+    except CustomUser.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

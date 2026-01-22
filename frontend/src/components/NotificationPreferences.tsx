@@ -52,7 +52,7 @@ export default function NotificationPreferences({ isOpen, onClose }: Notificatio
         {
           type: 'BOOKING_REQUEST',
           display_name: 'Booking Requests',
-          description: 'Notifications about venue booking requests'
+          description: 'Notifications about venue and referee booking requests'
         },
         {
           type: 'JOIN_REQUEST',

@@ -4,7 +4,6 @@ import type {
   DashboardLayout, 
   DashboardPreferences, 
   GetDashboardLayoutResponse,
-  SaveDashboardLayoutRequest,
   SaveDashboardLayoutResponse,
   BaseWidget
 } from '@/types/dashboard.types';
@@ -252,7 +251,7 @@ class DashboardService {
   async getNextTournament(): Promise<NextTournament | null> {
     try {
       const response = await api.get(API_ENDPOINTS.DASHBOARD.NEXT_TOURNAMENT);
-      return response.data;
+      return response.data.next_tournament;
     } catch (error) {
       console.warn('Next tournament endpoint not available, using fallback');
       // Return null instead of mock data to avoid confusion
@@ -262,11 +261,49 @@ class DashboardService {
 
   async getPlayerProfile(): Promise<PlayerProfile | null> {
     try {
-      const response = await api.get(API_ENDPOINTS.DASHBOARD.PROFILE);
-      return response.data;
+      // Use the user profile endpoint instead of dashboard profile endpoint
+      // This ensures we get the most up-to-date profile data
+      const response = await api.get(API_ENDPOINTS.USERS.ME);
+      console.log('User profile response for dashboard:', response.data);
+      
+      const userProfile = response.data.profile;
+      if (userProfile) {
+        // Transform user profile data to match PlayerProfile interface
+        return {
+          id: userProfile.id,
+          name: userProfile.full_name,
+          country: userProfile.country,
+          age: userProfile.date_of_birth ? this.calculateAge(userProfile.date_of_birth) : 0,
+          birthDate: userProfile.date_of_birth,
+          gender: userProfile.gender,
+          wtaRanking: userProfile.wtaRanking,
+          atpRanking: userProfile.atpRanking,
+          bio: userProfile.bio || '',
+          profilePicture: userProfile.profile_picture,
+        };
+      }
+      
+      return null;
     } catch (error) {
+      console.error('Failed to fetch user profile for dashboard:', error);
       // Return null if API fails - will show "complete profile" message
       return null;
+    }
+  }
+
+  private calculateAge(dateString: string): number {
+    try {
+      const birthDate = new Date(dateString);
+      if (isNaN(birthDate.getTime())) return 0;
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    } catch {
+      return 0;
     }
   }
 

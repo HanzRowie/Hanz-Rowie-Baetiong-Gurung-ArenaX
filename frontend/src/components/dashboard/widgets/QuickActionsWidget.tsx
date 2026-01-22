@@ -97,6 +97,42 @@ export function QuickActionsWidget({ widget }: QuickActionsWidgetProps) {
           }
         ];
 
+      case UserRole.REFEREE:
+        return [
+          {
+            id: 'set-availability',
+            label: 'Set Availability',
+            description: 'Update your schedule',
+            icon: 'calendar',
+            action: () => navigate('/referee/availability'),
+            color: 'green'
+          },
+          {
+            id: 'view-bookings',
+            label: 'View Bookings',
+            description: 'Manage booking requests',
+            icon: 'eye',
+            action: () => navigate('/referee/bookings'),
+            color: 'blue'
+          },
+          {
+            id: 'view-schedule',
+            label: 'My Schedule',
+            description: 'Upcoming assignments',
+            icon: 'calendar',
+            action: () => navigate('/referee/schedule'),
+            color: 'purple'
+          },
+          {
+            id: 'update-profile',
+            label: 'Update Profile',
+            description: 'Edit referee information',
+            icon: 'settings',
+            action: () => navigate('/profile'),
+            color: 'gray'
+          }
+        ];
+
       case UserRole.VENUE_OWNER:
         return [
           {

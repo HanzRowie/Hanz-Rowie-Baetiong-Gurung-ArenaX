@@ -1,6 +1,6 @@
 export interface Notification {
   id: string;
-  notification_type: 'TOURNAMENT_REGISTRATION' | 'MATCH_RESULT' | 'BOOKING_REQUEST' | 'JOIN_REQUEST' | 'SYSTEM' | 'MESSAGE' | 'VENUE_BOOKING';
+  notification_type: 'TOURNAMENT_REGISTRATION' | 'MATCH_RESULT' | 'BOOKING_REQUEST' | 'JOIN_REQUEST' | 'SYSTEM' | 'MESSAGE' | 'REFEREE_BOOKING' | 'VENUE_BOOKING';
   title: string;
   message: string;
   read: boolean;

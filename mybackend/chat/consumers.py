@@ -15,6 +15,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
+        # Only allow players to use chat
+        if self.user.role != 'PLAYER':
+            await self.close()
+            return
+
         # Get the other user ID from URL path
         # URL pattern: ws/chat/<other_user_id>/
         other_user_id = self.scope['url_route']['kwargs'].get('user_id')
@@ -26,6 +31,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             self.other_user = await self.get_user_by_id(other_user_id)
         except User.DoesNotExist:
+            await self.close()
+            return
+
+        # Only allow chatting with other players
+        if self.other_user.role != 'PLAYER':
             await self.close()
             return
 

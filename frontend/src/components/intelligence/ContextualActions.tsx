@@ -100,7 +100,7 @@ export function ContextualActions({
           onClick: () => console.log('Navigate to availability'),
           category: 'primary',
           context: ['dashboard'],
-          relevanceScore: 0.2,
+          relevanceScore: user.role === UserRole.REFEREE ? 0.8 : 0.2,
         }
       );
     }
