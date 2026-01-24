@@ -39,7 +39,7 @@ class RefereeAvailability(models.Model):
     notes = models.TextField(blank=True)
 
     class Meta:
-        unique_together = ('referee', 'available_date')  # One slot per referee per date
+        unique_together = ('referee', 'available_date', 'start_time', 'end_time')  # Prevent duplicate slots
         ordering = ['available_date', 'start_time']
 
     def __str__(self):

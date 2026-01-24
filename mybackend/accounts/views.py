@@ -1593,15 +1593,15 @@ def get_user_achievements(request):
 
         achievements = []
 
-        # Tournament wins
-        from tournaments.models import Tournament
-        won_tournaments = Tournament.objects.filter(winner=user)
-        if won_tournaments.exists():
+        # Tournament wins (based on matches won)
+        from tournaments.models import Match
+        won_matches = Match.objects.filter(winner=user, status='COMPLETED')
+        if won_matches.exists():
             achievements.append({
-                'title': 'Tournament Champion',
-                'description': f'Won {won_tournaments.count()} tournament(s)',
+                'title': 'Match Winner',
+                'description': f'Won {won_matches.count()} match(es)',
                 'icon': '🏆',
-                'count': won_tournaments.count()
+                'count': won_matches.count()
             })
 
         # Match win streaks or high win rate

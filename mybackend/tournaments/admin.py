@@ -1,3 +1,36 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Tournament, TournamentRegistration, Match, RefereeBooking
+
+
+@admin.register(Tournament)
+class TournamentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'sport_type', 'tournament_type', 'organizer', 'status', 'date', 'venue_name', 'created_at')
+    search_fields = ('title', 'sport_type', 'organizer__full_name', 'venue')
+    list_filter = ('sport_type', 'tournament_type', 'status', 'date')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(TournamentRegistration)
+class TournamentRegistrationAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'player', 'status', 'registered_at')
+    search_fields = ('tournament__title', 'player__full_name')
+    list_filter = ('status', 'registered_at')
+    ordering = ('-registered_at',)
+
+
+@admin.register(Match)
+class MatchAdmin(admin.ModelAdmin):
+    list_display = ('tournament', 'round_number', 'match_number', 'player1', 'player2', 'winner', 'status', 'scheduled_time')
+    search_fields = ('tournament__title', 'player1__full_name', 'player2__full_name')
+    list_filter = ('status', 'round_number')
+    ordering = ('tournament', 'round_number', 'match_number')
+
+
+@admin.register(RefereeBooking)
+class RefereeBookingAdmin(admin.ModelAdmin):
+    list_display = ('referee', 'match', 'requested_by', 'status', 'requested_at')
+    search_fields = ('referee__full_name', 'match__tournament__title', 'requested_by__full_name')
+    list_filter = ('status', 'requested_at')
+    ordering = ('-requested_at',)

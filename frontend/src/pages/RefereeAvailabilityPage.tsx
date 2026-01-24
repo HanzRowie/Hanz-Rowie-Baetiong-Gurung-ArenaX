@@ -81,6 +81,7 @@ const RefereeAvailabilityPage: React.FC = () => {
   };
 
   const isDateAvailable = (date: string) => {
+    // Check if there's any available slot for this date (regardless of times)
     return availabilities.some(slot => 
       slot.available_date === date && slot.is_available
     );
@@ -97,14 +98,22 @@ const RefereeAvailabilityPage: React.FC = () => {
 
     try {
       setSaving(true);
+      
+      // Check if there's any existing slot for this date
       const existingSlot = availabilities.find(slot => slot.available_date === date);
       
       if (existingSlot) {
-        // Toggle existing slot
-        const updatedSlot = { ...existingSlot, is_available: !existingSlot.is_available };
-        await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
+        if (existingSlot.is_available) {
+          // If currently available, make unavailable
+          const updatedSlot = { ...existingSlot, is_available: false };
+          await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
+        } else {
+          // If currently unavailable, make available
+          const updatedSlot = { ...existingSlot, is_available: true };
+          await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
+        }
       } else {
-        // Create new slot with general availability times
+        // Create new available slot
         const newSlot = {
           available_date: date,
           start_time: daySettings.start_time,
@@ -117,7 +126,8 @@ const RefereeAvailabilityPage: React.FC = () => {
       
       await fetchAvailabilities();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update availability');
+      console.error('Availability toggle error:', err.response?.data);
+      alert(err.response?.data?.error || err.response?.data?.detail || 'Failed to update availability');
     } finally {
       setSaving(false);
     }
@@ -146,14 +156,17 @@ const RefereeAvailabilityPage: React.FC = () => {
       setSaving(true);
       
       // Delete existing availabilities
-      for (const slot of availabilities) {
+      const deletePromises = availabilities.map(slot => {
         if (slot.id) {
-          await api.delete(`/api/referees/availability/${slot.id}/`);
+          return api.delete(`/api/referees/availability/${slot.id}/`);
         }
-      }
+        return Promise.resolve();
+      });
+      
+      await Promise.all(deletePromises);
 
       // Create new slots based on general availability
-      const promises = next14Days.map(day => {
+      const createPromises = next14Days.map(day => {
         const dayOfWeek = day.dayName.toLowerCase() as keyof GeneralAvailability;
         const daySettings = generalAvailability[dayOfWeek];
         
@@ -169,12 +182,13 @@ const RefereeAvailabilityPage: React.FC = () => {
         return Promise.resolve();
       });
 
-      await Promise.all(promises);
+      await Promise.all(createPromises);
       await fetchAvailabilities();
       setShowSettings(false);
       alert('Applied general availability to all days!');
     } catch (err: any) {
-      alert('Failed to apply general availability');
+      console.error('Apply general availability error:', err.response?.data);
+      alert(err.response?.data?.error || err.response?.data?.detail || 'Failed to apply general availability');
     } finally {
       setSaving(false);
     }
@@ -182,15 +196,15 @@ const RefereeAvailabilityPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="space-y-6">
         <LoadingSkeleton />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Availability</h1>
           <p className="text-gray-600 mt-1">Manage when you're available to referee tournaments</p>
@@ -366,7 +380,13 @@ const RefereeAvailabilityPage: React.FC = () => {
         ) : (
           <div className="space-y-2">
             {availabilities
-              .filter(slot => slot.is_available)
+              .filter(slot => {
+                // Only show slots from today onwards
+                const slotDate = new Date(slot.available_date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Reset time to start of day
+                return slot.is_available && slotDate >= today;
+              })
               .sort((a, b) => new Date(a.available_date).getTime() - new Date(b.available_date).getTime())
               .slice(0, 10)
               .map((slot) => (
@@ -392,10 +412,35 @@ const RefereeAvailabilityPage: React.FC = () => {
                 </div>
               ))}
             
-            {availabilities.filter(slot => slot.is_available).length > 10 && (
+            {availabilities.filter(slot => {
+              const slotDate = new Date(slot.available_date);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return slot.is_available && slotDate >= today;
+            }).length > 10 && (
               <p className="text-sm text-gray-500 text-center mt-4">
-                And {availabilities.filter(slot => slot.is_available).length - 10} more available slots...
+                And {availabilities.filter(slot => {
+                  const slotDate = new Date(slot.available_date);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return slot.is_available && slotDate >= today;
+                }).length - 10} more available slots...
               </p>
+            )}
+            
+            {availabilities.filter(slot => {
+              const slotDate = new Date(slot.available_date);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return slot.is_available && slotDate >= today;
+            }).length === 0 && (
+              <div className="text-center py-8">
+                <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 mb-2">No upcoming availability slots.</p>
+                <p className="text-sm text-gray-500">
+                  Use the toggle above to set your availability for upcoming days.
+                </p>
+              </div>
             )}
           </div>
         )}

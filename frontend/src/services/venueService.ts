@@ -118,7 +118,7 @@ class VenueService {
       formData.append('image', data.images[0]); // Backend uses single 'image'
     }
 
-    const response = await api.post('/api/venues/', formData, {
+    const response = await api.post('/api/venues/venues/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -139,12 +139,12 @@ class VenueService {
     if (filters?.available_date) params.append('available_date', filters.available_date);
     if (filters?.search) params.append('search', filters.search);
 
-    const response = await api.get(`/api/venues/?${params.toString()}`);
+    const response = await api.get(`/api/venues/venues/?${params.toString()}`);
     return response.data;
   }
 
   async getVenueDetail(venueId: string): Promise<{ venue: Venue }> {
-    const response = await api.get(`/api/venues/${venueId}/`);
+    const response = await api.get(`/api/venues/venues/${venueId}/`);
     return { venue: response.data };
   }
 
@@ -166,7 +166,7 @@ class VenueService {
       formData.append('image', data.images[0]);
     }
 
-    const response = await api.put(`/api/venues/${venueId}/`, formData, {
+    const response = await api.put(`/api/venues/venues/${venueId}/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -176,7 +176,7 @@ class VenueService {
   }
 
   async deleteVenue(venueId: string): Promise<{ message: string }> {
-    const response = await api.delete(`/api/venues/${venueId}/`);
+    const response = await api.delete(`/api/venues/venues/${venueId}/`);
     return response.data;
   }
 
@@ -199,7 +199,7 @@ class VenueService {
     venueId: string,
     availability: Omit<VenueAvailability, 'id' | 'venue'>[]
   ): Promise<{ availability: VenueAvailability[]; message: string }> {
-    const response = await api.post(`/api/venues/${venueId}/availability/`, { availability });
+    const response = await api.post(`/api/venues/venues/${venueId}/availability/`, { availability });
     return response.data;
   }
 
@@ -212,7 +212,7 @@ class VenueService {
 
   async getVenueAvailability(venueId: string, date?: string): Promise<{ availability: VenueAvailability[] }> {
     const params = date ? `?date=${date}` : '';
-    const response = await api.get(`/api/venues/${venueId}/availability/${params}`);
+    const response = await api.get(`/api/venues/venues/${venueId}/availability/${params}`);
     return response.data;
   }
 
@@ -243,19 +243,19 @@ class VenueService {
 
     console.log('Sending booking request:', requestData);
 
-    const response = await api.post(`/api/venues/${data.venue_id}/book/`, requestData);
+    const response = await api.post(`/api/venues/venues/${data.venue_id}/book/`, requestData);
     return response.data;
   }
 
   async getBookingRequests(venueId?: string): Promise<{ bookings: VenueBooking[] }> {
     const params = venueId ? `?venue_id=${venueId}` : '';
-    const response = await api.get(`/api/my-bookings/${params}`);
-    return { bookings: response.data };
+    const response = await api.get(`/api/venues/my-bookings/${params}`);
+    return { bookings: response.data.bookings || response.data };
   }
 
   async getMyBookings(): Promise<{ bookings: VenueBooking[] }> {
-    const response = await api.get('/api/my-bookings/');
-    return { bookings: response.data };
+    const response = await api.get('/api/venues/my-bookings/');
+    return { bookings: response.data.bookings || response.data };
   }
 
   async respondToBookingRequest(
@@ -264,12 +264,12 @@ class VenueService {
     notes?: string
   ): Promise<{ booking: VenueBooking; message: string }> {
     const endpoint = action === 'confirm' ? 'approve' : 'reject';
-    const response = await api.post(`/api/bookings/${bookingId}/${endpoint}/`, { notes });
+    const response = await api.post(`/api/venues/bookings/${bookingId}/${endpoint}/`, { notes });
     return response.data;
   }
 
   async cancelBooking(bookingId: string, reason?: string): Promise<{ message: string }> {
-    const response = await api.post(`/api/bookings/${bookingId}/cancel/`, { reason });
+    const response = await api.post(`/api/venues/bookings/${bookingId}/cancel/`, { reason });
     return response.data;
   }
 
@@ -281,17 +281,17 @@ class VenueService {
 
   // Venue owner specific methods
   async getMyVenues(): Promise<{ venues: Venue[] }> {
-    const response = await api.get('/api/my-venues/');
-    return { venues: response.data };
+    const response = await api.get('/api/venues/my-venues/');
+    return { venues: response.data.venues || response.data };
   }
 
   async getVenueStats(venueId: string): Promise<VenueStats> {
-    const response = await api.get(`/api/venues/${venueId}/stats/`);
+    const response = await api.get(`/api/venues/venues/${venueId}/stats/`);
     return response.data;
   }
 
   async getVenueReviews(venueId: string): Promise<{ reviews: any[] }> {
-    const response = await api.get(`/api/venues/${venueId}/reviews/`);
+    const response = await api.get(`/api/venues/venues/${venueId}/reviews/`);
     return response.data;
   }
 

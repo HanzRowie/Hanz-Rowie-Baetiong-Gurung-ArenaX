@@ -19,5 +19,6 @@ urlpatterns = [
     path('my-bookings/', views.my_venue_bookings, name='my_venue_bookings'),
     path('my-venues/', views.get_my_venues, name='get_my_venues'),
     path('venues/<int:venue_id>/stats/', views.venue_stats, name='venue_stats'),
+    path('venues/<int:venue_id>/reviews/', views.venue_reviews, name='venue_reviews'),
     path('earnings/', views.venue_earnings, name='venue_earnings'),
 ]

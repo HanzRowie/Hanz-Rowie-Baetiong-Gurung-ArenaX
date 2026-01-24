@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Building2, Calendar, MessageCircle,
   TrendingUp, DollarSign, Clock, CheckCircle,
-  XCircle, Plus,
+  XCircle,
   BarChart3, ArrowUpRight
 } from 'lucide-react';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
@@ -90,7 +90,7 @@ export default function VenueOwnerDashboard() {
   const handleBookingRequest = async (requestId: string, action: 'accept' | 'reject') => {
     try {
       const endpoint = action === 'accept' ? 'approve' : 'reject';
-      await api.post(`/api/bookings/${requestId}/${endpoint}/`);
+      await api.post(`/api/venues/bookings/${requestId}/${endpoint}/`);
 
       setBookingRequests(prev => prev.filter(req => req.id !== requestId));
       toastService.success(`Booking request ${action}ed successfully`);
@@ -343,42 +343,7 @@ export default function VenueOwnerDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-1 gap-3">
-              <button
-                onClick={() => navigate('/venues/create')}
-                className="flex items-center gap-3 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                <Plus className="h-5 w-5" />
-                <div className="text-left">
-                  <p className="font-medium">Add New Venue</p>
-                  <p className="text-sm opacity-80">List a new property</p>
-                </div>
-              </button>
-              <button
-                onClick={() => navigate('/venues')}
-                className="flex items-center gap-3 border border-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <Building2 className="h-5 w-5" />
-                <div className="text-left">
-                  <p className="font-medium">Manage All Venues</p>
-                  <p className="text-sm text-gray-600">View and edit venues</p>
-                </div>
-              </button>
-              <button
-                onClick={() => navigate('/venue-bookings')}
-                className="flex items-center gap-3 border border-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <Calendar className="h-5 w-5" />
-                <div className="text-left">
-                  <p className="font-medium">View All Bookings</p>
-                  <p className="text-sm text-gray-600">Manage reservations</p>
-                </div>
-              </button>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>

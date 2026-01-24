@@ -306,8 +306,8 @@ const RefereeManagementPage: React.FC = () => {
 
       {/* Booking Detail Modal */}
       {selectedBooking && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border">
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Assignment Details</h2>
@@ -315,6 +315,7 @@ const RefereeManagementPage: React.FC = () => {
                   variant="secondary"
                   size="sm"
                   onClick={() => setSelectedBooking(null)}
+                  className="bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
                   Close
                 </Button>
@@ -379,7 +380,7 @@ const RefereeManagementPage: React.FC = () => {
                   <Button
                     onClick={() => handleResponse(selectedBooking.id, 'accept')}
                     disabled={responding}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                   >
                     {responding ? 'Processing...' : 'Accept Assignment'}
                   </Button>
@@ -387,14 +388,14 @@ const RefereeManagementPage: React.FC = () => {
                     variant="secondary"
                     onClick={() => handleResponse(selectedBooking.id, 'decline')}
                     disabled={responding}
-                    className="flex-1 text-red-600 hover:text-red-700"
+                    className="flex-1 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100"
                   >
                     {responding ? 'Processing...' : 'Decline Assignment'}
                   </Button>
                 </div>
               )}
             </div>
-          </Card>
+          </div>
         </div>
       )}
     </div>

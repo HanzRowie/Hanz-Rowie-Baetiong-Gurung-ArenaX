@@ -17,6 +17,11 @@ class VenueViewSet(viewsets.ModelViewSet):
     serializer_class = VenueSerializer
     permission_classes = [IsAuthenticated]
 
+    def perform_create(self, serializer):
+        """Set the owner to the current user for venue owners"""
+        print(f"PERFORM_CREATE - User: {self.request.user}, Role: {getattr(self.request.user, 'role', 'No role')}")
+        serializer.save(owner=self.request.user)
+
     def get_queryset(self):
         queryset = Venue.objects.all()
         
@@ -82,12 +87,24 @@ class VenueViewSet(viewsets.ModelViewSet):
             'count': len(serializer.data)
         })
 
-    def perform_create(self, serializer):
-        # Set the owner to the current user for venue owners
-        if self.request.user.role == 'VENUE_OWNER':
-            serializer.save(owner=self.request.user)
-        else:
-            raise PermissionError("Only venue owners can create venues")
+    def create(self, request, *args, **kwargs):
+        """Override create method to add debugging and better error handling"""
+        print(f"CREATE REQUEST - User: {request.user}")
+        print(f"User authenticated: {request.user.is_authenticated}")
+        print(f"User role: {getattr(request.user, 'role', 'No role attribute')}")
+        print(f"Request data: {request.data}")
+        
+        # Check if user is authenticated
+        if not request.user.is_authenticated:
+            from rest_framework.exceptions import NotAuthenticated
+            raise NotAuthenticated("Authentication required")
+        
+        # Check if user has venue owner role
+        if not hasattr(request.user, 'role') or request.user.role != 'VENUE_OWNER':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only venue owners can create venues")
+        
+        return super().create(request, *args, **kwargs)
 
 class VenueAvailabilityViewSet(viewsets.ModelViewSet):
     queryset = VenueAvailability.objects.all()
@@ -386,7 +403,10 @@ def my_venue_bookings(request):
 
     bookings = bookings.order_by('-created_at')
     serializer = VenueBookingSerializer(bookings, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response({
+        'bookings': serializer.data,
+        'count': len(serializer.data)
+    }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -398,7 +418,10 @@ def get_my_venues(request):
         
         venues = Venue.objects.filter(owner=request.user)
         serializer = VenueSerializer(venues, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({
+            'venues': serializer.data,
+            'count': len(serializer.data)
+        }, status=status.HTTP_200_OK)
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -548,4 +571,34 @@ def venue_stats(request, venue_id):
         'monthly_stats': monthly_stats_list,
         'popular_time_slots': popular_slots_list,
         'sport_type_breakdown': sport_type_breakdown
+    }, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def venue_reviews(request, venue_id):
+    """Get reviews for a specific venue"""
+    venue = get_object_or_404(Venue, id=venue_id)
+    
+    # Mock reviews data since review system is not implemented yet
+    mock_reviews = [
+        {
+            'id': 1,
+            'user': {'name': 'John Doe', 'avatar': None},
+            'rating': 5,
+            'comment': 'Great venue with excellent facilities!',
+            'created_at': '2024-01-15T10:30:00Z'
+        },
+        {
+            'id': 2,
+            'user': {'name': 'Jane Smith', 'avatar': None},
+            'rating': 4,
+            'comment': 'Good location and clean courts.',
+            'created_at': '2024-01-10T14:20:00Z'
+        }
+    ]
+    
+    return Response({
+        'reviews': mock_reviews,
+        'count': len(mock_reviews),
+        'average_rating': 4.5
     }, status=status.HTTP_200_OK)

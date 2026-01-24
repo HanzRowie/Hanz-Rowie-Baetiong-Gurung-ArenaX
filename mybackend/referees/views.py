@@ -89,23 +89,26 @@ class RefereeAvailabilityViewSet(viewsets.ModelViewSet):
         if self.request.user.role != 'REFEREE':
             raise serializers.ValidationError('Only referees can create availability slots')
         
-        # Check for existing slot with same date and times
-        existing_slot = RefereeAvailability.objects.filter(
-            referee=self.request.user,
-            available_date=serializer.validated_data['available_date'],
-            start_time=serializer.validated_data.get('start_time'),
-            end_time=serializer.validated_data.get('end_time')
-        ).first()
+        # Use get_or_create to handle duplicates
+        availability_data = serializer.validated_data
+        availability_data['referee'] = self.request.user
         
-        if existing_slot:
-            # Update existing slot instead of creating new one
-            for key, value in serializer.validated_data.items():
-                setattr(existing_slot, key, value)
-            existing_slot.save()
-            # Return the updated instance
-            serializer.instance = existing_slot
-        else:
-            serializer.save(referee=self.request.user)
+        availability, created = RefereeAvailability.objects.get_or_create(
+            referee=self.request.user,
+            available_date=availability_data['available_date'],
+            start_time=availability_data.get('start_time'),
+            end_time=availability_data.get('end_time'),
+            defaults=availability_data
+        )
+        
+        if not created:
+            # Update existing record
+            for key, value in availability_data.items():
+                if key != 'referee':  # Don't update referee field
+                    setattr(availability, key, value)
+            availability.save()
+        
+        serializer.instance = availability
 
 class RefereeBookingViewSet(viewsets.ModelViewSet):
     queryset = RefereeBooking.objects.all()

@@ -27,6 +27,7 @@ import TournamentDetailPage from './pages/TournamentDetailPage';
 import RefereeSelectionPage from './pages/RefereeSelectionPage';
 import RefereeDashboardPage from './pages/RefereeDashboardPage';
 import RefereeManagementPage from './pages/RefereeManagementPage';
+import RefereeRatingsPage from './pages/RefereeRatingsPage';
 import ProfilePage from './pages/ProfilePage';
 import PlayersPage from './pages/PlayersPage';
 import ChatsPage from './pages/ChatsPage';
@@ -140,7 +141,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'referee/bookings',
-        element: <RefereeBookingsPage />,
+        element: <RefereeManagementPage />, // Redirect to management page
+      },
+      {
+        path: 'referee/ratings',
+        element: <RefereeRatingsPage />,
       },
       {
         path: 'referee/schedule',
