@@ -7,6 +7,7 @@ export { default as DashboardPage } from './DashboardPage';
 export { default as ForgotPasswordPage } from './ForgotPasswordPage';
 export { default as ResetPasswordPage } from './ResetPasswordPage';
 export { default as CreateTournamentPage } from './CreateTournamentPage';
+export { default as EditTournamentPage } from './EditTournamentPage';
 export { default as TournamentsPage } from './TournamentsPage';
 export { default as TournamentDetailPage } from './TournamentDetailPage';
 export { default as TournamentManagementPage } from './TournamentManagementPage';

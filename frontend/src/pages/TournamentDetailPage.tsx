@@ -19,6 +19,7 @@ export default function TournamentDetailPage() {
   const { user } = useAuth();
   
   const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
@@ -36,8 +37,51 @@ export default function TournamentDetailPage() {
   const loadTournament = async () => {
     try {
       setLoading(true);
+      
+      // Load tournament details
       const response = await tournamentService.getTournamentDetail(tournamentId!);
       setTournament(response.tournament);
+      
+      // Load detailed participants for organizers, or basic participant info for others
+      if (user?.role === 'ORGANIZER') {
+        try {
+          const participantsResponse = await tournamentService.getTournamentParticipants(tournamentId!);
+          setParticipants(participantsResponse.participants);
+        } catch (participantError) {
+          console.warn('Failed to load participants:', participantError);
+          // Fallback to registered_players from tournament data
+          if (response.tournament.registered_players) {
+            const basicParticipants = response.tournament.registered_players.map(player => ({
+              id: player.id, // This will be user ID, not registration ID
+              user: {
+                id: player.id,
+                full_name: player.name,
+                email: '', // Email might not be available in registered_players
+                profile_picture: player.profile_picture
+              },
+              status: 'ACCEPTED', // Assume accepted if in registered_players
+              registration_date: player.registered_at
+            }));
+            setParticipants(basicParticipants);
+          }
+        }
+      } else {
+        // For non-organizers, use the basic registered_players data
+        if (response.tournament.registered_players) {
+          const basicParticipants = response.tournament.registered_players.map(player => ({
+            id: player.id, // This will be user ID for non-organizers
+            user: {
+              id: player.id,
+              full_name: player.name,
+              email: '', // Email might not be available in registered_players
+              profile_picture: player.profile_picture
+            },
+            status: 'ACCEPTED', // Assume accepted if in registered_players
+            registration_date: player.registered_at
+          }));
+          setParticipants(basicParticipants);
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load tournament details');
     } finally {
@@ -98,14 +142,16 @@ export default function TournamentDetailPage() {
   };
 
   const handleExportParticipants = () => {
-    if (!tournament?.registered_players) return;
+    // Export participants to CSV
+    if (!participants || participants.length === 0) return;
     
     const csvContent = [
-      ['Name', 'Skill Level', 'Registration Date'],
-      ...tournament.registered_players.map(player => [
-        player.name,
-        player.skill_level || 'Not specified',
-        player.registered_at || 'Unknown'
+      ['Name', 'Email', 'Status', 'Registration Date'],
+      ...participants.map(participant => [
+        participant.user.full_name,
+        participant.user.email,
+        participant.status,
+        new Date(participant.registration_date || '').toLocaleDateString()
       ])
     ].map(row => row.join(',')).join('\n');
     
@@ -113,14 +159,58 @@ export default function TournamentDetailPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${tournament.title}_participants.csv`;
+    a.download = `${tournament?.title || 'tournament'}_participants.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
-  const filteredParticipants = tournament?.registered_players?.filter(player =>
-    player.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-    (player.skill_level && player.skill_level.toLowerCase().includes(participantSearch.toLowerCase()))
+  const handleAcceptParticipants = async () => {
+    if (selectedParticipants.length === 0) return;
+    
+    try {
+      if (selectedParticipants.length === 1) {
+        // Single accept
+        await tournamentService.acceptParticipant(tournamentId!, selectedParticipants[0]);
+        toastService.success('Participant accepted successfully!');
+      } else {
+        // Bulk accept
+        const response = await tournamentService.bulkAcceptParticipants(tournamentId!, selectedParticipants);
+        toastService.success(`${response.accepted_count} participants accepted successfully!`);
+      }
+      
+      setSelectedParticipants([]);
+      await loadTournament(); // Reload to update participant list
+    } catch (err: any) {
+      toastService.error(err.message || 'Failed to accept participants');
+    }
+  };
+
+  const handleRejectParticipants = async () => {
+    if (selectedParticipants.length === 0) return;
+    
+    const reason = prompt('Please provide a reason for rejection (optional):');
+    
+    try {
+      if (selectedParticipants.length === 1) {
+        // Single reject
+        await tournamentService.rejectParticipant(tournamentId!, selectedParticipants[0], reason || undefined);
+        toastService.success('Participant rejected successfully!');
+      } else {
+        // Bulk reject
+        const response = await tournamentService.bulkRejectParticipants(tournamentId!, selectedParticipants, reason || undefined);
+        toastService.success(`${response.rejected_count} participants rejected successfully!`);
+      }
+      
+      setSelectedParticipants([]);
+      await loadTournament(); // Reload to update participant list
+    } catch (err: any) {
+      toastService.error(err.message || 'Failed to reject participants');
+    }
+  };
+
+  const filteredParticipants = participants?.filter(participant =>
+    participant.user.full_name.toLowerCase().includes(participantSearch.toLowerCase()) ||
+    (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()))
   ) || [];
 
   const getStatusColor = (status: string) => {
@@ -413,7 +503,7 @@ export default function TournamentDetailPage() {
                         </div>
                       </div>
                       
-                      {isOrganizer() && tournament.registered_players && tournament.registered_players.length > 0 && (
+                      {isOrganizer() && participants && participants.length > 0 && (
                         <div className="flex items-center gap-2">
                           <button
                             onClick={handleExportParticipants}
@@ -425,11 +515,17 @@ export default function TournamentDetailPage() {
                           
                           {selectedParticipants.length > 0 && (
                             <div className="flex items-center gap-2">
-                              <button className="flex items-center gap-2 px-3 py-2 text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors">
+                              <button 
+                                onClick={handleAcceptParticipants}
+                                className="flex items-center gap-2 px-3 py-2 text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors"
+                              >
                                 <UserCheck className="h-4 w-4" />
                                 Accept ({selectedParticipants.length})
                               </button>
-                              <button className="flex items-center gap-2 px-3 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+                              <button 
+                                onClick={handleRejectParticipants}
+                                className="flex items-center gap-2 px-3 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                              >
                                 <UserX className="h-4 w-4" />
                                 Reject ({selectedParticipants.length})
                               </button>
@@ -440,7 +536,7 @@ export default function TournamentDetailPage() {
                     </div>
 
                     {/* Participant Search */}
-                    {tournament.registered_players && tournament.registered_players.length > 5 && (
+                    {participants && participants.length > 5 && (
                       <div className="mb-4">
                         <div className="relative">
                           <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -457,17 +553,17 @@ export default function TournamentDetailPage() {
 
                     {filteredParticipants.length > 0 ? (
                       <div className="space-y-3">
-                        {filteredParticipants.map((player, index) => (
-                          <div key={player.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        {filteredParticipants.map((participant, index) => (
+                          <div key={participant.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                             {isOrganizer() && (
                               <input
                                 type="checkbox"
-                                checked={selectedParticipants.includes(player.id)}
+                                checked={selectedParticipants.includes(participant.id)}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedParticipants([...selectedParticipants, player.id]);
+                                    setSelectedParticipants([...selectedParticipants, participant.id]);
                                   } else {
-                                    setSelectedParticipants(selectedParticipants.filter(id => id !== player.id));
+                                    setSelectedParticipants(selectedParticipants.filter(id => id !== participant.id));
                                   }
                                 }}
                                 className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
@@ -476,16 +572,16 @@ export default function TournamentDetailPage() {
                             
                             <div className="flex items-center gap-3 flex-1">
                               <div className="relative">
-                                {player.profile_picture ? (
+                                {participant.user.profile_picture ? (
                                   <img
-                                    src={player.profile_picture}
-                                    alt={player.name}
+                                    src={participant.user.profile_picture}
+                                    alt={participant.user.full_name}
                                     className="h-12 w-12 rounded-full object-cover"
                                   />
                                 ) : (
                                   <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
                                     <span className="text-lg font-medium text-purple-600">
-                                      {player.name.charAt(0)}
+                                      {participant.user.full_name.charAt(0)}
                                     </span>
                                   </div>
                                 )}
@@ -496,25 +592,30 @@ export default function TournamentDetailPage() {
                               
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <p className="font-medium text-gray-900">{player.name}</p>
-                                  {player.skill_level && (
-                                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                      {player.skill_level}
+                                  <p className="font-medium text-gray-900">{participant.user.full_name}</p>
+                                  {participant.status && (
+                                    <span className={`px-2 py-1 text-xs rounded-full ${
+                                      participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
+                                      participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                      participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {participant.status}
                                     </span>
                                   )}
                                 </div>
-                                {player.registered_at && (
+                                {participant.registration_date && (
                                   <p className="text-sm text-gray-500">
-                                    Registered {new Date(player.registered_at).toLocaleDateString()}
+                                    Registered {new Date(participant.registration_date).toLocaleDateString()}
                                   </p>
                                 )}
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {user?.role === 'PLAYER' && player.id !== user.id && (
+                              {user?.role === 'PLAYER' && participant.user.id !== user.id && (
                                 <button 
-                                  onClick={() => navigate('/chats', { state: { startChatWith: player.id } })}
+                                  onClick={() => navigate('/chats', { state: { startChatWith: participant.user.id } })}
                                   className="flex items-center gap-2 px-3 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors"
                                 >
                                   <MessageCircle className="h-4 w-4" />
@@ -522,12 +623,38 @@ export default function TournamentDetailPage() {
                                 </button>
                               )}
                               
-                              {isOrganizer() && (
+                              {isOrganizer() && participant.status === 'PENDING' && (
                                 <div className="flex items-center gap-1">
-                                  <button className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+                                  <button 
+                                    onClick={async () => {
+                                      try {
+                                        // Only use registration ID for organizers who have access to the participants API
+                                        await tournamentService.acceptParticipant(tournamentId!, participant.id);
+                                        toastService.success('Participant accepted successfully!');
+                                        await loadTournament();
+                                      } catch (err: any) {
+                                        toastService.error(err.message || 'Failed to accept participant');
+                                      }
+                                    }}
+                                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                    title="Accept participant"
+                                  >
                                     <UserCheck className="h-4 w-4" />
                                   </button>
-                                  <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                  <button 
+                                    onClick={async () => {
+                                      const reason = prompt('Please provide a reason for rejection (optional):');
+                                      try {
+                                        await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+                                        toastService.success('Participant rejected successfully!');
+                                        await loadTournament();
+                                      } catch (err: any) {
+                                        toastService.error(err.message || 'Failed to reject participant');
+                                      }
+                                    }}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Reject participant"
+                                  >
                                     <UserX className="h-4 w-4" />
                                   </button>
                                 </div>
@@ -536,7 +663,7 @@ export default function TournamentDetailPage() {
                           </div>
                         ))}
                       </div>
-                    ) : tournament.registered_players && tournament.registered_players.length > 0 ? (
+                    ) : participants && participants.length > 0 ? (
                       <div className="text-center py-8">
                         <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                         <p className="text-gray-600">No participants match your search</p>

@@ -71,17 +71,18 @@ def register_for_tournament(request, tournament_id):
         if TournamentRegistration.objects.filter(tournament=tournament, player=user).exists():
             return Response({'error': 'Already registered for this tournament'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create registration
+        # Create registration with PENDING status (requires organizer approval)
         registration = TournamentRegistration.objects.create(
             tournament=tournament,
             player=user,
-            status='ACCEPTED'
+            status='PENDING'
         )
 
         return Response({
-            'message': 'Successfully registered for tournament',
+            'message': 'Registration submitted successfully. Awaiting organizer approval.',
             'registration_id': str(registration.id),
-            'tournament': tournament.title
+            'tournament': tournament.title,
+            'status': 'PENDING'
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
@@ -285,7 +286,14 @@ def tournament_participants(request, tournament_id):
     if request.user != tournament.organizer:
         return Response({'error': 'Only tournament organizers can view participants'}, status=status.HTTP_403_FORBIDDEN)
     
+    # Get status filter from query params
+    status_filter = request.query_params.get('status', None)
+    
     registrations = TournamentRegistration.objects.filter(tournament=tournament).select_related('player')
+    
+    if status_filter:
+        registrations = registrations.filter(status=status_filter.upper())
+    
     participants = []
     
     for registration in registrations:
@@ -294,13 +302,28 @@ def tournament_participants(request, tournament_id):
             'user': {
                 'id': str(registration.player.id),
                 'full_name': registration.player.full_name,
-                'email': registration.player.email
+                'email': registration.player.email,
+                'profile_picture': registration.player.profile_picture.url if registration.player.profile_picture else None
             },
-            'registration_date': registration.created_at,
+            'status': registration.status,
+            'registration_date': registration.registered_at,
+            'notes': registration.notes,
             'payment_status': 'paid'  # Simplified for now
         })
     
-    return Response(participants, status=status.HTTP_200_OK)
+    # Add summary counts
+    status_counts = {
+        'pending': TournamentRegistration.objects.filter(tournament=tournament, status='PENDING').count(),
+        'accepted': TournamentRegistration.objects.filter(tournament=tournament, status='ACCEPTED').count(),
+        'rejected': TournamentRegistration.objects.filter(tournament=tournament, status='REJECTED').count(),
+        'total': TournamentRegistration.objects.filter(tournament=tournament).count()
+    }
+    
+    return Response({
+        'participants': participants,
+        'status_counts': status_counts,
+        'max_participants': tournament.max_participants
+    }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -363,3 +386,163 @@ def remove_tournament_referee(request, tournament_id, referee_id):
         return Response({'message': 'Referee assignment removed successfully'}, status=status.HTTP_200_OK)
     except RefereeBooking.DoesNotExist:
         return Response({'error': 'Referee assignment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def accept_tournament_participant(request, tournament_id, participant_id):
+    """Accept a participant's registration for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can accept participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
+        
+        # Check if tournament is full
+        accepted_count = TournamentRegistration.objects.filter(
+            tournament=tournament, 
+            status='ACCEPTED'
+        ).count()
+        
+        if accepted_count >= tournament.max_participants:
+            return Response({'error': 'Tournament is already full'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        registration.status = 'ACCEPTED'
+        registration.save()
+        
+        return Response({
+            'message': f'Participant {registration.player.full_name} accepted successfully',
+            'participant': {
+                'id': str(registration.id),
+                'user': {
+                    'id': str(registration.player.id),
+                    'full_name': registration.player.full_name,
+                    'email': registration.player.email
+                },
+                'status': registration.status,
+                'registration_date': registration.registered_at
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except TournamentRegistration.DoesNotExist:
+        return Response({'error': 'Participant registration not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def reject_tournament_participant(request, tournament_id, participant_id):
+    """Reject a participant's registration for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can reject participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
+        
+        registration.status = 'REJECTED'
+        registration.notes = request.data.get('reason', 'No reason provided')
+        registration.save()
+        
+        return Response({
+            'message': f'Participant {registration.player.full_name} rejected successfully',
+            'participant': {
+                'id': str(registration.id),
+                'user': {
+                    'id': str(registration.player.id),
+                    'full_name': registration.player.full_name,
+                    'email': registration.player.email
+                },
+                'status': registration.status,
+                'registration_date': registration.registered_at,
+                'rejection_reason': registration.notes
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except TournamentRegistration.DoesNotExist:
+        return Response({'error': 'Participant registration not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def bulk_accept_participants(request, tournament_id):
+    """Accept multiple participants at once"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can accept participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    participant_ids = request.data.get('participant_ids', [])
+    if not participant_ids:
+        return Response({'error': 'No participant IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Check current accepted count
+        accepted_count = TournamentRegistration.objects.filter(
+            tournament=tournament, 
+            status='ACCEPTED'
+        ).count()
+        
+        # Check if accepting all would exceed limit
+        if accepted_count + len(participant_ids) > tournament.max_participants:
+            return Response({
+                'error': f'Cannot accept {len(participant_ids)} participants. Only {tournament.max_participants - accepted_count} spots remaining.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update registrations
+        updated_registrations = TournamentRegistration.objects.filter(
+            id__in=participant_ids,
+            tournament=tournament,
+            status='PENDING'
+        )
+        
+        updated_count = updated_registrations.update(status='ACCEPTED')
+        
+        return Response({
+            'message': f'Successfully accepted {updated_count} participants',
+            'accepted_count': updated_count,
+            'total_accepted': accepted_count + updated_count
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def bulk_reject_participants(request, tournament_id):
+    """Reject multiple participants at once"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can reject participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    participant_ids = request.data.get('participant_ids', [])
+    rejection_reason = request.data.get('reason', 'Bulk rejection - no specific reason provided')
+    
+    if not participant_ids:
+        return Response({'error': 'No participant IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Update registrations
+        updated_registrations = TournamentRegistration.objects.filter(
+            id__in=participant_ids,
+            tournament=tournament,
+            status='PENDING'
+        )
+        
+        updated_count = updated_registrations.update(
+            status='REJECTED',
+            notes=rejection_reason
+        )
+        
+        return Response({
+            'message': f'Successfully rejected {updated_count} participants',
+            'rejected_count': updated_count,
+            'reason': rejection_reason
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

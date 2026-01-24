@@ -200,6 +200,49 @@ class TournamentService {
     const response = await api.post(`${API_ENDPOINTS.TOURNAMENTS.BY_ID(tournamentId)}/finalize`);
     return response.data;
   }
+
+  async updateTournament(tournamentId: string, data: FormData): Promise<{ tournament: Tournament; message: string }> {
+    const response = await api.put(API_ENDPOINTS.TOURNAMENTS.UPDATE(tournamentId), data, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
+  // Participant management methods
+  async acceptParticipant(tournamentId: string, participantId: string): Promise<{ message: string; participant: any }> {
+    const response = await api.put(API_ENDPOINTS.TOURNAMENTS.ACCEPT_PARTICIPANT(tournamentId, participantId));
+    return response.data;
+  }
+
+  async rejectParticipant(tournamentId: string, participantId: string, reason?: string): Promise<{ message: string; participant: any }> {
+    const response = await api.put(API_ENDPOINTS.TOURNAMENTS.REJECT_PARTICIPANT(tournamentId, participantId), { reason });
+    return response.data;
+  }
+
+  async bulkAcceptParticipants(tournamentId: string, participantIds: string[]): Promise<{ message: string; accepted_count: number }> {
+    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.BULK_ACCEPT_PARTICIPANTS(tournamentId), { participant_ids: participantIds });
+    return response.data;
+  }
+
+  async bulkRejectParticipants(tournamentId: string, participantIds: string[], reason?: string): Promise<{ message: string; rejected_count: number }> {
+    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.BULK_REJECT_PARTICIPANTS(tournamentId), { 
+      participant_ids: participantIds,
+      reason 
+    });
+    return response.data;
+  }
+
+  async getTournamentParticipants(tournamentId: string, status?: string): Promise<{ 
+    participants: any[]; 
+    status_counts: any; 
+    max_participants: number 
+  }> {
+    const params = status ? `?status=${status}` : '';
+    const response = await api.get(`${API_ENDPOINTS.TOURNAMENTS.PARTICIPANTS(tournamentId)}${params}`);
+    return response.data;
+  }
 }
 
 export const tournamentService = new TournamentService();

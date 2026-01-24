@@ -8,6 +8,7 @@ import {
   ForgotPasswordPage,
   ResetPasswordPage,
   CreateTournamentPage,
+  EditTournamentPage,
   MyTournamentsPage,
   RefereeAvailabilityPage,
   RefereeBookingsPage,
@@ -91,6 +92,10 @@ export const router = createBrowserRouter([
       {
         path: 'tournaments/:tournamentId',
         element: <TournamentDetailPage />,
+      },
+      {
+        path: 'tournaments/:tournamentId/edit',
+        element: <EditTournamentPage />,
       },
       {
         path: 'tournaments/:tournamentId/manage',

@@ -65,9 +65,13 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
       <div className="h-52 bg-gradient-to-br from-purple-100 via-indigo-50 to-blue-100 relative overflow-hidden">
         {tournament.tournament_image ? (
           <img 
-            src={tournament.tournament_image} 
+            src={tournament.tournament_image.startsWith('http') ? tournament.tournament_image : `${import.meta.env.VITE_API_URL}${tournament.tournament_image}`} 
             alt={tournament.title}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('Failed to load tournament image:', tournament.tournament_image);
+              e.currentTarget.style.display = 'none';
+            }}
           />
         ) : (
           <>
