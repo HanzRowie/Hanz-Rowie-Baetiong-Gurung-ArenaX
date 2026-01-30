@@ -1,0 +1,36 @@
+INVITATION {{ response|upper }} - {{ team.name }}
+
+Hello,
+
+{{ player.full_name }} has {{ action_text|upper }} the invitation to join your team.
+
+TEAM DETAILS:
+- Team Name: {{ team.name }}
+- Sports: {{ sports }}
+- Player: {{ player.full_name }}
+- Response: {{ response|title }}
+
+{% if response == 'ACCEPTED' %}
+Great news! {{ player.full_name }} is now a member of your team and can participate in tournaments and team activities.
+
+You can now:
+- Include them in tournament registrations
+- Assign them team roles if needed
+- Start planning your next tournament together
+{% else %}
+{{ player.full_name }} has declined the invitation to join {{ team.name }}. You can send a new invitation in the future if circumstances change.
+
+Consider:
+- Reaching out to other potential team members
+- Checking if there were any concerns about the team or sport
+- Continuing to build your team with other players
+{% endif %}
+
+You can manage your team and view all members through your ArenaX dashboard.
+
+Best regards,
+The ArenaX Team
+
+---
+This notification was sent because you are a leader of the {{ team.name }} team.
+© {{ "now"|date:"Y" }} ArenaX. All rights reserved.

@@ -22,6 +22,24 @@ class VenueViewSet(viewsets.ModelViewSet):
         print(f"PERFORM_CREATE - User: {self.request.user}, Role: {getattr(self.request.user, 'role', 'No role')}")
         serializer.save(owner=self.request.user)
 
+    def update(self, request, *args, **kwargs):
+        """Custom update method with debug logging"""
+        print(f"VENUE UPDATE - User: {request.user}, Data: {request.data}")
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"VENUE UPDATE ERROR: {str(e)}")
+            raise
+
+    def partial_update(self, request, *args, **kwargs):
+        """Custom partial update method with debug logging"""
+        print(f"VENUE PARTIAL UPDATE - User: {request.user}, Data: {request.data}")
+        try:
+            return super().partial_update(request, *args, **kwargs)
+        except Exception as e:
+            print(f"VENUE PARTIAL UPDATE ERROR: {str(e)}")
+            raise
+
     def get_queryset(self):
         queryset = Venue.objects.all()
         
@@ -205,13 +223,13 @@ def book_venue(request, venue_id):
             date=data['date'],
             is_available=True,
             # The slot must cover the entire requested time
-            start_time__lte=start_time_obj,
-            end_time__gte=end_time_obj
+            opening_time__lte=start_time_obj,
+            closing_time__gte=end_time_obj
         )
 
         print(f"Found {available_slots.count()} availability slots covering this time.")
         for slot in available_slots:
-            print(f"Slot: {slot.start_time}-{slot.end_time}")
+            print(f"Slot: {slot.opening_time}-{slot.closing_time}")
 
         # If no availability slots exist for this venue/date, allow booking (assume venue is available)
         # This is for venues that don't have specific availability slots configured
@@ -312,7 +330,7 @@ def venue_availability(request, venue_id):
     availabilities = VenueAvailability.objects.filter(
         venue=venue,
         date=date
-    ).order_by('start_time')
+    ).order_by('opening_time')
 
     booking_serializer = VenueBookingSerializer(bookings, many=True)
     availability_serializer = VenueAvailabilitySerializer(availabilities, many=True)
@@ -464,14 +482,14 @@ def available_venues_for_tournament(request):
                     venue=venue,
                     date=date,
                     is_available=True
-                ).order_by('start_time')
+                ).order_by('opening_time')
                 
                 # Check if slots cover the entire requested time range
                 time_covered = False
                 
                 # Simple approach: check if any single slot covers the entire range
                 for slot in available_slots:
-                    if slot.start_time <= start_time_obj and slot.end_time >= end_time_obj:
+                    if slot.opening_time <= start_time_obj and slot.closing_time >= end_time_obj:
                         time_covered = True
                         break
                 
@@ -481,8 +499,8 @@ def available_venues_for_tournament(request):
                     current_time = start_time_obj
                     for slot in available_slots:
                         # If this slot starts at or before current_time and extends beyond it
-                        if slot.start_time <= current_time and slot.end_time > current_time:
-                            current_time = slot.end_time
+                        if slot.opening_time <= current_time and slot.closing_time > current_time:
+                            current_time = slot.closing_time
                             if current_time >= end_time_obj:
                                 time_covered = True
                                 break

@@ -1,17 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Grid,
   List,
   ArrowUpDown,
-  Bookmark,
-  TrendingUp,
   Clock,
-  MapPin,
   Trophy,
   Zap,
   Star,
-  Filter,
 } from 'lucide-react';
 import { Button } from '@/design-system/components/Button';
 import { Card } from '@/design-system/components/Card';
@@ -20,7 +15,6 @@ import TournamentFilters, { type TournamentFilterOptions } from '@/components/pl
 import TournamentDetailModal from '@/components/player/TournamentDetailModal';
 import { tournamentService } from '@/services/tournamentService';
 import type { Tournament } from '@/types';
-import { useAuth } from '@/hooks/useAuth';
 import toastService from '@/services/toastService';
 
 // Debounce utility function
@@ -43,9 +37,6 @@ const SORT_OPTIONS = [
 ];
 
 export default function TournamentDiscoveryPage() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  
   // State
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);

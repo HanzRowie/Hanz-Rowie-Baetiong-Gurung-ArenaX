@@ -11,26 +11,33 @@ export interface Venue {
   description?: string;
   location: string;
   address: string;
+  court_size?: string;
   capacity: number;
   price_per_hour: number;
   images?: string[];
   amenities: string[];
   sport_types: string[];
   availability: VenueAvailability[];
+  image?: string;
   rating?: number;
   total_bookings?: number;
   created_at: string;
   updated_at?: string;
+  // Enhanced availability settings
+  is_active?: boolean;
+  default_opening_time?: string;
+  default_closing_time?: string;
+  operating_days?: number[];
 }
 
 export interface VenueAvailability {
   id: string;
   venue: string;
-  available_date: string;
-  start_time: string;
-  end_time: string;
+  date: string;
+  opening_time: string;
+  closing_time: string;
   is_available: boolean;
-  price_override?: number;
+  notes?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -95,6 +102,7 @@ export interface CreateVenueData {
   description?: string;
   location: string;
   address: string;
+  court_size?: string;
   capacity: number;
   price_per_hour: number;
   amenities: string[];

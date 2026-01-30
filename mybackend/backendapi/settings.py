@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "chat",
     "venues",
     "payments",
+    "teams",
 ]
 
 # Middleware
@@ -40,6 +41,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "teams.error_handlers.TeamErrorMiddleware",  # Team error handling middleware
 ]
 
 # Disable APPEND_SLASH to prevent redirect issues with API calls
@@ -48,6 +50,18 @@ APPEND_SLASH = False
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3002', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # URL configuration
 ROOT_URLCONF = "backendapi.urls"
@@ -165,4 +179,112 @@ KHALTI_CONFIG = {
     'WEBSITE_URL': config('WEBSITE_URL', default='http://localhost:3000'),
     'RETURN_URL': config('KHALTI_RETURN_URL', default='http://localhost:3000/payment/success'),
     'WEBHOOK_URL': config('KHALTI_WEBHOOK_URL', default='http://localhost:8000/api/webhook/khalti/'),
+}
+
+# Logging Configuration for Team Operations
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+        'team_operations': {
+            'format': '{asctime} - {levelname} - [{name}] - {message}',
+            'style': '{',
+        },
+    },
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+        'team_operations_filter': {
+            '()': 'teams.logging_config.TeamOperationFilter',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'team_operations_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'team_operations.log',
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 5,
+            'formatter': 'team_operations',
+            'filters': ['team_operations_filter'],
+        },
+        'team_errors_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'team_errors.log',
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 10,
+            'formatter': 'verbose',
+            'filters': ['team_operations_filter'],
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+        },
+        'teams': {
+            'handlers': ['console', 'team_operations_file', 'team_errors_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'teams.error_handlers': {
+            'handlers': ['console', 'team_errors_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'teams.match_scoring': {
+            'handlers': ['console', 'team_operations_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'teams.monitoring': {
+            'handlers': ['console', 'team_operations_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Create logs directory if it doesn't exist
+import os
+os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+# Team System Configuration
+TEAM_SYSTEM_CONFIG = {
+    'MAX_TEAM_SIZE': 15,
+    'INVITATION_EXPIRY_DAYS': 7,
+    'ERROR_MONITORING_ENABLED': True,
+    'PERFORMANCE_MONITORING_ENABLED': True,
+    'USER_FEEDBACK_ENABLED': True,
+    'ALERT_HANDLERS': {
+        'console': DEBUG,
+        'email': not DEBUG,
+        'slack': False,  # Enable in production
+    },
+    'HEALTH_CHECK_INTERVAL': 300,  # 5 minutes
+    'METRICS_RETENTION_HOURS': 24,
 }

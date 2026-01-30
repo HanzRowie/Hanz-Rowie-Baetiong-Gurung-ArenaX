@@ -109,7 +109,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ item, type, onResul
               ))}
               {player.match_score && (
                 <span className="text-blue-600 font-medium">
-                  {Math.round(player.match_score * 100)}% match
+                  {Math.round(player.match_score)}% match
                 </span>
               )}
             </div>

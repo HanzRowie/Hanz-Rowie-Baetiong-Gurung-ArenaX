@@ -43,7 +43,7 @@ export default function EditTournamentPage() {
   const [formData, setFormData] = useState<EditTournamentFormData>({
     title: '',
     description: '',
-    sport_type: 'TENNIS',
+    sport_type: 'FUTSAL',
     date: '',
     time: '',
     venue: '',
@@ -81,7 +81,7 @@ export default function EditTournamentPage() {
           setFormData({
             title: tournament.title || '',
             description: tournament.description || '',
-            sport_type: tournament.sport_type || 'TENNIS',
+            sport_type: tournament.sport_type || 'FUTSAL',
             date: tournament.date ? tournament.date.split('T')[0] : '',
             time: tournament.start_time || '', // Map start_time to time
             venue: tournament.venue || '',
@@ -361,15 +361,26 @@ export default function EditTournamentPage() {
                     Sport Type *
                   </label>
                   <select
-                    value={formData.sport_type || 'TENNIS'}
+                    value={formData.sport_type || 'FUTSAL'}
                     onChange={(e) => handleInputChange('sport_type', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-competitive-500 focus:border-competitive-500"
                     required
                   >
-                    <option value="TENNIS">Tennis</option>
-                    <option value="BADMINTON">Badminton</option>
                     <option value="FUTSAL">Futsal</option>
+                    <option value="BADMINTON">Badminton</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Registration Type
+                  </label>
+                  <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-700">
+                    {tournament?.registration_type === 'TEAM' ? 'Team Registration' : 'Individual Players'}
+                    {tournament?.sport_type === 'FUTSAL' && (
+                      <span className="text-sm text-blue-600 ml-2">(Futsal is always team-based)</span>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -379,12 +390,10 @@ export default function EditTournamentPage() {
                   <select
                     value={formData.tournament_format || 'SINGLE_ELIMINATION'}
                     onChange={(e) => handleInputChange('tournament_format', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-competitive-500 focus:border-competitive-500"
-                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-competitive-500 focus:border-competitive-500 bg-gray-100"
+                    disabled={true} // Tournament type cannot be changed after creation
                   >
                     <option value="SINGLE_ELIMINATION">Single Elimination</option>
-                    <option value="DOUBLE_ELIMINATION">Double Elimination</option>
-                    <option value="ROUND_ROBIN">Round Robin</option>
                   </select>
                 </div>
               </div>

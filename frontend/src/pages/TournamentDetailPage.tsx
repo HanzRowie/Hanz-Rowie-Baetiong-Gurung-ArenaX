@@ -91,6 +91,12 @@ export default function TournamentDetailPage() {
 
   const handleRegister = async () => {
     try {
+      // Check if tournament requires team registration
+      if (tournament?.participation_type === 'TEAM') {
+        toastService.error('This tournament requires team registration. Please register as a team from the Teams page.');
+        return;
+      }
+      
       setRegistering(true);
       await tournamentService.registerForTournament(tournamentId!);
       await loadTournament(); // Reload to update registration status
@@ -146,13 +152,27 @@ export default function TournamentDetailPage() {
     if (!participants || participants.length === 0) return;
     
     const csvContent = [
-      ['Name', 'Email', 'Status', 'Registration Date'],
-      ...participants.map(participant => [
-        participant.user.full_name,
-        participant.user.email,
-        participant.status,
-        new Date(participant.registration_date || '').toLocaleDateString()
-      ])
+      tournament?.participation_type === 'TEAM' 
+        ? ['Team Name', 'Registered By', 'Status', 'Registration Date', 'Selected Players']
+        : ['Name', 'Email', 'Status', 'Registration Date'],
+      ...participants.map(participant => {
+        if (participant.type === 'team') {
+          return [
+            participant.team.name,
+            participant.registered_by.full_name,
+            participant.status,
+            new Date(participant.registration_date || '').toLocaleDateString(),
+            participant.selected_players.map((p: any) => p.full_name).join('; ')
+          ];
+        } else {
+          return [
+            participant.user.full_name,
+            participant.user.email,
+            participant.status,
+            new Date(participant.registration_date || '').toLocaleDateString()
+          ];
+        }
+      })
     ].map(row => row.join(',')).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -208,10 +228,15 @@ export default function TournamentDetailPage() {
     }
   };
 
-  const filteredParticipants = participants?.filter(participant =>
-    participant.user.full_name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-    (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()))
-  ) || [];
+  const filteredParticipants = participants?.filter(participant => {
+    if (participant.type === 'team') {
+      return participant.team.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
+             (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
+    } else {
+      return participant.user.full_name.toLowerCase().includes(participantSearch.toLowerCase()) ||
+             (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
+    }
+  }) || [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -307,7 +332,7 @@ export default function TournamentDetailPage() {
                   Share
                 </button>
                 
-                {tournament.status === 'UPCOMING' && tournament.registered_count >= tournament.min_participants && (
+                {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && (
                   <button
                     onClick={handleGenerateBracket}
                     className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
@@ -572,18 +597,26 @@ export default function TournamentDetailPage() {
                             
                             <div className="flex items-center gap-3 flex-1">
                               <div className="relative">
-                                {participant.user.profile_picture ? (
-                                  <img
-                                    src={participant.user.profile_picture}
-                                    alt={participant.user.full_name}
-                                    className="h-12 w-12 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <span className="text-lg font-medium text-purple-600">
-                                      {participant.user.full_name.charAt(0)}
-                                    </span>
+                                {participant.type === 'team' ? (
+                                  // Team display
+                                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <Users className="h-6 w-6 text-blue-600" />
                                   </div>
+                                ) : (
+                                  // Individual player display
+                                  participant.user.profile_picture ? (
+                                    <img
+                                      src={participant.user.profile_picture}
+                                      alt={participant.user.full_name}
+                                      className="h-12 w-12 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                                      <span className="text-lg font-medium text-purple-600">
+                                        {participant.user.full_name.charAt(0)}
+                                      </span>
+                                    </div>
+                                  )
                                 )}
                                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border-2 border-gray-200">
                                   <span className="text-xs font-bold text-gray-600">#{index + 1}</span>
@@ -592,7 +625,16 @@ export default function TournamentDetailPage() {
                               
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <p className="font-medium text-gray-900">{participant.user.full_name}</p>
+                                  {participant.type === 'team' ? (
+                                    <>
+                                      <p className="font-medium text-gray-900">{participant.team.name}</p>
+                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                        {participant.selected_player_count} players
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <p className="font-medium text-gray-900">{participant.user.full_name}</p>
+                                  )}
                                   {participant.status && (
                                     <span className={`px-2 py-1 text-xs rounded-full ${
                                       participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
@@ -604,16 +646,38 @@ export default function TournamentDetailPage() {
                                     </span>
                                   )}
                                 </div>
-                                {participant.registration_date && (
-                                  <p className="text-sm text-gray-500">
-                                    Registered {new Date(participant.registration_date).toLocaleDateString()}
-                                  </p>
+                                {participant.type === 'team' ? (
+                                  <div className="text-sm text-gray-500">
+                                    <p>Registered by {participant.registered_by.full_name}</p>
+                                    {participant.registration_date && (
+                                      <p>on {new Date(participant.registration_date).toLocaleDateString()}</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  participant.registration_date && (
+                                    <p className="text-sm text-gray-500">
+                                      Registered {new Date(participant.registration_date).toLocaleDateString()}
+                                    </p>
+                                  )
                                 )}
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2">
-                              {user?.role === 'PLAYER' && participant.user.id !== user.id && (
+                              {participant.type === 'team' && (
+                                <button 
+                                  onClick={() => {
+                                    // Show team details modal with selected players
+                                    alert(`Team: ${participant.team.name}\nSelected Players:\n${participant.selected_players.map((p: any) => `• ${p.full_name}`).join('\n')}`);
+                                  }}
+                                  className="flex items-center gap-2 px-3 py-2 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                                >
+                                  <Users className="h-4 w-4" />
+                                  View Players
+                                </button>
+                              )}
+                              
+                              {participant.type === 'individual' && user?.role === 'PLAYER' && participant.user.id !== user.id && (
                                 <button 
                                   onClick={() => navigate('/chats', { state: { startChatWith: participant.user.id } })}
                                   className="flex items-center gap-2 px-3 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors"
@@ -628,8 +692,13 @@ export default function TournamentDetailPage() {
                                   <button 
                                     onClick={async () => {
                                       try {
-                                        // Only use registration ID for organizers who have access to the participants API
-                                        await tournamentService.acceptParticipant(tournamentId!, participant.id);
+                                        if (participant.type === 'team') {
+                                          // Use team-specific endpoint
+                                          await tournamentService.acceptTeamParticipant(tournamentId!, participant.id);
+                                        } else {
+                                          // Use individual participant endpoint
+                                          await tournamentService.acceptParticipant(tournamentId!, participant.id);
+                                        }
                                         toastService.success('Participant accepted successfully!');
                                         await loadTournament();
                                       } catch (err: any) {
@@ -645,7 +714,13 @@ export default function TournamentDetailPage() {
                                     onClick={async () => {
                                       const reason = prompt('Please provide a reason for rejection (optional):');
                                       try {
-                                        await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+                                        if (participant.type === 'team') {
+                                          // Use team-specific endpoint
+                                          await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
+                                        } else {
+                                          // Use individual participant endpoint
+                                          await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+                                        }
                                         toastService.success('Participant rejected successfully!');
                                         await loadTournament();
                                       } catch (err: any) {

@@ -106,9 +106,6 @@ class TournamentTemplate(models.Model):
     sport_type = models.CharField(max_length=50)
     tournament_type = models.CharField(max_length=20, choices=[
         ('SINGLE_ELIMINATION', 'Single Elimination'),
-        ('DOUBLE_ELIMINATION', 'Double Elimination'),
-        ('ROUND_ROBIN', 'Round Robin'),
-        ('SWISS', 'Swiss System'),
     ])
     default_max_participants = models.IntegerField(default=16)
     default_entry_fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)

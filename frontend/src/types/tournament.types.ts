@@ -3,7 +3,8 @@ export interface Tournament {
   title: string;
   description: string;
   sport_type: string;
-  tournament_type: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'ROUND_ROBIN' | 'SWISS';
+  tournament_type: 'SINGLE_ELIMINATION'; // Only single elimination supported
+  participation_type: 'INDIVIDUAL' | 'TEAM'; // New field for team-based tournaments
   date: string;
   start_time: string;
   end_time?: string;
@@ -27,6 +28,7 @@ export interface Tournament {
   is_registration_open: boolean;
   user_registration_status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'WITHDRAWN' | null;
   registered_players?: Player[];
+  registered_teams?: TeamRegistration[]; // New field for team registrations
   matches?: Match[];
   created_at: string;
   updated_at?: string;
@@ -35,8 +37,12 @@ export interface Tournament {
   current_round?: number;
   total_rounds?: number;
   completion_percentage?: number;
-  winner?: Player;
-  final_standings?: Player[];
+  winner?: Player | TeamRegistration; // Can be either player or team
+  final_standings?: (Player | TeamRegistration)[];
+  // Team-specific settings
+  team_size_min?: number;
+  team_size_max?: number;
+  allow_mixed_teams?: boolean;
 }
 
 export interface Player {
@@ -59,12 +65,17 @@ export interface Match {
   match_number: number;
   player1?: Player;
   player2?: Player;
+  team1?: TeamRegistration; // New field for team matches
+  team2?: TeamRegistration; // New field for team matches
   winner?: {
     id: string;
     name: string;
+    type: 'PLAYER' | 'TEAM'; // Specify if winner is player or team
   };
   player1_score?: number;
   player2_score?: number;
+  team1_score?: number; // New field for team scores
+  team2_score?: number; // New field for team scores
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   scheduled_time?: string;
   // Enhanced match data
@@ -84,12 +95,15 @@ export interface Match {
   };
   match_duration?: number;
   notes?: string;
+  // Sport-specific scoring
+  futsal_score?: FutsalMatchScore;
+  badminton_sets?: BadmintonSet[];
 }
 
 export interface TournamentBracket {
   id: string;
   tournament: string;
-  bracket_type: 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'ROUND_ROBIN' | 'SWISS';
+  bracket_type: 'SINGLE_ELIMINATION'; // Only single elimination supported
   rounds: BracketRound[];
   created_at: string;
   updated_at?: string;
@@ -128,12 +142,18 @@ export interface TournamentStats {
 export interface TournamentFilters {
   sport_type?: string;
   tournament_type?: string;
+  registration_type?: 'INDIVIDUAL' | 'TEAM';
+  participation_type?: 'INDIVIDUAL' | 'TEAM';
   status?: string;
   location?: string;
   entry_fee_max?: number;
   date_from?: string;
   date_to?: string;
   search?: string;
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_order?: string;
 }
 
 export interface TournamentSearchResult {
@@ -146,4 +166,77 @@ export interface TournamentSearchResult {
     earliest: string;
     latest: string;
   };
+}
+
+// Team-related types for tournaments
+export interface TeamRegistration {
+  id: string;
+  team: {
+    id: string;
+    name: string;
+    sport_types: string[];
+    owner: {
+      id: string;
+      full_name: string;
+      profile_picture?: string;
+    };
+    member_count: number;
+    max_size: number;
+  };
+  tournament: string;
+  selected_players: Player[];
+  registered_by: {
+    id: string;
+    full_name: string;
+    profile_picture?: string;
+  };
+  registered_at: string;
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+}
+
+// Sport-specific scoring types
+export interface FutsalMatchScore {
+  id: string;
+  match: string;
+  team1_goals: number;
+  team2_goals: number;
+  team1_stats: FutsalPlayerStat[];
+  team2_stats: FutsalPlayerStat[];
+  created_at: string;
+}
+
+export interface FutsalPlayerStat {
+  id: string;
+  player: {
+    id: string;
+    full_name: string;
+    profile_picture?: string;
+  };
+  goals: number;
+  assists: number;
+  minutes_played: number;
+}
+
+export interface BadmintonSet {
+  id: string;
+  set_number: number;
+  home_score: number;
+  away_score: number;
+  duration: number; // in minutes
+  winner: 'home' | 'away';
+}
+
+// Enhanced tournament filters for team tournaments
+export interface TournamentFilters {
+  sport_type?: string;
+  tournament_type?: string;
+  participation_type?: 'INDIVIDUAL' | 'TEAM';
+  status?: string;
+  location?: string;
+  entry_fee_max?: number;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  team_size_min?: number;
+  team_size_max?: number;
 }

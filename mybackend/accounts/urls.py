@@ -44,4 +44,11 @@ urlpatterns = [
     path('admin/users/', views.admin_get_all_users, name='admin_get_all_users'),
     path('admin/users/<uuid:user_id>/', views.admin_get_user_details, name='admin_get_user_details'),
     path('admin/dashboard/', views.admin_dashboard_stats, name='admin_dashboard_stats'),
+    
+    # Player statistics and rankings endpoints
+    path('players/stats/', views.get_player_stats, name='get_player_stats'),
+    path('players/<uuid:player_id>/stats/', views.get_player_stats, name='get_player_stats_by_id'),
+    path('players/leaderboard/', views.get_sport_leaderboard, name='get_sport_leaderboard'),
+    path('players/rankings/', views.get_player_rankings, name='get_player_rankings'),
+    path('players/<uuid:player_id>/rankings/', views.get_player_rankings, name='get_player_rankings_by_id'),
 ]

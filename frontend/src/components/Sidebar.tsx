@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, Settings } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, Settings, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -98,6 +98,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           active: location.pathname === '/my-tournaments',
         },
         {
+          id: 'my-tournaments',
+          label: 'My Tournaments',
+          icon: Settings,
+          path: '/my-tournaments',
+          active: location.pathname === '/my-tournaments',
+        },
+        {
           id: 'venues',
           label: 'Find Venues',
           icon: Building2,
@@ -118,6 +125,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: Trophy,
           path: '/tournaments',
           active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
+        },
+        {
+          id: 'teams',
+          label: 'Teams',
+          icon: Users,
+          path: '/teams',
+          active: location.pathname.startsWith('/teams'),
         },
         {
           id: 'venues',
@@ -278,8 +292,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                   key={item.id}
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${item.active
-                      ? 'bg-purple-50 text-purple-600 shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-purple-600'
+                    ? 'bg-purple-50 text-purple-600 shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-purple-600'
                     }`}
                 >
                   <IconComponent

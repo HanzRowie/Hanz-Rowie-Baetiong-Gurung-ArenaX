@@ -3,17 +3,20 @@ from .models import Venue, VenueAvailability, VenueBooking
 
 @admin.register(Venue)
 class VenueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'sport_type', 'location', 'capacity', 'price_per_hour')
-    list_filter = ('sport_type', 'owner')
+    list_display = ('name', 'owner', 'sport_type', 'location', 'capacity', 'price_per_hour', 'is_active')
+    list_filter = ('sport_type', 'owner', 'is_active')
     search_fields = ('name', 'location', 'owner__full_name', 'owner__email')
     ordering = ('name',)
 
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'owner', 'location', 'sport_type', 'court_size', 'facilities')
+            'fields': ('name', 'owner', 'location', 'sport_type', 'court_size', 'facilities', 'is_active')
         }),
         ('Capacity & Pricing', {
             'fields': ('capacity', 'price_per_hour')
+        }),
+        ('Operating Schedule', {
+            'fields': ('default_opening_time', 'default_closing_time', 'operating_days')
         }),
         ('Media', {
             'fields': ('image',)
@@ -22,21 +25,21 @@ class VenueAdmin(admin.ModelAdmin):
 
 @admin.register(VenueAvailability)
 class VenueAvailabilityAdmin(admin.ModelAdmin):
-    list_display = ('venue', 'date', 'start_time', 'end_time', 'is_available')
+    list_display = ('venue', 'date', 'opening_time', 'closing_time', 'is_available')
     list_filter = ('is_available', 'date', 'venue__sport_type')
     search_fields = ('venue__name', 'venue__location')
-    ordering = ('date', 'start_time')
+    ordering = ('date',)
     date_hierarchy = 'date'
 
     fieldsets = (
         ('Venue & Date', {
             'fields': ('venue', 'date')
         }),
-        ('Time Slot', {
-            'fields': ('start_time', 'end_time')
+        ('Operating Hours', {
+            'fields': ('opening_time', 'closing_time')
         }),
         ('Availability', {
-            'fields': ('is_available',)
+            'fields': ('is_available', 'notes')
         })
     )
 

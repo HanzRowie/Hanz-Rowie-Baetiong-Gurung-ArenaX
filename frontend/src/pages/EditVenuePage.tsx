@@ -39,7 +39,7 @@ export default function EditVenuePage() {
             setFormData({
                 name: venue.name,
                 location: venue.location,
-                sport_type: venue.sport_types && venue.sport_types.length > 0 ? venue.sport_types[0] : 'FUTSAL',
+                sport_type: venue.sport_types && venue.sport_types.length > 0 ? venue.sport_types[0].toUpperCase() : 'FUTSAL',
                 court_size: 'Standard', // Not in venue type? Assuming standard or fetch from description if stored there
                 facilities: venue.description || '',
                 capacity: venue.capacity.toString(),
@@ -92,7 +92,7 @@ export default function EditVenuePage() {
                 description: formData.facilities,
                 capacity: parseInt(formData.capacity),
                 price_per_hour: parseFloat(formData.price_per_hour),
-                sport_types: [formData.sport_type],
+                sport_types: [formData.sport_type.toUpperCase()], // Ensure uppercase for backend
                 court_size: formData.court_size,
                 images: formData.image ? [formData.image] : undefined
             };

@@ -1,8 +1,9 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, DollarSign, Trophy, AlertCircle, CheckCircle, Clock, Users, Upload, X, Building2 } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, Trophy, AlertCircle, CheckCircle, Users, Upload, X, Building2 } from 'lucide-react';
 import { tournamentService } from '@/services/tournamentService';
-import { venueService, type Venue } from '@/services/venueService';
+import { venueService } from '@/services/venueService';
+import type { Venue } from '@/types/venue.types';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
 import TimePicker from '@/components/TimePicker';
@@ -21,6 +22,10 @@ export default function CreateTournamentPage() {
     description: '',
     sport_type: '',
     tournament_type: 'SINGLE_ELIMINATION',
+    registration_type: 'INDIVIDUAL', // New field
+    team_size: '5', // New field for team tournaments
+    allow_substitutes: false, // New field
+    max_substitutes: '3', // New field
     date: '',
     start_time: '',
     end_time: '',
@@ -43,12 +48,73 @@ export default function CreateTournamentPage() {
     'BADMINTON',
   ];
 
-  const tournamentTypes = [
-    { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' },
-    { value: 'DOUBLE_ELIMINATION', label: 'Double Elimination' },
-    { value: 'ROUND_ROBIN', label: 'Round Robin' },
-    { value: 'SWISS', label: 'Swiss System' },
+  // Tournament type is now fixed to single elimination only
+  const tournamentType = 'SINGLE_ELIMINATION';
+
+  const registrationTypes = [
+    { value: 'INDIVIDUAL', label: 'Individual Players' },
+    { value: 'TEAM', label: 'Team Registration' },
   ];
+
+  // Helper functions for dynamic labels and defaults
+  const getParticipantLabel = () => {
+    if (formData.registration_type === 'TEAM') {
+      return formData.sport_type === 'FUTSAL' ? 'Teams' : 'Teams';
+    }
+    return 'Participants';
+  };
+
+  const getTeamSizeForSport = (sportType: string) => {
+    switch (sportType) {
+      case 'FUTSAL':
+        return '5';
+      case 'BADMINTON':
+        return '2'; // For doubles
+      default:
+        return '5';
+    }
+  };
+
+  const getMaxSubstitutesForSport = (sportType: string) => {
+    switch (sportType) {
+      case 'FUTSAL':
+        return '3';
+      case 'BADMINTON':
+        return '0'; // No substitutes in badminton
+      default:
+        return '3';
+    }
+  };
+
+  // Update team size and substitutes when sport type changes
+  useEffect(() => {
+    if (formData.sport_type) {
+      // Automatically set registration type based on sport
+      let newRegistrationType = formData.registration_type;
+      if (formData.sport_type === 'FUTSAL') {
+        newRegistrationType = 'TEAM'; // Futsal is always team-based
+      }
+      
+      if (newRegistrationType === 'TEAM') {
+        const newTeamSize = getTeamSizeForSport(formData.sport_type);
+        const newMaxSubstitutes = getMaxSubstitutesForSport(formData.sport_type);
+        const allowSubs = formData.sport_type === 'FUTSAL';
+        
+        setFormData(prev => ({
+          ...prev,
+          registration_type: newRegistrationType,
+          team_size: newTeamSize,
+          max_substitutes: newMaxSubstitutes,
+          allow_substitutes: allowSubs
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          registration_type: newRegistrationType
+        }));
+      }
+    }
+  }, [formData.sport_type]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,7 +196,11 @@ export default function CreateTournamentPage() {
         title: formData.title,
         description: formData.description,
         sport_type: formData.sport_type,
-        tournament_type: formData.tournament_type,
+        tournament_type: tournamentType, // Always single elimination
+        registration_type: formData.registration_type,
+        team_size: formData.registration_type === 'TEAM' ? parseInt(formData.team_size) : undefined,
+        allow_substitutes: formData.registration_type === 'TEAM' ? formData.allow_substitutes : undefined,
+        max_substitutes: formData.registration_type === 'TEAM' && formData.allow_substitutes ? parseInt(formData.max_substitutes) : undefined,
         date: formData.date,
         start_time: formData.start_time,
         end_time: formData.end_time || undefined,
@@ -313,7 +383,7 @@ export default function CreateTournamentPage() {
               )}
             </div>
 
-            {/* Sport Type and Tournament Type */}
+            {/* Sport Type and Registration Type */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="sport_type" className="block text-sm font-medium text-gray-700 mb-2">
@@ -340,24 +410,96 @@ export default function CreateTournamentPage() {
               </div>
 
               <div>
-                <label htmlFor="tournament_type" className="block text-sm font-medium text-gray-700 mb-2">
-                  Tournament Format
+                <label htmlFor="registration_type" className="block text-sm font-medium text-gray-700 mb-2">
+                  Registration Type <span className="text-red-500">*</span>
+                  {formData.sport_type === 'FUTSAL' && (
+                    <span className="text-sm text-blue-600 font-normal ml-2">(Futsal is always team-based)</span>
+                  )}
                 </label>
-                <select
-                  id="tournament_type"
-                  value={formData.tournament_type}
-                  onChange={(e) => setFormData({ ...formData, tournament_type: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white"
-                  disabled={isLoading}
-                >
-                  {tournamentTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    id="registration_type"
+                    value={formData.registration_type}
+                    onChange={(e) => setFormData({ ...formData, registration_type: e.target.value })}
+                    className={`w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white ${
+                      formData.sport_type === 'FUTSAL' ? 'bg-gray-100 cursor-not-allowed' : ''
+                    }`}
+                    required
+                    disabled={isLoading || formData.sport_type === 'FUTSAL'}
+                  >
+                    {registrationTypes.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
+
+            {/* Team-specific settings */}
+            {formData.registration_type === 'TEAM' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Team Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label htmlFor="team_size" className="block text-sm font-medium text-gray-700 mb-2">
+                      Team Size <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      id="team_size"
+                      value={formData.team_size}
+                      onChange={(e) => setFormData({ ...formData, team_size: e.target.value })}
+                      min="1"
+                      max="11"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                      required={formData.registration_type === 'TEAM'}
+                      disabled={isLoading}
+                    />
+                    <p className="mt-1 text-sm text-gray-500">
+                      {formData.sport_type === 'FUTSAL' && 'Players on field (typically 5)'}
+                      {formData.sport_type === 'BADMINTON' && 'Players per team (1 for singles, 2 for doubles)'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="flex items-center space-x-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.allow_substitutes}
+                        onChange={(e) => setFormData({ ...formData, allow_substitutes: e.target.checked })}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        disabled={isLoading || formData.sport_type === 'BADMINTON'}
+                      />
+                      <span className="text-sm font-medium text-gray-700">Allow Substitutes</span>
+                    </label>
+                    {formData.sport_type === 'BADMINTON' && (
+                      <p className="text-sm text-gray-500">Substitutes not allowed in badminton</p>
+                    )}
+                  </div>
+
+                  {formData.allow_substitutes && (
+                    <div>
+                      <label htmlFor="max_substitutes" className="block text-sm font-medium text-gray-700 mb-2">
+                        Max Substitutes
+                      </label>
+                      <input
+                        type="number"
+                        id="max_substitutes"
+                        value={formData.max_substitutes}
+                        onChange={(e) => setFormData({ ...formData, max_substitutes: e.target.value })}
+                        min="0"
+                        max="7"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Date and Time */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -535,7 +677,7 @@ export default function CreateTournamentPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div>
                 <label htmlFor="max_participants" className="block text-sm font-medium text-gray-700 mb-2">
-                  Max Participants
+                  Max {getParticipantLabel()}
                 </label>
                 <div className="relative">
                   <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -554,7 +696,7 @@ export default function CreateTournamentPage() {
 
               <div>
                 <label htmlFor="min_participants" className="block text-sm font-medium text-gray-700 mb-2">
-                  Min Participants
+                  Min {getParticipantLabel()}
                 </label>
                 <input
                   type="number"
@@ -586,6 +728,9 @@ export default function CreateTournamentPage() {
                     disabled={isLoading}
                   />
                 </div>
+                {formData.registration_type === 'TEAM' && (
+                  <p className="mt-1 text-sm text-gray-500">Fee per team</p>
+                )}
               </div>
 
               <div>

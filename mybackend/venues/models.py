@@ -1,4 +1,7 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import datetime, time, timedelta
 
 # Import CustomUser from core
 from accounts.models import CustomUser
@@ -19,24 +22,94 @@ class Venue(models.Model):
     capacity = models.IntegerField()
     price_per_hour = models.DecimalField(max_digits=8, decimal_places=2)
     image = models.ImageField(upload_to='venue_images/', blank=True, null=True)  # For now, single image
+    
+    # Enhanced availability settings
+    is_active = models.BooleanField(default=True)
+    default_opening_time = models.TimeField(default=time(6, 0))  # 6:00 AM
+    default_closing_time = models.TimeField(default=time(22, 0))  # 10:00 PM
+    
+    # Operating days (JSON field to store which days venue is open)
+    # 1=Monday, 2=Tuesday, ..., 7=Sunday
+    operating_days = models.JSONField(default=list)  # e.g., [1, 2, 3, 4, 5, 6, 7] for all days
 
     def __str__(self):
         return f"{self.name} - {self.location}"
 
-# Venue Availability
+    def is_operating_day(self, date):
+        """Check if venue operates on the given date's weekday"""
+        weekday = date.weekday() + 1  # Convert to 1-7 (Monday=1)
+        return weekday in self.operating_days
+
+    def get_operating_hours(self, date):
+        """Get operating hours for a specific date"""
+        if not self.is_operating_day(date) or not self.is_active:
+            return None
+        
+        # Check for date-specific availability override
+        venue_availability = VenueAvailability.objects.filter(
+            venue=self,
+            date=date
+        ).first()
+        
+        if venue_availability:
+            if not venue_availability.is_available:
+                return None  # Venue is closed on this date
+            return {
+                'opening_time': venue_availability.opening_time,
+                'closing_time': venue_availability.closing_time,
+                'notes': venue_availability.notes
+            }
+        
+        # Return default operating hours
+        return {
+            'opening_time': self.default_opening_time,
+            'closing_time': self.default_closing_time,
+            'notes': None
+        }
+
+    def is_available_at_time(self, date, start_time, end_time):
+        """Check if venue is available for booking at specific time"""
+        operating_hours = self.get_operating_hours(date)
+        if not operating_hours:
+            return False
+        
+        # Check if requested time is within operating hours
+        if start_time < operating_hours['opening_time'] or end_time > operating_hours['closing_time']:
+            return False
+        
+        # Check for conflicting bookings
+        conflicting_bookings = VenueBooking.objects.filter(
+            venue=self,
+            date=date,
+            start_time__lt=end_time,
+            end_time__gt=start_time,
+            status__in=['CONFIRMED', 'PENDING']
+        )
+        
+        return not conflicting_bookings.exists()
+
+
+# Enhanced Venue Availability (for specific dates - overrides default hours)
 class VenueAvailability(models.Model):
     venue = models.ForeignKey(Venue, on_delete=models.CASCADE, related_name='availabilities')
     date = models.DateField()
-    start_time = models.TimeField()
-    end_time = models.TimeField()
-    is_available = models.BooleanField(default=True)  # True for available, False for blocked/unavailable
+    opening_time = models.TimeField()
+    closing_time = models.TimeField()
+    is_available = models.BooleanField(default=True)  # False to mark entire day as unavailable
+    notes = models.TextField(blank=True)  # Reason for unavailability or special notes
 
     class Meta:
-        ordering = ['date', 'start_time']
-        unique_together = ('venue', 'date', 'start_time', 'end_time')  # Prevent overlapping slots
+        ordering = ['date']
+        unique_together = ('venue', 'date')
+
+    def clean(self):
+        if self.is_available and self.opening_time >= self.closing_time:
+            raise ValidationError("Opening time must be before closing time")
 
     def __str__(self):
-        return f"{self.venue.name} - {self.date} {self.start_time}-{self.end_time} ({'Available' if self.is_available else 'Blocked'})"
+        status = "Available" if self.is_available else "Unavailable"
+        return f"{self.venue.name} - {self.date} ({status})"
+
 
 # Venue Booking
 class VenueBooking(models.Model):
@@ -69,11 +142,42 @@ class VenueBooking(models.Model):
     class Meta:
         ordering = ['date', 'start_time']
 
+    def clean(self):
+        if self.start_time and self.end_time and self.start_time >= self.end_time:
+            raise ValidationError("Start time must be before end time")
+        
+        # Check if venue is available for this date/time
+        if self.venue and self.date and self.start_time and self.end_time:
+            if not self.venue.is_available_at_time(self.date, self.start_time, self.end_time):
+                # Get more specific error message
+                operating_hours = self.venue.get_operating_hours(self.date)
+                if not operating_hours:
+                    raise ValidationError("Venue is not operating on this date")
+                
+                if (self.start_time < operating_hours['opening_time'] or 
+                    self.end_time > operating_hours['closing_time']):
+                    raise ValidationError(
+                        f"Booking time must be within operating hours: "
+                        f"{operating_hours['opening_time']} - {operating_hours['closing_time']}"
+                    )
+                
+                # Check for overlapping bookings
+                conflicting_bookings = VenueBooking.objects.filter(
+                    venue=self.venue,
+                    date=self.date,
+                    start_time__lt=self.end_time,
+                    end_time__gt=self.start_time,
+                    status__in=['CONFIRMED', 'PENDING']
+                ).exclude(pk=self.pk)
+                
+                if conflicting_bookings.exists():
+                    raise ValidationError("This time slot conflicts with an existing booking")
+
     def save(self, *args, **kwargs):
         # Calculate amount based on duration and price_per_hour
         if self.start_time and self.end_time and self.venue.price_per_hour:
             from datetime import datetime, date, time
-            from decimal import Decimal
+            from decimal import Decimal, ROUND_HALF_UP
             
             # Ensure start_time and end_time are time objects
             if isinstance(self.start_time, str):
@@ -84,7 +188,11 @@ class VenueBooking(models.Model):
             start = datetime.combine(date.today(), self.start_time)
             end = datetime.combine(date.today(), self.end_time)
             duration_hours = (end - start).total_seconds() / 3600
-            self.amount = self.venue.price_per_hour * Decimal(str(duration_hours))
+            calculated_amount = self.venue.price_per_hour * Decimal(str(duration_hours))
+            # Round to 2 decimal places to match the field constraint
+            self.amount = calculated_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        self.full_clean()  # Run validation
         super().save(*args, **kwargs)
 
     def __str__(self):

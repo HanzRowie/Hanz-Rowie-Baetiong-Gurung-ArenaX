@@ -12,6 +12,9 @@ import { tournamentService } from '@/services/tournamentService';
 import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import PlayerCard from '@/components/PlayerCard';
+import SportRankingsCard from '@/components/player/SportRankingsCard';
+import FutsalStatsSummary from '@/components/player/FutsalStatsSummary';
+import VenueBookingsCard from '@/components/player/VenueBookingsCard';
 import { dashboardService, type DashboardStats, type MonthlyStats, type NextTournament, type PlayerProfile } from '@/services/dashboardService';
 import VenueOwnerDashboard from './VenueOwnerDashboard';
 
@@ -439,6 +442,35 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Sport Rankings Card */}
+                {/* Temporarily commented out - not needed currently
+                {stats.sport_rankings && Object.keys(stats.sport_rankings).length > 0 && (
+                  <SportRankingsCard sportRankings={stats.sport_rankings} />
+                )}
+                */}
+
+                {/* Futsal Stats Summary - Show if player has futsal statistics */}
+                {stats.sport_rankings?.FUTSAL && (
+                  <FutsalStatsSummary 
+                    stats={{
+                      total_matches: stats.total_matches || 0,
+                      total_goals: stats.total_goals || 0,
+                      total_assists: stats.total_assists || 0,
+                      goals_per_match: stats.goals_per_match || 0,
+                      assists_per_match: stats.assists_per_match || 0,
+                      recent_form: stats.recent_form || []
+                    }}
+                    playerName={user.full_name || 'Player'}
+                  />
+                )}
+
+                {/* Venue Bookings Card */}
+                {/* Temporarily commented out - not needed currently
+                {stats.venue_bookings && (
+                  <VenueBookingsCard bookings={stats.venue_bookings} />
+                )}
+                */}
               </div>
 
               {/* Right Column - Player Card */}

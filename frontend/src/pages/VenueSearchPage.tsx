@@ -158,9 +158,7 @@ export default function VenueSearchPage() {
                   <option value="">All Sports</option>
                   <option value="badminton">Badminton</option>
                   <option value="futsal">Futsal</option>
-                  <option value="basketball">Basketball</option>
-                  <option value="tennis">Tennis</option>
-                  <option value="volleyball">Volleyball</option>
+                  <option value="badminton">Badminton</option>
                 </select>
               </div>
 

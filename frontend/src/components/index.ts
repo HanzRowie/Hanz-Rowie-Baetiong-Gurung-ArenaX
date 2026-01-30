@@ -9,5 +9,14 @@ export { default as SearchPreferences } from './SearchPreferences';
 export { default as ChatInterface } from './ChatInterface';
 export { default as ConnectionRequestCard } from './ConnectionRequestCard';
 
+// Match Scoring Components
+export { default as MatchScorer } from './MatchScorer';
+export { default as FutsalScoreForm } from './FutsalScoreForm';
+export { default as BadmintonScoreForm } from './BadmintonScoreForm';
+export { default as MatchScoringInterface } from './MatchScoringInterface';
+
 // Player Experience Components
 export * from './player';
+
+// Team Management Components
+export * from './team';

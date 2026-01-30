@@ -1,94 +1,5 @@
 import api from './api';
-import type { VenueStats } from '../types/venue.types';
-
-export interface Venue {
-  id: string;
-  owner: {
-    id: string;
-    name: string;
-    email?: string;
-    phone_number?: string;
-  };
-  name: string;
-  description?: string;
-  location: string;
-  address: string;
-  court_size?: string;
-  capacity: number;
-  price_per_hour: number;
-  images?: string[];
-  amenities: string[];
-  sport_types: string[];
-  availability: VenueAvailability[];
-  image?: string;
-  rating?: number;
-  total_bookings?: number;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface VenueAvailability {
-  id: string;
-  venue: string;
-  available_date: string;
-  start_time: string;
-  end_time: string;
-  is_available: boolean;
-  price_override?: number;
-}
-
-export interface VenueBooking {
-  id: string;
-  venue: Venue;
-  booker: {
-    id: string;
-    name: string;
-    email?: string;
-  };
-  booking_date: string;
-  start_time: string;
-  end_time: string;
-  total_hours: number;
-  total_cost: number;
-  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
-  purpose: string;
-  notes?: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface CreateVenueData {
-  name: string;
-  description?: string;
-  location: string;
-  address: string;
-  court_size?: string;
-  capacity: number;
-  price_per_hour: number;
-  amenities: string[];
-  sport_types: string[];
-  images?: File[];
-}
-
-export interface VenueFilters {
-  location?: string;
-  sport_type?: string;
-  capacity_min?: number;
-  capacity_max?: number;
-  price_min?: number;
-  price_max?: number;
-  available_date?: string;
-  search?: string;
-}
-
-export interface BookingRequest {
-  venue_id: string;
-  booking_date: string;
-  start_time: string;
-  end_time: string;
-  purpose: string;
-  notes?: string;
-}
+import type { VenueStats, Venue, VenueAvailability, VenueBooking, CreateVenueData, VenueFilters, BookingRequest } from '../types/venue.types';
 
 class VenueService {
   // Venue CRUD operations
@@ -111,7 +22,7 @@ class VenueService {
     }
 
     if (data.sport_types && data.sport_types.length > 0) {
-      formData.append('sport_type', data.sport_types[0]); // Backend uses single 'sport_type'
+      formData.append('sport_type', data.sport_types[0].toUpperCase()); // Ensure uppercase
     }
 
     if (data.images && data.images.length > 0) {
@@ -148,7 +59,13 @@ class VenueService {
     return { venue: response.data };
   }
 
-  async updateVenue(venueId: string, data: Partial<CreateVenueData> & { court_size?: string }): Promise<{ venue: Venue; message: string }> {
+  async updateVenue(venueId: string, data: Partial<CreateVenueData> & { 
+    court_size?: string;
+    is_active?: boolean;
+    default_opening_time?: string;
+    default_closing_time?: string;
+    operating_days?: number[];
+  }): Promise<{ venue: Venue; message: string }> {
     const formData = new FormData();
 
     if (data.name) formData.append('name', data.name);
@@ -158,8 +75,14 @@ class VenueService {
     if (data.description !== undefined) formData.append('facilities', data.description || '');
     if (data.court_size !== undefined) formData.append('court_size', data.court_size || 'Standard');
 
+    // Handle new venue fields
+    if (data.is_active !== undefined) formData.append('is_active', data.is_active.toString());
+    if (data.default_opening_time) formData.append('default_opening_time', data.default_opening_time);
+    if (data.default_closing_time) formData.append('default_closing_time', data.default_closing_time);
+    if (data.operating_days) formData.append('operating_days', JSON.stringify(data.operating_days));
+
     if (data.sport_types && data.sport_types.length > 0) {
-      formData.append('sport_type', data.sport_types[0]);
+      formData.append('sport_type', data.sport_types[0].toUpperCase()); // Ensure uppercase
     }
 
     if (data.images && data.images.length > 0) {
@@ -173,6 +96,16 @@ class VenueService {
     });
 
     return { venue: response.data, message: 'Venue updated successfully' };
+  }
+
+  async updateVenueSettings(venueId: string, settings: {
+    is_active?: boolean;
+    default_opening_time?: string;
+    default_closing_time?: string;
+    operating_days?: number[];
+  }): Promise<{ venue: Venue; message: string }> {
+    const response = await api.patch(`/api/venues/venues/${venueId}/`, settings);
+    return { venue: response.data, message: 'Venue settings updated successfully' };
   }
 
   async deleteVenue(venueId: string): Promise<{ message: string }> {

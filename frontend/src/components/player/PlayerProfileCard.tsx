@@ -1,26 +1,18 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  User,
   MapPin,
   Trophy,
   Star,
   Users,
-  Calendar,
   Award,
   Target,
-  Heart,
   MessageCircle,
-  UserPlus,
-  UserCheck,
-  UserX,
-  Clock,
-  Zap,
-  Shield,
-  Crown,
-  Medal,
   Activity,
-  TrendingUp,
   Eye,
+  UserCheck,
+  Clock,
+  UserPlus,
+  UserX,
 } from 'lucide-react';
 import { Card } from '@/design-system/components/Card';
 import { Button } from '@/design-system/components/Button';
@@ -85,7 +77,6 @@ export default function PlayerProfileCard({
   onViewProfile,
   onBlock
 }: PlayerProfileCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const getSkillLevelColor = (level: string) => {

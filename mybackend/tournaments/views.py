@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from accounts.decorators import jwt_required
 from accounts.models import CustomUser
 from accounts.utils import decode_jwt
+import uuid
 
 from .models import Tournament, TournamentRegistration, Match
 from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer
@@ -31,11 +32,14 @@ class TournamentViewSet(viewsets.ModelViewSet):
         # Apply additional filters
         sport_type = self.request.query_params.get('sport_type', None)
         status_filter = self.request.query_params.get('status', None)
+        registration_type = self.request.query_params.get('registration_type', None)
 
         if sport_type:
             queryset = queryset.filter(sport_type=sport_type)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        if registration_type:
+            queryset = queryset.filter(registration_type=registration_type)
 
         return queryset.order_by('-created_at')
 
@@ -66,6 +70,12 @@ def register_for_tournament(request, tournament_id):
         
         user = CustomUser.objects.get(id=payload['user_id'])
         tournament = get_object_or_404(Tournament, id=tournament_id)
+
+        # Validate registration type compatibility
+        if tournament.registration_type == 'TEAM':
+            return Response({
+                'error': 'This tournament requires team registration. Please register as a team.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if user is already registered
         if TournamentRegistration.objects.filter(tournament=tournament, player=user).exists():
@@ -195,8 +205,8 @@ def create_tournament(request):
                     date=booking_data['date'],
                     is_available=True
                 ).filter(
-                    start_time__lte=booking_data['start_time'],
-                    end_time__gte=booking_data['end_time']
+                    opening_time__lte=booking_data['start_time'],
+                    closing_time__gte=booking_data['end_time']
                 )
                 
                 has_availability_slots = VenueAvailability.objects.filter(venue=venue, date=booking_data['date']).exists()
@@ -210,8 +220,8 @@ def create_tournament(request):
                     date=booking_data['date'],
                     status__in=['PENDING', 'CONFIRMED']
                 ).filter(
-                    start_time__lt=booking_data['end_time'],
-                    end_time__gt=booking_data['start_time']
+                    start_time__lt=end_time_obj,
+                    end_time__gt=start_time_obj
                 )
                 
                 if conflicting_bookings.exists():
@@ -260,6 +270,94 @@ def create_tournament(request):
     except Exception as e:
         return Response({'error': f'Tournament creation failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_match_result(request, tournament_id, match_id):
+    """Update match result with scores and winner"""
+    try:
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+        match = get_object_or_404(Match, id=match_id, tournament=tournament)
+        
+        # Check if user is the organizer
+        if request.user != tournament.organizer:
+            return Response({
+                'error': 'Only tournament organizers can update match results'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get the data from request
+        data = request.data
+        
+        # Update scores based on tournament type
+        if tournament.registration_type == 'TEAM':
+            # For team tournaments, use player1_score and player2_score fields
+            if 'team1_score' in data:
+                match.player1_score = data['team1_score']
+            if 'team2_score' in data:
+                match.player2_score = data['team2_score']
+            
+            # Set winner
+            if 'winner_id' in data:
+                try:
+                    from teams.models import Team
+                    winner_team = Team.objects.get(id=data['winner_id'])
+                    match.winning_team = winner_team
+                except Team.DoesNotExist:
+                    return Response({
+                        'error': 'Winner team not found'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # For individual tournaments
+            if 'player1_score' in data:
+                match.player1_score = data['player1_score']
+            if 'player2_score' in data:
+                match.player2_score = data['player2_score']
+            
+            # Set winner
+            if 'winner_id' in data:
+                try:
+                    from accounts.models import CustomUser
+                    winner_player = CustomUser.objects.get(id=data['winner_id'])
+                    match.winner = winner_player
+                except CustomUser.DoesNotExist:
+                    return Response({
+                        'error': 'Winner player not found'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update match status
+        match.status = 'COMPLETED'
+        match.save()
+        
+        # Try to advance winner to next round
+        try:
+            from teams.services.match_scorer import MatchScorer
+            print(f"Attempting to advance winner from Match {match.match_number} (Round {match.round_number})")
+            print(f"Tournament type: {tournament.tournament_type}, Registration type: {tournament.registration_type}")
+            print(f"Match status: {match.status}")
+            if tournament.registration_type == 'TEAM':
+                print(f"Winning team: {match.winning_team}")
+            else:
+                print(f"Winner: {match.winner}")
+            MatchScorer._advance_winner_to_next_round(match)
+            print("Winner advancement completed successfully")
+        except Exception as e:
+            # Log the error but don't fail the request
+            print(f"Error advancing winner: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        
+        # Return updated match data
+        serializer = MatchSerializer(match)
+        return Response({
+            'message': 'Match result updated successfully',
+            'match': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to update match result: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Match.objects.all().order_by('round_number', 'match_number')
     serializer_class = MatchSerializer
@@ -289,40 +387,114 @@ def tournament_participants(request, tournament_id):
     # Get status filter from query params
     status_filter = request.query_params.get('status', None)
     
-    registrations = TournamentRegistration.objects.filter(tournament=tournament).select_related('player')
-    
-    if status_filter:
-        registrations = registrations.filter(status=status_filter.upper())
-    
     participants = []
+    status_counts = {}
     
-    for registration in registrations:
-        participants.append({
-            'id': str(registration.id),
-            'user': {
-                'id': str(registration.player.id),
-                'full_name': registration.player.full_name,
-                'email': registration.player.email,
-                'profile_picture': registration.player.profile_picture.url if registration.player.profile_picture else None
-            },
-            'status': registration.status,
-            'registration_date': registration.registered_at,
-            'notes': registration.notes,
-            'payment_status': 'paid'  # Simplified for now
-        })
-    
-    # Add summary counts
-    status_counts = {
-        'pending': TournamentRegistration.objects.filter(tournament=tournament, status='PENDING').count(),
-        'accepted': TournamentRegistration.objects.filter(tournament=tournament, status='ACCEPTED').count(),
-        'rejected': TournamentRegistration.objects.filter(tournament=tournament, status='REJECTED').count(),
-        'total': TournamentRegistration.objects.filter(tournament=tournament).count()
-    }
+    if tournament.registration_type == 'TEAM':
+        # Handle team registrations
+        from teams.models import TeamTournamentRegistration
+        
+        team_registrations = TeamTournamentRegistration.objects.filter(
+            tournament=tournament
+        ).select_related('team', 'registered_by').prefetch_related('selected_players')
+        
+        if status_filter:
+            # Map status filter to team registration status
+            team_status_map = {
+                'PENDING': 'PENDING',
+                'ACCEPTED': 'CONFIRMED',
+                'REJECTED': 'CANCELLED'
+            }
+            mapped_status = team_status_map.get(status_filter.upper())
+            if mapped_status:
+                team_registrations = team_registrations.filter(status=mapped_status)
+        
+        for registration in team_registrations:
+            # Map team registration status to participant status
+            participant_status = 'PENDING'
+            if registration.status == 'CONFIRMED':
+                participant_status = 'ACCEPTED'
+            elif registration.status == 'CANCELLED':
+                participant_status = 'REJECTED'
+            
+            # Get selected players for this team
+            selected_players = []
+            for player in registration.selected_players.all():
+                selected_players.append({
+                    'id': str(player.id),
+                    'full_name': player.full_name,
+                    'email': player.email,
+                    'profile_picture': player.profile_picture.url if player.profile_picture else None,
+                    'skill_level': player.skill_level
+                })
+            
+            participants.append({
+                'id': str(registration.id),
+                'type': 'team',
+                'team': {
+                    'id': str(registration.team.id),
+                    'name': registration.team.name,
+                    'sport_types': registration.team.sport_types,
+                    'member_count': registration.team.member_count
+                },
+                'registered_by': {
+                    'id': str(registration.registered_by.id),
+                    'full_name': registration.registered_by.full_name,
+                    'email': registration.registered_by.email
+                },
+                'selected_players': selected_players,
+                'selected_player_count': len(selected_players),
+                'status': participant_status,
+                'registration_date': registration.registered_at,
+                'notes': f'Team registration by {registration.registered_by.full_name}',
+                'payment_status': 'paid'  # Simplified for now
+            })
+        
+        # Calculate status counts for teams
+        status_counts = {
+            'pending': TeamTournamentRegistration.objects.filter(tournament=tournament, status='PENDING').count(),
+            'accepted': TeamTournamentRegistration.objects.filter(tournament=tournament, status='CONFIRMED').count(),
+            'rejected': TeamTournamentRegistration.objects.filter(tournament=tournament, status='CANCELLED').count(),
+            'total': TeamTournamentRegistration.objects.filter(tournament=tournament).count()
+        }
+        
+    else:
+        # Handle individual registrations
+        registrations = TournamentRegistration.objects.filter(tournament=tournament).select_related('player')
+        
+        if status_filter:
+            registrations = registrations.filter(status=status_filter.upper())
+        
+        for registration in registrations:
+            participants.append({
+                'id': str(registration.id),
+                'type': 'individual',
+                'user': {
+                    'id': str(registration.player.id),
+                    'full_name': registration.player.full_name,
+                    'email': registration.player.email,
+                    'profile_picture': registration.player.profile_picture.url if registration.player.profile_picture else None,
+                    'skill_level': registration.player.skill_level
+                },
+                'status': registration.status,
+                'registration_date': registration.registered_at,
+                'notes': registration.notes,
+                'payment_status': 'paid'  # Simplified for now
+            })
+        
+        # Calculate status counts for individuals
+        status_counts = {
+            'pending': TournamentRegistration.objects.filter(tournament=tournament, status='PENDING').count(),
+            'accepted': TournamentRegistration.objects.filter(tournament=tournament, status='ACCEPTED').count(),
+            'rejected': TournamentRegistration.objects.filter(tournament=tournament, status='REJECTED').count(),
+            'total': TournamentRegistration.objects.filter(tournament=tournament).count()
+        }
     
     return Response({
         'participants': participants,
         'status_counts': status_counts,
-        'max_participants': tournament.max_participants
+        'max_participants': tournament.max_participants,
+        'registration_type': tournament.registration_type
     }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -546,3 +718,567 @@ def bulk_reject_participants(request, tournament_id):
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Team Tournament Registration Endpoints
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def register_team_for_tournament(request, tournament_id):
+    """Register a team for a tournament"""
+    try:
+        from teams.models import Team, TeamMembership, TeamTournamentRegistration
+        from teams.services.tournament_validator import TournamentValidator
+        from accounts.models import CustomUser
+        
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+        
+        # Validate tournament supports team registration
+        if tournament.registration_type != 'TEAM':
+            return Response({
+                'error': 'This tournament only accepts individual registrations'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get team ID and selected players from request
+        team_id = request.data.get('team_id')
+        selected_player_ids = request.data.get('selected_players', [])
+        
+        if not team_id:
+            return Response({
+                'error': 'Team ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not selected_player_ids:
+            return Response({
+                'error': 'Selected players are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get team and validate user can register it
+        try:
+            team = Team.objects.get(id=team_id, is_active=True)
+        except Team.DoesNotExist:
+            return Response({
+                'error': 'Team not found or inactive'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user can register this team (must be owner or leader)
+        try:
+            membership = TeamMembership.objects.get(
+                team=team,
+                player=request.user,
+                is_active=True
+            )
+            if not membership.can_register_for_tournaments():
+                return Response({
+                    'error': 'Only team owners and leaders can register teams for tournaments'
+                }, status=status.HTTP_403_FORBIDDEN)
+        except TeamMembership.DoesNotExist:
+            return Response({
+                'error': 'You are not a member of this team'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if team is already registered
+        if TeamTournamentRegistration.objects.filter(tournament=tournament, team=team).exists():
+            return Response({
+                'error': 'Team is already registered for this tournament'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate tournament is open for registration
+        if not tournament.is_registration_open:
+            return Response({
+                'error': 'Tournament registration is closed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate team composition using TournamentValidator
+        validator = TournamentValidator()
+        validation_result = validator.validate_team_composition(team, tournament)
+        
+        if not validation_result.is_valid:
+            return Response({
+                'error': '; '.join(validation_result.errors)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate selected players
+        try:
+            selected_players = CustomUser.objects.filter(
+                id__in=selected_player_ids,
+                role='PLAYER'
+            )
+        except ValueError as e:
+            return Response({
+                'error': f'Invalid player ID format: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if selected_players.count() != len(selected_player_ids):
+            return Response({
+                'error': 'Some selected players were not found'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate all selected players are team members
+        team_member_ids = set(
+            TeamMembership.objects.filter(
+                team=team,
+                is_active=True
+            ).values_list('player_id', flat=True)
+        )
+        
+        # Convert selected_player_ids to UUID objects for comparison
+        try:
+            selected_player_uuids = set()
+            for pid in selected_player_ids:
+                if isinstance(pid, str):
+                    selected_player_uuids.add(uuid.UUID(pid))
+                else:
+                    selected_player_uuids.add(pid)
+        except ValueError as e:
+            return Response({
+                'error': f'Invalid UUID format in selected players: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not selected_player_uuids.issubset(team_member_ids):
+            return Response({
+                'error': 'All selected players must be active team members'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create team tournament registration
+        registration = TeamTournamentRegistration.objects.create(
+            tournament=tournament,
+            team=team,
+            registered_by=request.user,
+            status='PENDING'
+        )
+        
+        # Add selected players
+        registration.selected_players.set(selected_players)
+        
+        # Record activity history
+        from teams.models import ActivityHistory
+        ActivityHistory.objects.create(
+            team=team,
+            event_type='TOURNAMENT_REGISTERED',
+            description=f'Team registered for tournament: {tournament.title}',
+            performed_by=request.user,
+            metadata={
+                'tournament_id': str(tournament.id),
+                'tournament_title': tournament.title,
+                'selected_players': len(selected_player_ids)
+            }
+        )
+        
+        return Response({
+            'message': 'Team registered successfully. Awaiting organizer approval.',
+            'registration_id': str(registration.id),
+            'tournament': tournament.title,
+            'team': team.name,
+            'selected_players': len(selected_player_ids),
+            'status': 'PENDING'
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Registration failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def team_available_tournaments(request, team_id):
+    """Get available tournaments for a specific team"""
+    try:
+        from teams.models import Team, TeamMembership, TeamTournamentRegistration
+        from django.utils import timezone
+        
+        # Get team and validate user access
+        try:
+            team = Team.objects.get(id=team_id, is_active=True)
+        except Team.DoesNotExist:
+            return Response({
+                'error': 'Team not found or inactive'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user is a member of this team
+        try:
+            TeamMembership.objects.get(
+                team=team,
+                player=request.user,
+                is_active=True
+            )
+        except TeamMembership.DoesNotExist:
+            return Response({
+                'error': 'You are not a member of this team'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get tournaments that:
+        # 1. Accept team registration
+        # 2. Match team's sport types
+        # 3. Are open for registration
+        # 4. Team is not already registered for
+        
+        # Get already registered tournament IDs
+        registered_tournament_ids = TeamTournamentRegistration.objects.filter(
+            team=team
+        ).values_list('tournament_id', flat=True)
+        
+        # Filter tournaments
+        available_tournaments = Tournament.objects.filter(
+            registration_type='TEAM',
+            sport_type__in=team.sport_types,
+            status='UPCOMING',
+            registration_deadline__gt=timezone.now()
+        ).exclude(
+            id__in=registered_tournament_ids
+        ).order_by('date', 'start_time')
+        
+        # Apply additional filters from query params
+        sport_filter = request.query_params.get('sport_type')
+        if sport_filter:
+            available_tournaments = available_tournaments.filter(sport_type=sport_filter)
+        
+        # Serialize tournaments
+        serializer = TournamentSerializer(
+            available_tournaments, 
+            many=True, 
+            context={'request': request}
+        )
+        
+        return Response({
+            'team': {
+                'id': str(team.id),
+                'name': team.name,
+                'sport_types': team.sport_types
+            },
+            'available_tournaments': serializer.data,
+            'total_count': available_tournaments.count()
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to fetch available tournaments: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_tournament_bracket(request, tournament_id):
+    """Generate tournament bracket for a tournament"""
+    try:
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+        
+        # Check if user is the organizer
+        if request.user != tournament.organizer:
+            return Response({
+                'error': 'Only tournament organizers can generate brackets'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if tournament has enough participants
+        if tournament.registration_type == 'INDIVIDUAL':
+            accepted_registrations = TournamentRegistration.objects.filter(
+                tournament=tournament,
+                status='ACCEPTED'
+            )
+            participant_count = accepted_registrations.count()
+            participants = [reg.player for reg in accepted_registrations]
+        else:  # TEAM registration
+            from teams.models import TeamTournamentRegistration
+            accepted_registrations = TeamTournamentRegistration.objects.filter(
+                tournament=tournament,
+                status='CONFIRMED'
+            )
+            participant_count = accepted_registrations.count()
+            participants = [reg.team for reg in accepted_registrations]
+        
+        if participant_count < tournament.min_participants:
+            return Response({
+                'error': f'Not enough participants. Minimum required: {tournament.min_participants}, current: {participant_count}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if bracket already exists
+        existing_matches = Match.objects.filter(tournament=tournament)
+        if existing_matches.exists():
+            return Response({
+                'error': 'Tournament bracket already exists. Delete existing matches first if you want to regenerate.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate bracket - only single elimination supported
+        if tournament.tournament_type == 'SINGLE_ELIMINATION':
+            matches = generate_single_elimination_bracket(tournament, participants)
+        else:
+            return Response({
+                'error': f'Tournament type {tournament.tournament_type} is not supported. Only single elimination is available.'
+            }, status=status.HTTP_501_NOT_IMPLEMENTED)
+        
+        # Update tournament status
+        tournament.status = 'ONGOING'
+        tournament.save()
+        
+        return Response({
+            'message': 'Tournament bracket generated successfully',
+            'tournament_id': str(tournament.id),
+            'tournament_type': tournament.tournament_type,
+            'participant_count': participant_count,
+            'matches_created': len(matches),
+            'status': 'ONGOING'
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to generate bracket: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def generate_single_elimination_bracket(tournament, participants):
+    """Generate single elimination bracket following proper power-of-2 structure"""
+    import random
+    from datetime import timedelta
+    from django.utils import timezone
+    import math
+    
+    # Shuffle participants for random seeding
+    participants_list = list(participants)
+    random.shuffle(participants_list)
+    
+    participant_count = len(participants_list)
+    
+    # Calculate the bracket structure based on power of 2
+    next_power_of_2 = 2 ** math.ceil(math.log2(participant_count))
+    byes_needed = next_power_of_2 - participant_count
+    
+    print(f"Participants: {participant_count}, Next power of 2: {next_power_of_2}, Byes needed: {byes_needed}")
+    
+    # Create bracket structure following standard tournament format
+    matches = []
+    match_number = 1
+    
+    # Calculate how many rounds we need
+    total_rounds = math.ceil(math.log2(next_power_of_2))
+    
+    # Create the bracket structure round by round
+    current_participants = participants_list[:]
+    
+    # If we have byes, we need to place them strategically
+    if byes_needed > 0:
+        # Add placeholder "BYE" entries to make it a power of 2
+        for i in range(byes_needed):
+            current_participants.append(None)  # None represents a bye
+    
+    # Now we have exactly next_power_of_2 participants (including byes)
+    # Generate matches for each round
+    round_number = 1
+    current_round_participants = current_participants[:]
+    
+    # Only create matches for the first round with actual participants
+    # Future rounds will be created as empty matches that get filled when winners advance
+    
+    # First round: Create matches between actual participants
+    first_round_participants = []
+    first_round_matches = []
+    
+    matches_in_round = len(current_round_participants) // 2
+    print(f"Round {round_number}: {len(current_round_participants)} participants, {matches_in_round} matches")
+    
+    for i in range(matches_in_round):
+        participant1 = current_round_participants[i * 2]
+        participant2 = current_round_participants[i * 2 + 1]
+        
+        # Calculate match time
+        match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
+        match_time = timezone.make_aware(
+            timezone.datetime.combine(tournament.date, tournament.start_time)
+        ) + match_time_offset
+        
+        # Handle bye matches (where one participant is None)
+        if participant1 is None and participant2 is None:
+            # Both are byes, skip this match - no one advances
+            continue
+        elif participant1 is None:
+            # Participant2 gets a bye, advances automatically
+            first_round_participants.append(participant2)
+            continue
+        elif participant2 is None:
+            # Participant1 gets a bye, advances automatically
+            first_round_participants.append(participant1)
+            continue
+        
+        # Create actual match between two real participants
+        if tournament.registration_type == 'INDIVIDUAL':
+            match = Match.objects.create(
+                tournament=tournament,
+                round_number=round_number,
+                match_number=match_number,
+                player1=participant1,
+                player2=participant2,
+                scheduled_time=match_time,
+                status='SCHEDULED'
+            )
+        else:  # TEAM
+            match = Match.objects.create(
+                tournament=tournament,
+                round_number=round_number,
+                match_number=match_number,
+                team1=participant1,
+                team2=participant2,
+                scheduled_time=match_time,
+                status='SCHEDULED'
+            )
+        
+        matches.append(match)
+        first_round_matches.append(match)
+        match_number += 1
+        
+        # The winner of this match will advance (to be determined later)
+        first_round_participants.append(None)  # Placeholder for winner
+    
+    # Now create empty matches for all subsequent rounds
+    current_round_size = len(first_round_matches) + len([p for p in first_round_participants if p is not None])
+    current_round = 2
+    
+    while current_round_size > 1:
+        next_round_size = current_round_size // 2
+        
+        for i in range(next_round_size):
+            match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
+            match_time = timezone.make_aware(
+                timezone.datetime.combine(tournament.date, tournament.start_time)
+            ) + match_time_offset
+            
+            # Create empty match for future winners
+            if tournament.registration_type == 'INDIVIDUAL':
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=current_round,
+                    match_number=match_number,
+                    player1=None,
+                    player2=None,
+                    scheduled_time=match_time,
+                    status='SCHEDULED',
+                    notes=f'Round {current_round} - Winners from previous round will be assigned'
+                )
+            else:  # TEAM
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=current_round,
+                    match_number=match_number,
+                    team1=None,
+                    team2=None,
+                    scheduled_time=match_time,
+                    status='SCHEDULED',
+                    notes=f'Round {current_round} - Winners from previous round will be assigned'
+                )
+            
+            matches.append(match)
+            match_number += 1
+        
+        current_round_size = next_round_size
+        current_round += 1
+    
+    print(f"Created {len(matches)} matches across {current_round - 1} rounds")
+    print(f"Round structure: {[len([m for m in matches if m.round_number == r]) for r in range(1, current_round)]}")
+    
+    return matches
+
+
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def accept_team_participant(request, tournament_id, registration_id):
+    """Accept a team's registration for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can accept team participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        from teams.models import TeamTournamentRegistration
+        
+        registration = TeamTournamentRegistration.objects.get(id=registration_id, tournament=tournament)
+        
+        # Check if tournament is full
+        accepted_count = TeamTournamentRegistration.objects.filter(
+            tournament=tournament, 
+            status='CONFIRMED'
+        ).count()
+        
+        if accepted_count >= tournament.max_participants:
+            return Response({'error': 'Tournament is already full'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        registration.status = 'CONFIRMED'
+        registration.save()
+        
+        # Record activity history
+        from teams.models import ActivityHistory
+        ActivityHistory.objects.create(
+            team=registration.team,
+            event_type='TOURNAMENT_REGISTERED',
+            description=f'Team accepted for tournament: {tournament.title}',
+            performed_by=request.user,
+            metadata={
+                'tournament_id': str(tournament.id),
+                'tournament_title': tournament.title,
+                'status': 'CONFIRMED'
+            }
+        )
+        
+        return Response({
+            'message': f'Team {registration.team.name} accepted successfully',
+            'team': {
+                'id': str(registration.team.id),
+                'name': registration.team.name,
+                'sport_types': registration.team.sport_types
+            },
+            'status': 'CONFIRMED',
+            'registration_date': registration.registered_at,
+            'selected_player_count': registration.selected_player_count
+        }, status=status.HTTP_200_OK)
+        
+    except TeamTournamentRegistration.DoesNotExist:
+        return Response({'error': 'Team registration not found'}, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def reject_team_participant(request, tournament_id, registration_id):
+    """Reject a team's registration for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Check if user is the organizer
+    if request.user != tournament.organizer:
+        return Response({'error': 'Only tournament organizers can reject team participants'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        from teams.models import TeamTournamentRegistration, ActivityHistory
+        
+        registration = TeamTournamentRegistration.objects.get(id=registration_id, tournament=tournament)
+        
+        rejection_reason = request.data.get('reason', 'No reason provided')
+        
+        registration.status = 'CANCELLED'
+        registration.save()
+        
+        # Record activity history
+        ActivityHistory.objects.create(
+            team=registration.team,
+            event_type='TOURNAMENT_REGISTERED',
+            description=f'Team rejected for tournament: {tournament.title}. Reason: {rejection_reason}',
+            performed_by=request.user,
+            metadata={
+                'tournament_id': str(tournament.id),
+                'tournament_title': tournament.title,
+                'status': 'CANCELLED',
+                'rejection_reason': rejection_reason
+            }
+        )
+        
+        return Response({
+            'message': f'Team {registration.team.name} rejected successfully',
+            'team': {
+                'id': str(registration.team.id),
+                'name': registration.team.name,
+                'sport_types': registration.team.sport_types
+            },
+            'status': 'CANCELLED',
+            'registration_date': registration.registered_at,
+            'rejection_reason': rejection_reason
+        }, status=status.HTTP_200_OK)
+        
+    except TeamTournamentRegistration.DoesNotExist:
+        return Response({'error': 'Team registration not found'}, status=status.HTTP_404_NOT_FOUND)

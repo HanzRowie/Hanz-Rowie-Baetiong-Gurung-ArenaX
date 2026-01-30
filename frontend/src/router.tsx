@@ -10,6 +10,7 @@ import {
   CreateTournamentPage,
   EditTournamentPage,
   MyTournamentsPage,
+  MatchScoringPage,
   RefereeAvailabilityPage,
   RefereeBookingsPage,
   RefereeSchedulePage,
@@ -39,6 +40,10 @@ import VenueBookingPage from './pages/VenueBookingPage';
 import VenuesPage from './pages/VenuesPage';
 import VenueSearchPage from './pages/VenueSearchPage';
 import BookingsPage from './pages/BookingsPage';
+import TeamsPage from './pages/TeamsPage';
+import TeamDetailsPage from './pages/TeamDetailsPage';
+import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
+import MyStatsPage from './pages/MyStatsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -80,6 +85,10 @@ export const router = createBrowserRouter([
         path: 'dashboard',
         element: <DashboardPage />,
       },
+      {
+        path: 'my-stats',
+        element: <MyStatsPage />,
+      },
       // Tournament routes
       {
         path: 'tournaments',
@@ -105,6 +114,10 @@ export const router = createBrowserRouter([
         path: 'my-tournaments',
         element: <MyTournamentsPage />,
       },
+      {
+        path: 'match-scoring',
+        element: <MatchScoringPage />,
+      },
       // Player routes
       {
         path: 'players',
@@ -117,6 +130,19 @@ export const router = createBrowserRouter([
       {
         path: 'player-connections',
         element: <PlayerConnectionsPage />,
+      },
+      // Team routes
+      {
+        path: 'teams',
+        element: <TeamsPage />,
+      },
+      {
+        path: 'teams/:teamId',
+        element: <TeamDetailsPage />,
+      },
+      {
+        path: 'teams/analytics',
+        element: <TeamAnalyticsPage />,
       },
       // Profile routes
       {

@@ -7,6 +7,10 @@ export interface CreateTournamentData {
   description?: string;
   sport_type: string;
   tournament_type?: string;
+  registration_type?: string; // New field
+  team_size?: number; // New field
+  allow_substitutes?: boolean; // New field
+  max_substitutes?: number; // New field
   date: string;
   start_time: string;
   end_time?: string;
@@ -25,6 +29,7 @@ export interface CreateTournamentData {
 export interface TournamentFilters {
   sport_type?: string;
   tournament_type?: string;
+  registration_type?: string;
   status?: string;
   location?: string;
   entry_fee_max?: number;
@@ -66,6 +71,7 @@ class TournamentService {
 
     if (filters?.sport_type) params.append('sport_type', filters.sport_type);
     if (filters?.tournament_type) params.append('tournament_type', filters.tournament_type);
+    if (filters?.registration_type) params.append('registration_type', filters.registration_type);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.location) params.append('location', filters.location);
     if (filters?.entry_fee_max) params.append('entry_fee_max', filters.entry_fee_max.toString());
@@ -143,7 +149,13 @@ class TournamentService {
   async updateMatchResult(
     tournamentId: string, 
     matchId: string, 
-    data: { player1_score: number; player2_score: number; winner_id?: string }
+    data: { 
+      player1_score?: number; 
+      player2_score?: number; 
+      team1_score?: number; 
+      team2_score?: number; 
+      winner_id?: string 
+    }
   ): Promise<{ match: Match; message: string }> {
     const response = await api.put(API_ENDPOINTS.TOURNAMENTS.MATCH_RESULT(tournamentId, matchId), data);
     return response.data;
@@ -241,6 +253,22 @@ class TournamentService {
   }> {
     const params = status ? `?status=${status}` : '';
     const response = await api.get(`${API_ENDPOINTS.TOURNAMENTS.PARTICIPANTS(tournamentId)}${params}`);
+    return response.data;
+  }
+
+  async getAvailableTournamentsForTeam(teamId: string): Promise<Tournament[]> {
+    const response = await api.get(`/api/tournaments/teams/${teamId}/available/`);
+    return response.data.available_tournaments || [];
+  }
+
+  // Team participant management methods
+  async acceptTeamParticipant(tournamentId: string, registrationId: string): Promise<{ message: string; team: any }> {
+    const response = await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/accept/`);
+    return response.data;
+  }
+
+  async rejectTeamParticipant(tournamentId: string, registrationId: string, reason?: string): Promise<{ message: string; team: any }> {
+    const response = await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/reject/`, { reason });
     return response.data;
   }
 }

@@ -8,6 +8,8 @@ import {
   Crown,
   Medal,
   ChevronRight,
+  Users,
+  Play,
 } from 'lucide-react';
 import type { Match, Tournament } from '@/types';
 import { tournamentService } from '@/services/tournamentService';
@@ -23,20 +25,29 @@ interface MatchResultModalProps {
   match: Match;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (matchId: string, player1Score: number, player2Score: number, winnerId: string) => void;
+  onSave: (matchId: string, score1: number, score2: number, winnerId: string) => void;
+  isTeamTournament: boolean;
 }
 
-const MatchResultModal = ({ match, isOpen, onClose, onSave }: MatchResultModalProps) => {
-  const [player1Score, setPlayer1Score] = useState(match.player1_score || 0);
-  const [player2Score, setPlayer2Score] = useState(match.player2_score || 0);
+const MatchResultModal = ({ match, isOpen, onClose, onSave, isTeamTournament }: MatchResultModalProps) => {
+  const [score1, setScore1] = useState(
+    isTeamTournament ? (match.team1_score || 0) : (match.player1_score || 0)
+  );
+  const [score2, setScore2] = useState(
+    isTeamTournament ? (match.team2_score || 0) : (match.player2_score || 0)
+  );
   const [selectedWinner, setSelectedWinner] = useState(match.winner?.id || '');
+
+  const participant1 = isTeamTournament ? match.team1 : match.player1;
+  const participant2 = isTeamTournament ? match.team2 : match.player2;
 
   const handleSave = () => {
     if (!selectedWinner) {
       toastService.error('Please select a winner');
       return;
     }
-    onSave(match.id, player1Score, player2Score, selectedWinner);
+
+    onSave(match.id, score1, score2, selectedWinner);
     onClose();
   };
 
@@ -60,17 +71,20 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave }: MatchResultModalPr
             Match {match.match_number} - Round {match.round_number}
           </div>
 
-          {/* Player 1 */}
+          {/* Participant 1 */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              {match.player1?.name || 'Player 1'}
+              {isTeamTournament
+                ? ((match.team1 as any)?.name || 'Team 1')
+                : ((match.player1 as any)?.name || 'Player 1')
+              }
             </label>
             <div className="flex items-center gap-3">
               <input
                 type="number"
                 min="0"
-                value={player1Score}
-                onChange={(e) => setPlayer1Score(parseInt(e.target.value) || 0)}
+                value={score1}
+                onChange={(e) => setScore1(parseInt(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                 placeholder="Score"
               />
@@ -78,8 +92,8 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave }: MatchResultModalPr
                 <input
                   type="radio"
                   name="winner"
-                  value={match.player1?.id || ''}
-                  checked={selectedWinner === match.player1?.id}
+                  value={participant1?.id || ''}
+                  checked={selectedWinner === participant1?.id}
                   onChange={(e) => setSelectedWinner(e.target.value)}
                   className="mr-2"
                 />
@@ -88,17 +102,20 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave }: MatchResultModalPr
             </div>
           </div>
 
-          {/* Player 2 */}
+          {/* Participant 2 */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              {match.player2?.name || 'Player 2'}
+              {isTeamTournament
+                ? ((match.team2 as any)?.name || 'Team 2')
+                : ((match.player2 as any)?.name || 'Player 2')
+              }
             </label>
             <div className="flex items-center gap-3">
               <input
                 type="number"
                 min="0"
-                value={player2Score}
-                onChange={(e) => setPlayer2Score(parseInt(e.target.value) || 0)}
+                value={score2}
+                onChange={(e) => setScore2(parseInt(e.target.value) || 0)}
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                 placeholder="Score"
               />
@@ -106,8 +123,8 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave }: MatchResultModalPr
                 <input
                   type="radio"
                   name="winner"
-                  value={match.player2?.id || ''}
-                  checked={selectedWinner === match.player2?.id}
+                  value={participant2?.id || ''}
+                  checked={selectedWinner === participant2?.id}
                   onChange={(e) => setSelectedWinner(e.target.value)}
                   className="mr-2"
                 />
@@ -140,20 +157,37 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
 
+  const isTeamTournament = tournament.participation_type === 'TEAM';
+
   const handleMatchClick = (match: Match) => {
-    if (isOrganizer && match.status !== 'COMPLETED' && match.player1 && match.player2) {
-      setSelectedMatch(match);
-      setShowResultModal(true);
+    if (isOrganizer && match.status !== 'COMPLETED') {
+      const hasParticipants = isTeamTournament
+        ? (match.team1 && match.team2)
+        : (match.player1 && match.player2);
+
+      if (hasParticipants) {
+        setSelectedMatch(match);
+        setShowResultModal(true);
+      }
     }
   };
 
-  const handleSaveResult = async (matchId: string, player1Score: number, player2Score: number, winnerId: string) => {
+  const handleSaveResult = async (matchId: string, score1: number, score2: number, winnerId: string) => {
     try {
-      await tournamentService.updateMatchResult(tournament.id, matchId, {
-        player1_score: player1Score,
-        player2_score: player2Score,
-        winner_id: winnerId,
-      });
+      // Prepare the data based on tournament type
+      const updateData = isTeamTournament
+        ? {
+          team1_score: score1,
+          team2_score: score2,
+          winner_id: winnerId,
+        }
+        : {
+          player1_score: score1,
+          player2_score: score2,
+          winner_id: winnerId,
+        };
+
+      await tournamentService.updateMatchResult(tournament.id, matchId, updateData);
       toastService.success('Match result updated successfully!');
       onMatchUpdate?.();
     } catch (err: any) {
@@ -166,7 +200,46 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
       <div className="text-center py-12">
         <Trophy className="mx-auto h-16 w-16 text-gray-400 mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">No Bracket Generated</h3>
-        <p className="text-gray-600">Tournament bracket has not been generated yet.</p>
+        <p className="text-gray-600 mb-6">Tournament bracket has not been generated yet.</p>
+
+        {isOrganizer && tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && (
+          <button
+            onClick={async () => {
+              if (confirm('Generate tournament bracket? This cannot be undone.')) {
+                try {
+                  await tournamentService.generateBracket(tournament.id);
+                  toastService.success('Tournament bracket generated successfully!');
+                  onMatchUpdate?.();
+                } catch (err: any) {
+                  toastService.error(err.message || 'Failed to generate bracket');
+                }
+              }
+            }}
+            className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+          >
+            <Play className="h-5 w-5" />
+            Generate Bracket
+          </button>
+        )}
+
+        {isOrganizer && tournament.status === 'UPCOMING' && tournament.registered_count < (tournament.min_participants || 2) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+            <p className="text-yellow-800 text-sm">
+              Need at least {tournament.min_participants || 2} participants to generate bracket.
+              Currently have {tournament.registered_count}.
+            </p>
+            {/* Debug info - remove in production */}
+            <p className="text-xs text-gray-600 mt-2">
+              Debug: min_participants={tournament.min_participants}, registered_count={tournament.registered_count}
+            </p>
+          </div>
+        )}
+
+        {!isOrganizer && (
+          <p className="text-gray-500 text-sm">
+            The tournament organizer will generate the bracket when ready.
+          </p>
+        )}
       </div>
     );
   }
@@ -199,14 +272,65 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
     }
   };
 
-  const getPlayerCardStyle = (match: Match, playerId?: string) => {
-    if (match.status === 'COMPLETED' && match.winner?.id === playerId) {
+  const getParticipantCardStyle = (match: Match, participantId?: string) => {
+    if (match.status === 'COMPLETED' && match.winner?.id === participantId) {
       return 'bg-green-100 border-green-300 text-green-900';
     }
-    if (match.status === 'COMPLETED' && match.winner?.id !== playerId) {
+    if (match.status === 'COMPLETED' && match.winner?.id !== participantId) {
       return 'bg-red-50 border-red-200 text-red-700';
     }
     return 'bg-gray-50 border-gray-200 text-gray-900';
+  };
+
+  const renderParticipant = (participant: any, score: number | undefined, isWinner: boolean, participantType: 'team' | 'player', isByeMatch: boolean = false) => {
+    if (!participant) {
+      return (
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+            {participantType === 'team' ? <Users className="h-4 w-4 text-gray-400" /> : <User className="h-4 w-4 text-gray-400" />}
+          </div>
+          <span className="font-medium text-gray-400">
+            {isByeMatch ? 'BYE' : 'TBD'}
+          </span>
+        </div>
+      );
+    }
+
+    // Handle team vs player name extraction - participant is the actual data from API
+    const name = participant.name || 'Unknown';
+
+    // Teams don't have profile pictures in our system
+    const profilePicture = participantType === 'player' ? participant.profile_picture : null;
+
+    return (
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-3">
+          {profilePicture ? (
+            <img
+              src={profilePicture}
+              alt={name}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
+              {participantType === 'team' ? <Users className="h-4 w-4 text-purple-600" /> : <User className="h-4 w-4 text-purple-600" />}
+            </div>
+          )}
+          <div>
+            <span className="font-medium">{name}</span>
+            {participantType === 'team' && (
+              <div className="text-xs text-gray-500">
+                2 players {/* For doubles badminton */}
+              </div>
+            )}
+          </div>
+          {isWinner && <Crown className="h-4 w-4 text-yellow-500" />}
+        </div>
+        {score !== null && score !== undefined && (
+          <span className="text-xl font-bold">{score}</span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -220,7 +344,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             {tournament.tournament_type.replace('_', ' ')} Format
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">
@@ -247,13 +371,13 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             <div className="text-sm text-gray-600">Complete</div>
           </div>
         </div>
-        
+
         <div className="mt-4">
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-500" 
-              style={{ 
-                width: `${(tournament.matches.filter(m => m.status === 'COMPLETED').length / tournament.matches.length) * 100}%` 
+            <div
+              className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-500"
+              style={{
+                width: `${(tournament.matches.filter(m => m.status === 'COMPLETED').length / tournament.matches.length) * 100}%`
               }}
             ></div>
           </div>
@@ -292,116 +416,96 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                   <div className="space-y-6">
                     {matchesByRound[round]
                       .sort((a, b) => a.match_number - b.match_number)
-                      .map((match) => (
-                      <div key={match.id} className="relative">
-                        <div
-                          className={`border-2 rounded-lg overflow-hidden transition-all duration-200 ${getMatchStatusColor(match.status)} ${
-                            isOrganizer && match.status !== 'COMPLETED' && match.player1 && match.player2
-                              ? 'cursor-pointer hover:shadow-md'
-                              : ''
-                          }`}
-                          onClick={() => handleMatchClick(match)}
-                        >
-                          {/* Match Header */}
-                          <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-gray-700">
-                                Match {match.match_number}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  match.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                  match.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                                  'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {match.status.replace('_', ' ')}
-                                </span>
-                                {isOrganizer && match.status !== 'COMPLETED' && match.player1 && match.player2 && (
-                                  <Edit className="h-3 w-3 text-gray-400" />
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                      .map((match) => {
+                        // Check if this is a bye match (one participant is null)
+                        const participant1 = isTeamTournament ? match.team1 : match.player1;
+                        const participant2 = isTeamTournament ? match.team2 : match.player2;
+                        const isByeMatch = (participant1 && !participant2) || (!participant1 && participant2);
 
-                          {/* Players */}
-                          <div className="p-4 space-y-3">
-                            {/* Player 1 */}
-                            <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${getPlayerCardStyle(match, match.player1?.id)}`}>
-                              <div className="flex items-center gap-3">
-                                {match.player1?.profile_picture ? (
-                                  <img
-                                    src={match.player1.profile_picture}
-                                    alt={match.player1.name}
-                                    className="h-8 w-8 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <User className="h-4 w-4 text-purple-600" />
+                        return (
+                          <div key={match.id} className="relative">
+                            <div
+                              className={`border-2 rounded-lg overflow-hidden transition-all duration-200 ${getMatchStatusColor(match.status)} ${isOrganizer && match.status !== 'COMPLETED' &&
+                                  (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2))
+                                  ? 'cursor-pointer hover:shadow-md'
+                                  : ''
+                                }`}
+                              onClick={() => handleMatchClick(match)}
+                            >
+                              {/* Match Header */}
+                              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Match {match.match_number}
+                                    {isByeMatch && <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">BYE</span>}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${match.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                        match.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
+                                          'bg-gray-100 text-gray-800'
+                                      }`}>
+                                      {match.status.replace('_', ' ')}
+                                    </span>
+                                    {isOrganizer && match.status !== 'COMPLETED' &&
+                                      (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2)) && (
+                                        <Edit className="h-3 w-3 text-gray-400" />
+                                      )}
                                   </div>
-                                )}
-                                <span className="font-medium">
-                                  {match.player1?.name || 'TBD'}
-                                </span>
-                                {match.winner?.id === match.player1?.id && (
-                                  <Crown className="h-4 w-4 text-yellow-500" />
-                                )}
+                                </div>
                               </div>
-                              {match.player1_score !== null && (
-                                <span className="text-xl font-bold">{match.player1_score}</span>
+
+                              {/* Participants */}
+                              <div className="p-4 space-y-3">
+                                {/* Participant 1 */}
+                                <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${getParticipantCardStyle(match, isTeamTournament ? match.team1?.id : match.player1?.id)}`}>
+                                  {renderParticipant(
+                                    isTeamTournament ? match.team1 : match.player1,
+                                    isTeamTournament ? match.team1_score : match.player1_score,
+                                    match.winner?.id === (isTeamTournament ? match.team1?.id : match.player1?.id),
+                                    isTeamTournament ? 'team' : 'player',
+                                    isByeMatch && !participant1
+                                  )}
+                                </div>
+
+                                {/* VS Divider */}
+                                <div className="text-center">
+                                  <span className="text-xs text-gray-400 font-medium bg-white px-2">
+                                    {isByeMatch ? 'BYE' : 'VS'}
+                                  </span>
+                                </div>
+
+                                {/* Participant 2 */}
+                                <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${getParticipantCardStyle(match, isTeamTournament ? match.team2?.id : match.player2?.id)}`}>
+                                  {renderParticipant(
+                                    isTeamTournament ? match.team2 : match.player2,
+                                    isTeamTournament ? match.team2_score : match.player2_score,
+                                    match.winner?.id === (isTeamTournament ? match.team2?.id : match.player2?.id),
+                                    isTeamTournament ? 'team' : 'player',
+                                    isByeMatch && !participant2
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Match Footer */}
+                              {match.scheduled_time && (
+                                <div className="bg-gray-50 px-4 py-2 border-t border-gray-200">
+                                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(match.scheduled_time).toLocaleString()}
+                                  </div>
+                                </div>
                               )}
                             </div>
-                            
-                            {/* VS Divider */}
-                            <div className="text-center">
-                              <span className="text-xs text-gray-400 font-medium bg-white px-2">VS</span>
-                            </div>
-                            
-                            {/* Player 2 */}
-                            <div className={`flex items-center justify-between p-3 rounded-lg border-2 transition-colors ${getPlayerCardStyle(match, match.player2?.id)}`}>
-                              <div className="flex items-center gap-3">
-                                {match.player2?.profile_picture ? (
-                                  <img
-                                    src={match.player2.profile_picture}
-                                    alt={match.player2.name}
-                                    className="h-8 w-8 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                    <User className="h-4 w-4 text-purple-600" />
-                                  </div>
-                                )}
-                                <span className="font-medium">
-                                  {match.player2?.name || 'TBD'}
-                                </span>
-                                {match.winner?.id === match.player2?.id && (
-                                  <Crown className="h-4 w-4 text-yellow-500" />
-                                )}
-                              </div>
-                              {match.player2_score !== null && (
-                                <span className="text-xl font-bold">{match.player2_score}</span>
-                              )}
-                            </div>
-                          </div>
 
-                          {/* Match Footer */}
-                          {match.scheduled_time && (
-                            <div className="bg-gray-50 px-4 py-2 border-t border-gray-200">
-                              <div className="flex items-center gap-2 text-xs text-gray-600">
-                                <Clock className="h-3 w-3" />
-                                {new Date(match.scheduled_time).toLocaleString()}
+                            {/* Connection Line to Next Round */}
+                            {roundIndex < rounds.length - 1 && (
+                              <div className="absolute top-1/2 -right-4 transform -translate-y-1/2">
+                                <ChevronRight className="h-6 w-6 text-gray-400" />
                               </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Connection Line to Next Round */}
-                        {roundIndex < rounds.length - 1 && (
-                          <div className="absolute top-1/2 -right-4 transform -translate-y-1/2">
-                            <ChevronRight className="h-6 w-6 text-gray-400" />
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        );
+                      })}
                   </div>
                 </div>
               ))}
@@ -417,19 +521,11 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             <Trophy className="mx-auto h-16 w-16 text-yellow-500 mb-4" />
             <h3 className="text-2xl font-bold text-gray-900 mb-4">Tournament Champion</h3>
             <div className="flex items-center justify-center gap-4">
-              {tournament.winner.profile_picture ? (
-                <img
-                  src={tournament.winner.profile_picture}
-                  alt={tournament.winner.name}
-                  className="h-20 w-20 rounded-full object-cover border-4 border-yellow-300"
-                />
-              ) : (
-                <div className="h-20 w-20 rounded-full bg-yellow-100 flex items-center justify-center border-4 border-yellow-300">
-                  <Crown className="h-10 w-10 text-yellow-600" />
-                </div>
-              )}
+              <div className="h-20 w-20 rounded-full bg-yellow-100 flex items-center justify-center border-4 border-yellow-300">
+                <Crown className="h-10 w-10 text-yellow-600" />
+              </div>
               <div>
-                <p className="text-3xl font-bold text-gray-900">{tournament.winner.name}</p>
+                <p className="text-3xl font-bold text-gray-900">{(tournament.winner as any)?.name || 'Champion'}</p>
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <Medal className="h-5 w-5 text-yellow-600" />
                   <span className="text-yellow-600 font-medium">Tournament Champion</span>
@@ -450,6 +546,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             setSelectedMatch(null);
           }}
           onSave={handleSaveResult}
+          isTeamTournament={isTeamTournament}
         />
       )}
     </div>

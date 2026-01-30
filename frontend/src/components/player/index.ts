@@ -8,6 +8,11 @@ export { default as AchievementBadge } from './AchievementBadge';
 export { default as PerformanceStatsCard } from './PerformanceStatsCard';
 export { default as ProgressVisualization } from './ProgressVisualization';
 export { default as PerformanceComparison } from './PerformanceComparison';
+export { default as SportRankingsCard } from './SportRankingsCard';
+export { default as PlayerStatsCard } from './PlayerStatsCard';
+export { default as SportLeaderboard } from './SportLeaderboard';
+export { default as FutsalStatsCard } from './FutsalStatsCard';
+export { default as FutsalStatsSummary } from './FutsalStatsSummary';
 
 // Social Player Matching Components
 export { default as PlayerProfileCard } from './PlayerProfileCard';
@@ -23,6 +28,9 @@ export { default as MatchResultCard } from './MatchResultCard';
 export { default as NotificationCard } from './NotificationCard';
 export { default as NotificationCenter } from './NotificationCenter';
 export { default as NotificationPreferences } from './NotificationPreferences';
+
+// Venue Bookings Components
+export { default as VenueBookingsCard } from './VenueBookingsCard';
 
 // Type exports (only export types that actually exist)
 export type { Achievement } from './AchievementBadge';

@@ -16,6 +16,36 @@ export interface DashboardStats {
   winRate: number;
   matchesWon: number;
   matchesPlayed: number;
+  sport_rankings?: Record<string, SportRanking>;
+  venue_bookings?: VenueBooking[];
+}
+
+export interface SportRanking {
+  ranking: number;
+  total_players: number;
+  percentile: number;
+  matches_played: number;
+  matches_won: number;
+  win_rate: number;
+  total_goals?: number;
+  total_assists?: number;
+  goals_per_match?: number;
+  assists_per_match?: number;
+  sets_won?: number;
+  sets_lost?: number;
+  set_win_rate?: number;
+}
+
+export interface VenueBooking {
+  id: string;
+  venue_name: string;
+  venue_location: string;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  status: string;
+  amount: string;
+  purpose: string;
 }
 
 export interface MonthlyStats {
@@ -29,12 +59,19 @@ export interface NextTournament {
   id: string;
   title: string;
   date: string;
+  time?: string;
+  venue?: string;
+  sport?: string;
+  registration_type?: string;
   match_scheduled?: boolean;
   opponent?: {
     name: string;
-    avatar: string;
+    type: 'player' | 'team';
   } | null;
-  venue: string;
+  match_time?: string;
+  match_id?: string;
+  round_number?: number;
+  match_number?: number;
 }
 
 export interface PlayerProfile {

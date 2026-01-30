@@ -4,7 +4,7 @@ import type { VenueBooking, Venue } from '../types/venue.types';
 import { useAuth } from '../hooks/useAuth';
 import {
   Calendar, Clock, CheckCircle, XCircle,
-  MessageCircle, DollarSign, Building2, User,
+  DollarSign, Building2, User,
   RefreshCw
 } from 'lucide-react';
 
@@ -346,16 +346,6 @@ const BookingsList: React.FC<BookingsListProps> = ({ bookings, loading, activeTa
                     booking.status === 'REJECTED' ? 'Rejected' : 'Cancelled'} on ${new Date(booking.updated_at || booking.created_at).toLocaleDateString()}`
               }
             </span>
-
-            {activeTab === 'confirmed' && (
-              <button
-                onClick={() => {/* Navigate to chats */ }}
-                className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <MessageCircle className="h-4 w-4" />
-                Chat
-              </button>
-            )}
 
             {activeTab === 'pending' && (
               <div className="flex gap-2">

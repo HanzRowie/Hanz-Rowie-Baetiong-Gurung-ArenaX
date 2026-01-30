@@ -456,7 +456,7 @@ export default function MyTournamentsPage() {
                                 Edit
                               </button>
 
-                              {tournament.status === 'UPCOMING' && tournament.registered_count >= tournament.min_participants && (
+                              {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && (
                                 <button
                                   onClick={() => handleQuickAction('generate_bracket', tournament.id)}
                                   className="flex items-center gap-2 px-3 py-2 text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors"

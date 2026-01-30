@@ -70,6 +70,10 @@ export default function VenueBookingPage() {
 
   // Helper to parse "HH:MM:SS" or "HH:MM" to minutes from midnight
   const parseTimeToMinutes = (timeStr: string) => {
+    if (!timeStr || typeof timeStr !== 'string') {
+      console.warn('Invalid timeStr provided to parseTimeToMinutes:', timeStr);
+      return 0;
+    }
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   };
@@ -87,8 +91,8 @@ export default function VenueBookingPage() {
 
     // Convert initial slots to minutes ranges
     let freeSlots = availabilities.map(slot => ({
-      start: parseTimeToMinutes(slot.start_time),
-      end: parseTimeToMinutes(slot.end_time),
+      start: parseTimeToMinutes(slot.opening_time),
+      end: parseTimeToMinutes(slot.closing_time),
       originalId: slot.id
     }));
 

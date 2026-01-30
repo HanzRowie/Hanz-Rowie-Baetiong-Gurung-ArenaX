@@ -14,17 +14,31 @@ class Tournament(models.Model):
 
     TOURNAMENT_TYPES = (
         ('SINGLE_ELIMINATION', 'Single Elimination'),
-        ('DOUBLE_ELIMINATION', 'Double Elimination'),
-        ('ROUND_ROBIN', 'Round Robin'),
-        ('SWISS', 'Swiss System'),
+    )
+
+    REGISTRATION_TYPES = (
+        ('INDIVIDUAL', 'Individual'),
+        ('TEAM', 'Team'),
+    )
+
+    SPORT_TYPES = (
+        ('FUTSAL', 'Futsal'),
+        ('BADMINTON', 'Badminton'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organizer = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, limit_choices_to={'role': 'ORGANIZER'})
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    sport_type = models.CharField(max_length=50)
+    sport_type = models.CharField(max_length=50, choices=SPORT_TYPES)
     tournament_type = models.CharField(max_length=20, choices=TOURNAMENT_TYPES, default='SINGLE_ELIMINATION')
+    registration_type = models.CharField(max_length=15, choices=REGISTRATION_TYPES, default='INDIVIDUAL')
+    
+    # Team-specific requirements
+    team_size = models.IntegerField(default=1, help_text="Required number of players per team")
+    allow_substitutes = models.BooleanField(default=False)
+    max_substitutes = models.IntegerField(default=0, help_text="Maximum number of substitute players allowed")
+    
     date = models.DateField()
     start_time = models.TimeField()
     end_time = models.TimeField(null=True, blank=True)
@@ -51,7 +65,10 @@ class Tournament(models.Model):
 
     @property
     def registered_count(self):
-        return self.registrations.filter(status='ACCEPTED').count()
+        if self.registration_type == 'TEAM':
+            return self.team_registrations.filter(status='CONFIRMED').count()
+        else:
+            return self.registrations.filter(status='ACCEPTED').count()
 
     @property
     def is_registration_open(self):
@@ -75,6 +92,50 @@ class Tournament(models.Model):
         if self.linked_venue:
             return self.linked_venue.location
         return self.venue_address
+
+    def get_sport_requirements(self):
+        """Get sport-specific team composition requirements"""
+        if self.sport_type == 'FUTSAL':
+            return {
+                'team_size': 5,
+                'allow_substitutes': True,
+                'max_substitutes': 10,
+                'description': '5 players + up to 10 substitutes'
+            }
+        elif self.sport_type == 'BADMINTON':
+            if self.registration_type == 'TEAM':
+                return {
+                    'team_size': 2,
+                    'allow_substitutes': False,
+                    'max_substitutes': 0,
+                    'description': '2 players (doubles)'
+                }
+            else:
+                return {
+                    'team_size': 1,
+                    'allow_substitutes': False,
+                    'max_substitutes': 0,
+                    'description': '1 player (singles)'
+                }
+        return {
+            'team_size': self.team_size,
+            'allow_substitutes': self.allow_substitutes,
+            'max_substitutes': self.max_substitutes,
+            'description': f'{self.team_size} players'
+        }
+
+    def validate_team_composition(self, selected_players_count):
+        """Validate if team composition meets tournament requirements"""
+        requirements = self.get_sport_requirements()
+        
+        if self.registration_type == 'INDIVIDUAL':
+            return selected_players_count == 1
+        
+        # For team registration
+        min_players = requirements['team_size']
+        max_players = min_players + (requirements['max_substitutes'] if requirements['allow_substitutes'] else 0)
+        
+        return min_players <= selected_players_count <= max_players
 
 # Tournament Registration
 class TournamentRegistration(models.Model):
@@ -112,9 +173,17 @@ class Match(models.Model):
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='matches')
     round_number = models.IntegerField()
     match_number = models.IntegerField()
+    
+    # Individual player fields (for backward compatibility)
     player1 = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='matches_as_player1_tournaments', null=True, blank=True)
     player2 = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='matches_as_player2_tournaments', null=True, blank=True)
     winner = models.ForeignKey('accounts.CustomUser', on_delete=models.SET_NULL, related_name='won_matches_tournaments', null=True, blank=True)
+    
+    # Team fields (for team tournaments)
+    team1 = models.ForeignKey('teams.Team', on_delete=models.CASCADE, related_name='matches_as_team1', null=True, blank=True)
+    team2 = models.ForeignKey('teams.Team', on_delete=models.CASCADE, related_name='matches_as_team2', null=True, blank=True)
+    winning_team = models.ForeignKey('teams.Team', on_delete=models.SET_NULL, related_name='won_matches', null=True, blank=True)
+    
     player1_score = models.IntegerField(null=True, blank=True)
     player2_score = models.IntegerField(null=True, blank=True)
     scheduled_time = models.DateTimeField(null=True, blank=True)
@@ -129,9 +198,14 @@ class Match(models.Model):
         ordering = ['round_number', 'match_number']
 
     def __str__(self):
-        p1_name = self.player1.full_name if self.player1 else "TBD"
-        p2_name = self.player2.full_name if self.player2 else "TBD"
-        return f"{self.tournament.title} - Round {self.round_number}, Match {self.match_number}: {p1_name} vs {p2_name}"
+        if self.tournament.registration_type == 'TEAM':
+            team1_name = self.team1.name if self.team1 else "TBD"
+            team2_name = self.team2.name if self.team2 else "TBD"
+            return f"{self.tournament.title} - Round {self.round_number}, Match {self.match_number}: {team1_name} vs {team2_name}"
+        else:
+            p1_name = self.player1.full_name if self.player1 else "TBD"
+            p2_name = self.player2.full_name if self.player2 else "TBD"
+            return f"{self.tournament.title} - Round {self.round_number}, Match {self.match_number}: {p1_name} vs {p2_name}"
 
 # Referee Booking Request
 class RefereeBooking(models.Model):

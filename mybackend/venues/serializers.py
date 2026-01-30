@@ -28,7 +28,8 @@ class VenueSerializer(serializers.ModelSerializer):
         model = Venue
         fields = ['id', 'owner', 'name', 'description', 'location', 'capacity', 
                  'price_per_hour', 'sport_types', 'sport_type', 'court_size', 
-                 'facilities', 'amenities', 'rating', 'image']
+                 'facilities', 'amenities', 'rating', 'image', 'is_active',
+                 'default_opening_time', 'default_closing_time', 'operating_days']
         read_only_fields = ['owner']
     
     def get_sport_types(self, obj):

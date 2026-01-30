@@ -90,15 +90,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const variantClasses = {
       primary: role
         ? `bg-${role}-500 hover:bg-${role}-600 text-white focus:ring-${role}-500`
-        : 'bg-primary-500 hover:bg-primary-600 text-white focus:ring-primary-500',
+        : 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500',
       secondary: role
         ? `bg-${role}-100 hover:bg-${role}-200 text-${role}-700 focus:ring-${role}-500`
         : 'bg-gray-100 hover:bg-gray-200 text-gray-700 focus:ring-gray-500',
       ghost: role
         ? `text-${role}-600 hover:bg-${role}-50 focus:ring-${role}-500`
         : 'text-gray-600 hover:bg-gray-50 focus:ring-gray-500',
-      danger: 'bg-error-500 hover:bg-error-600 text-white focus:ring-error-500',
-      success: 'bg-success-500 hover:bg-success-600 text-white focus:ring-success-500',
+      danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
+      success: 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500',
     };
 
     // Animation classes

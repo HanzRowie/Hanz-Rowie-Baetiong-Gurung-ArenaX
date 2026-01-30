@@ -11,6 +11,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.shortcuts import get_object_or_404
 from django.db.models import Sum, Q
+from django.db import models
 import random
 import json
 import re
@@ -20,6 +21,7 @@ from .decorators import jwt_required
 from .models import EmailVerification, PasswordResetToken
 from .serializers import EmailVerificationSerializer, PasswordResetTokenSerializer
 from .utils import generate_access_token, generate_refresh_token
+from .player_statistics import PlayerStatisticsService
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -1501,6 +1503,15 @@ def find_matching_players(current_user, potential_players):
     # Sort by match score (highest first)
     matches.sort(key=lambda x: x['score'], reverse=True)
 
+    # Normalize scores to percentage (0-100%)
+    # Define maximum possible score for normalization
+    max_possible_score = 150  # Reasonable maximum based on scoring criteria
+    
+    for match in matches:
+        # Convert to percentage and cap at 100%
+        percentage = min(100, (match['score'] / max_possible_score) * 100)
+        match['score'] = round(percentage, 1)
+
     return matches
 
 # Additional user endpoints that the frontend expects
@@ -1933,20 +1944,93 @@ def dashboard_stats(request):
         stats = {
             'upcomingMatches': 0,
             'totalTournaments': 0,
+            'totalParticipants': 0,
             'winRate': 0.0,
-            'currentRank': 0
+            'matchesWon': 0,
+            'matchesPlayed': 0,
         }
         
         if user.role == 'PLAYER':
-            from tournaments.models import TournamentRegistration
-            registrations = TournamentRegistration.objects.filter(player=user, status='ACCEPTED')
-            stats['totalTournaments'] = registrations.count()
-            stats['winRate'] = user.win_rate
+            from tournaments.models import TournamentRegistration, Match
+            from teams.models import TeamTournamentRegistration
+            from django.db.models import Q
+            
+            # Get tournament registrations
+            individual_registrations = TournamentRegistration.objects.filter(player=user, status='ACCEPTED')
+            team_registrations = TeamTournamentRegistration.objects.filter(
+                selected_players=user,
+                status='CONFIRMED'
+            )
+            
+            stats['totalTournaments'] = individual_registrations.count() + team_registrations.count()
+            
+            # Get matches played
+            individual_matches = Match.objects.filter(
+                Q(player1=user) | Q(player2=user),
+                status='COMPLETED'
+            )
+            
+            team_matches = Match.objects.filter(
+                Q(team1__in=team_registrations.values_list('team', flat=True)) |
+                Q(team2__in=team_registrations.values_list('team', flat=True)),
+                status='COMPLETED'
+            )
+            
+            matches_played = individual_matches.count() + team_matches.count()
+            stats['matchesPlayed'] = matches_played
+            
+            # Calculate wins
+            individual_wins = individual_matches.filter(winner=user).count()
+            team_wins = team_matches.filter(
+                Q(winning_team__in=team_registrations.values_list('team', flat=True))
+            ).count()
+            
+            matches_won = individual_wins + team_wins
+            stats['matchesWon'] = matches_won
+            stats['winRate'] = (matches_won / matches_played * 100) if matches_played > 0 else 0.0
+            
+            # Get sport-specific rankings
+            sport_rankings = {}
+            for sport in ['FUTSAL', 'BADMINTON']:
+                try:
+                    player_stats = PlayerStatisticsService.get_player_stats(str(user.id), sport)
+                    if player_stats.get('matches_played', 0) > 0:
+                        rankings = PlayerStatisticsService.get_player_rankings(str(user.id), sport)
+                        sport_rankings[sport] = {
+                            'ranking': rankings['ranking'],
+                            'total_players': rankings['total_players'],
+                            'percentile': rankings['percentile'],
+                            **player_stats
+                        }
+                except:
+                    continue
+            
+            stats['sport_rankings'] = sport_rankings
+            
+            # Get venue bookings
+            from venues.models import VenueBooking
+            venue_bookings = VenueBooking.objects.filter(
+                user=user,
+                status__in=['CONFIRMED', 'PENDING']
+            ).select_related('venue').order_by('date', 'start_time')[:5]
+            
+            stats['venue_bookings'] = [{
+                'id': str(booking.id),
+                'venue_name': booking.venue.name,
+                'venue_location': booking.venue.location,
+                'date': booking.date.isoformat(),
+                'start_time': booking.start_time.strftime('%H:%M') if booking.start_time else None,
+                'end_time': booking.end_time.strftime('%H:%M') if booking.end_time else None,
+                'status': booking.status,
+                'amount': str(booking.amount) if booking.amount else '0.00',
+                'purpose': booking.purpose
+            } for booking in venue_bookings]
             
         elif user.role == 'ORGANIZER':
             from tournaments.models import Tournament
             tournaments = Tournament.objects.filter(organizer=user)
             stats['totalTournaments'] = tournaments.count()
+            stats['totalParticipants'] = sum(t.registered_count for t in tournaments)
             
         elif user.role == 'REFEREE':
             from referees.models import RefereeBooking
@@ -1959,6 +2043,8 @@ def dashboard_stats(request):
     except CustomUser.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -1991,36 +2077,49 @@ def dashboard_monthly_stats(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_next_tournament(request):
-    """Get next tournament for the current user"""
+    """Get next tournament and upcoming match for the current user"""
     try:
         user = request.user
         
         next_tournament = None
         if user.role == 'PLAYER':
-            from tournaments.models import TournamentRegistration
-            registration = TournamentRegistration.objects.filter(
+            from tournaments.models import TournamentRegistration, Match
+            from teams.models import TeamTournamentRegistration
+            
+            # Check for individual tournament registrations (only future tournaments)
+            individual_registration = TournamentRegistration.objects.filter(
                 player=user, 
                 status='ACCEPTED',
-                tournament__date__gte=timezone.now().date()
-            ).select_related('tournament').first()
+                tournament__date__gte=timezone.now().date(),
+                tournament__status__in=['UPCOMING', 'ONGOING']  # Exclude completed tournaments
+            ).select_related('tournament').order_by('tournament__date').first()
             
-            if registration:
-                tournament = registration.tournament
-                next_tournament = {
-                    'id': str(tournament.id),
-                    'title': tournament.title,
-                    'date': tournament.date.isoformat(),
-                    'time': tournament.start_time.strftime('%H:%M'),
-                    'venue': tournament.venue_name,
-                    'sport': tournament.sport_type
-                }
-                
-        elif user.role == 'ORGANIZER':
-            from tournaments.models import Tournament
-            tournament = Tournament.objects.filter(
-                organizer=user,
-                date__gte=timezone.now().date()
-            ).first()
+            # Check for team tournament registrations (only future tournaments)
+            team_registration = TeamTournamentRegistration.objects.filter(
+                selected_players=user,
+                status='CONFIRMED',
+                tournament__date__gte=timezone.now().date(),
+                tournament__status__in=['UPCOMING', 'ONGOING']  # Exclude completed tournaments
+            ).select_related('tournament', 'team').order_by('tournament__date').first()
+            
+            # Determine which tournament is next
+            tournament = None
+            is_team_tournament = False
+            
+            if individual_registration and team_registration:
+                # Both exist, pick the earlier one
+                if individual_registration.tournament.date <= team_registration.tournament.date:
+                    tournament = individual_registration.tournament
+                    is_team_tournament = False
+                else:
+                    tournament = team_registration.tournament
+                    is_team_tournament = True
+            elif individual_registration:
+                tournament = individual_registration.tournament
+                is_team_tournament = False
+            elif team_registration:
+                tournament = team_registration.tournament
+                is_team_tournament = True
             
             if tournament:
                 next_tournament = {
@@ -2029,14 +2128,90 @@ def dashboard_next_tournament(request):
                     'date': tournament.date.isoformat(),
                     'time': tournament.start_time.strftime('%H:%M'),
                     'venue': tournament.venue_name,
-                    'sport': tournament.sport_type
+                    'sport': tournament.sport_type,
+                    'registration_type': tournament.registration_type,
+                    'match_scheduled': False,
+                    'opponent': None,
+                    'match_time': None,
+                    'match_id': None
+                }
+                
+                # Check for upcoming matches in this tournament
+                upcoming_match = None
+                
+                if is_team_tournament:
+                    # For team tournaments, find matches where user's team is playing
+                    team = team_registration.team
+                    upcoming_match = Match.objects.filter(
+                        tournament=tournament,
+                        status='SCHEDULED'
+                    ).filter(
+                        models.Q(team1=team) | models.Q(team2=team)
+                    ).order_by('round_number', 'match_number').first()
+                    
+                    if upcoming_match:
+                        # Determine opponent team
+                        opponent_team = upcoming_match.team2 if upcoming_match.team1 == team else upcoming_match.team1
+                        next_tournament.update({
+                            'match_scheduled': True,
+                            'opponent': {
+                                'name': opponent_team.name if opponent_team else 'TBD',
+                                'type': 'team'
+                            },
+                            'match_time': upcoming_match.scheduled_time.strftime('%H:%M') if upcoming_match.scheduled_time else None,
+                            'match_id': str(upcoming_match.id),
+                            'round_number': upcoming_match.round_number,
+                            'match_number': upcoming_match.match_number
+                        })
+                else:
+                    # For individual tournaments, find matches where user is playing
+                    upcoming_match = Match.objects.filter(
+                        tournament=tournament,
+                        status='SCHEDULED'
+                    ).filter(
+                        models.Q(player1=user) | models.Q(player2=user)
+                    ).order_by('round_number', 'match_number').first()
+                    
+                    if upcoming_match:
+                        # Determine opponent player
+                        opponent_player = upcoming_match.player2 if upcoming_match.player1 == user else upcoming_match.player1
+                        next_tournament.update({
+                            'match_scheduled': True,
+                            'opponent': {
+                                'name': opponent_player.full_name if opponent_player else 'TBD',
+                                'type': 'player'
+                            },
+                            'match_time': upcoming_match.scheduled_time.strftime('%H:%M') if upcoming_match.scheduled_time else None,
+                            'match_id': str(upcoming_match.id),
+                            'round_number': upcoming_match.round_number,
+                            'match_number': upcoming_match.match_number
+                        })
+                
+        elif user.role == 'ORGANIZER':
+            from tournaments.models import Tournament
+            tournament = Tournament.objects.filter(
+                organizer=user,
+                date__gte=timezone.now().date(),
+                status__in=['UPCOMING', 'ONGOING']  # Exclude completed tournaments
+            ).order_by('date').first()
+            
+            if tournament:
+                next_tournament = {
+                    'id': str(tournament.id),
+                    'title': tournament.title,
+                    'date': tournament.date.isoformat(),
+                    'time': tournament.start_time.strftime('%H:%M'),
+                    'venue': tournament.venue_name,
+                    'sport': tournament.sport_type,
+                    'registration_type': tournament.registration_type
                 }
         
         return Response({'next_tournament': next_tournament})
         
-    except CustomUser.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        import traceback
+        print(f"Dashboard next tournament error: {str(e)}")
+        print(traceback.format_exc())
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -2068,3 +2243,97 @@ def dashboard_profile(request):
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_player_stats(request, player_id=None):
+    """Get comprehensive player statistics"""
+    try:
+        # Use provided player_id or current user's id
+        target_player_id = player_id or str(request.user.id)
+        sport_filter = request.GET.get('sport')  # Optional: 'FUTSAL', 'BADMINTON', or None
+        
+        stats = PlayerStatisticsService.get_player_stats(target_player_id, sport_filter)
+        
+        return Response({
+            'success': True,
+            'stats': stats
+        })
+    except ValueError as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"Error getting player stats: {e}")
+        return Response({
+            'success': False,
+            'error': 'Failed to retrieve player statistics'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_sport_leaderboard(request):
+    """Get leaderboard for a specific sport"""
+    try:
+        sport = request.GET.get('sport', 'FUTSAL').upper()
+        category = request.GET.get('category', 'overall')
+        limit = int(request.GET.get('limit', 50))
+        
+        if sport not in ['FUTSAL', 'BADMINTON']:
+            return Response({
+                'success': False,
+                'error': 'Invalid sport. Must be FUTSAL or BADMINTON'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if category not in ['overall', 'goals', 'assists', 'wins', 'sets']:
+            return Response({
+                'success': False,
+                'error': 'Invalid category'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        leaderboard = PlayerStatisticsService.get_sport_leaderboard(sport, category, limit)
+        
+        return Response({
+            'success': True,
+            'leaderboard': leaderboard,
+            'sport': sport,
+            'category': category
+        })
+    except Exception as e:
+        print(f"Error getting sport leaderboard: {e}")
+        return Response({
+            'success': False,
+            'error': 'Failed to retrieve leaderboard'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_player_rankings(request, player_id=None):
+    """Get player rankings across all sports"""
+    try:
+        # Use provided player_id or current user's id
+        target_player_id = player_id or str(request.user.id)
+        
+        rankings = {}
+        for sport in ['FUTSAL', 'BADMINTON']:
+            try:
+                sport_ranking = PlayerStatisticsService.get_player_rankings(target_player_id, sport)
+                if sport_ranking['ranking'] > 0:  # Only include if player has played this sport
+                    rankings[sport] = sport_ranking
+            except Exception as e:
+                print(f"Error getting {sport} ranking for player {target_player_id}: {e}")
+                continue
+        
+        return Response({
+            'success': True,
+            'rankings': rankings
+        })
+    except Exception as e:
+        print(f"Error getting player rankings: {e}")
+        return Response({
+            'success': False,
+            'error': 'Failed to retrieve player rankings'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

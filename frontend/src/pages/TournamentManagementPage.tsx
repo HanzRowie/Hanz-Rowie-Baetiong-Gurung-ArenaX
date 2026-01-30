@@ -12,7 +12,12 @@ import {
   Edit,
   Trash2,
   Clock,
-  DollarSign
+  DollarSign,
+  Check,
+  X,
+  Play,
+  UserCheck,
+  AlertCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -22,6 +27,7 @@ interface Tournament {
   description: string;
   sport_type: string;
   tournament_type: string;
+  registration_type: 'INDIVIDUAL' | 'TEAM';
   date: string;
   start_time: string;
   end_time: string;
@@ -51,6 +57,31 @@ interface Participant {
   payment_status: string;
 }
 
+interface TeamRegistration {
+  id: string;
+  team: {
+    id: string;
+    name: string;
+    owner: {
+      id: string;
+      full_name: string;
+      email: string;
+    };
+  };
+  selected_players: Array<{
+    id: string;
+    full_name: string;
+    email: string;
+  }>;
+  registered_by: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  registered_at: string;
+  status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+}
+
 interface RefereeAssignment {
   id: string;
   referee: {
@@ -69,6 +100,7 @@ const TournamentManagementPage: React.FC = () => {
   
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [teamRegistrations, setTeamRegistrations] = useState<TeamRegistration[]>([]);
   const [referees, setReferees] = useState<RefereeAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,68 +117,75 @@ const TournamentManagementPage: React.FC = () => {
   const fetchTournamentData = async () => {
     try {
       setLoading(true);
-      const [tournamentRes, participantsRes, refereesRes] = await Promise.all([
+      const [tournamentRes, refereesRes, participantsRes] = await Promise.all([
         api.get(`/api/tournaments/tournaments/${tournamentId}/`),
-        api.get(`/api/tournaments/${tournamentId}/participants/`),
-        api.get(`/api/tournaments/${tournamentId}/referees/`)
+        api.get(`/api/tournaments/${tournamentId}/referees/`),
+        api.get(`/api/tournaments/${tournamentId}/participants/`)
       ]);
       
       setTournament(tournamentRes.data);
       
-      // Robust handling of participants data - handle various API response formats
+      // Handle participants data based on registration type
       const participantsData = participantsRes.data;
-      let participantsArray: Participant[] = [];
       
-      if (Array.isArray(participantsData)) {
-        participantsArray = participantsData;
-      } else if (participantsData && typeof participantsData === 'object') {
-        // Check for common pagination formats
-        if (Array.isArray(participantsData.results)) {
-          participantsArray = participantsData.results;
-        } else if (Array.isArray(participantsData.participants)) {
-          participantsArray = participantsData.participants;
-        } else if (Array.isArray(participantsData.data)) {
-          participantsArray = participantsData.data;
-        } else {
-          console.warn('Unexpected participants data format:', participantsData);
-          participantsArray = [];
+      if (tournamentRes.data.registration_type === 'TEAM') {
+        // Handle team registrations
+        let teamArray: TeamRegistration[] = [];
+        
+        if (Array.isArray(participantsData.participants)) {
+          // Map the backend team registration format to our frontend format
+          teamArray = participantsData.participants.map((p: any) => ({
+            id: p.id,
+            team: {
+              id: p.team.id,
+              name: p.team.name,
+              owner: {
+                id: p.registered_by.id,
+                full_name: p.registered_by.full_name,
+                email: p.registered_by.email
+              }
+            },
+            selected_players: p.selected_players || [],
+            registered_by: p.registered_by,
+            registered_at: p.registration_date,
+            status: p.status === 'ACCEPTED' ? 'CONFIRMED' : 
+                   p.status === 'REJECTED' ? 'CANCELLED' : 'PENDING'
+          }));
         }
+        
+        setTeamRegistrations(teamArray);
+        setParticipants([]);
       } else {
-        console.warn('Participants data is not an array or object:', participantsData);
-        participantsArray = [];
+        // Handle individual participants
+        let participantsArray: Participant[] = [];
+        
+        if (Array.isArray(participantsData.participants)) {
+          participantsArray = participantsData.participants.map((p: any) => ({
+            id: p.id,
+            user: p.user,
+            registration_date: p.registration_date,
+            payment_status: p.payment_status || 'pending'
+          }));
+        }
+        
+        setParticipants(participantsArray);
+        setTeamRegistrations([]);
       }
       
-      setParticipants(participantsArray);
-      
-      // Robust handling of referees data - handle various API response formats
+      // Handle referees data
       const refereesData = refereesRes.data;
       let refereesArray: RefereeAssignment[] = [];
       
       if (Array.isArray(refereesData)) {
         refereesArray = refereesData;
-      } else if (refereesData && typeof refereesData === 'object') {
-        // Check for common pagination formats
-        if (Array.isArray(refereesData.results)) {
-          refereesArray = refereesData.results;
-        } else if (Array.isArray(refereesData.referees)) {
-          refereesArray = refereesData.referees;
-        } else if (Array.isArray(refereesData.data)) {
-          refereesArray = refereesData.data;
-        } else {
-          console.warn('Unexpected referees data format:', refereesData);
-          refereesArray = [];
-        }
-      } else {
-        console.warn('Referees data is not an array or object:', refereesData);
-        refereesArray = [];
       }
       
       setReferees(refereesArray);
     } catch (err: any) {
       console.error('Error fetching tournament data:', err);
       setError(err.response?.data?.error || 'Failed to fetch tournament data');
-      // Set empty arrays on error to prevent crashes
       setParticipants([]);
+      setTeamRegistrations([]);
       setReferees([]);
     } finally {
       setLoading(false);
@@ -182,6 +221,50 @@ const TournamentManagementPage: React.FC = () => {
       alert(err.response?.data?.error || 'Failed to remove referee');
     } finally {
       setRefereesLoading(false);
+    }
+  };
+
+  const handleAcceptTeamRegistration = async (registrationId: string) => {
+    try {
+      setParticipantsLoading(true);
+      await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/accept/`);
+      await fetchTournamentData();
+      alert('Team registration accepted successfully!');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to accept team registration');
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
+  const handleRejectTeamRegistration = async (registrationId: string) => {
+    const reason = prompt('Enter reason for rejection (optional):');
+    
+    try {
+      setParticipantsLoading(true);
+      await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/reject/`, { reason });
+      await fetchTournamentData();
+      alert('Team registration rejected successfully!');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to reject team registration');
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
+  const handleGenerateBracket = async () => {
+    if (!confirm('Generate tournament bracket? This will start the tournament and cannot be undone.')) return;
+    
+    try {
+      setLoading(true);
+      await api.post(`/api/tournaments/${tournamentId}/generate-bracket/`);
+      await fetchTournamentData();
+      alert('Tournament bracket generated successfully!');
+      navigate(`/tournaments/${tournamentId}`);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to generate bracket');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -366,66 +449,213 @@ const TournamentManagementPage: React.FC = () => {
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Participants</h3>
-              <p className="text-sm text-gray-600">
-                {participants ? participants.length : 0} of {tournament.max_participants} registered
-              </p>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {tournament?.registration_type === 'TEAM' ? 'Team Registrations' : 'Participants'}
+              </h3>
+              <div className="flex items-center gap-4">
+                <p className="text-sm text-gray-600">
+                  {tournament?.registration_type === 'TEAM' 
+                    ? `${teamRegistrations.filter(t => t.status === 'CONFIRMED').length} of ${tournament.max_participants} confirmed`
+                    : `${participants.length} of ${tournament.max_participants} registered`
+                  }
+                </p>
+                {tournament?.registration_type === 'TEAM' && tournament.status === 'OPEN' && (
+                  <Button 
+                    onClick={handleGenerateBracket}
+                    className="bg-green-600 text-white hover:bg-green-700"
+                    disabled={teamRegistrations.filter(t => t.status === 'CONFIRMED').length < 2}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Generate Bracket
+                  </Button>
+                )}
+              </div>
             </div>
             
             {participantsLoading ? (
               <div className="flex justify-center py-8">
                 <LoadingSkeleton variant="text" className="w-32" />
               </div>
-            ) : participants && participants.length === 0 ? (
-              <div className="text-center py-8">
-                <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">No participants yet</h4>
-                <p className="text-gray-600">Participants will appear here once they register</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {Array.isArray(participants) && participants.map((participant) => {
-                  // Add null checks for participant data
-                  if (!participant || !participant.id) {
-                    return null;
-                  }
-                  
-                  return (
-                    <div key={participant.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            ) : tournament?.registration_type === 'TEAM' ? (
+              // Team Registrations View
+              <>
+                {teamRegistrations.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">No team registrations yet</h4>
+                    <p className="text-gray-600">Teams will appear here once they register</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Pending Registrations */}
+                    {teamRegistrations.filter(reg => reg.status === 'PENDING').length > 0 && (
                       <div>
-                        <h4 className="font-medium text-gray-900">
-                          {participant.user?.full_name || 'Unknown User'}
+                        <h4 className="text-md font-semibold text-orange-600 mb-3 flex items-center">
+                          <AlertCircle className="w-4 h-4 mr-2" />
+                          Pending Approval ({teamRegistrations.filter(reg => reg.status === 'PENDING').length})
                         </h4>
-                        <p className="text-sm text-gray-600">
-                          {participant.user?.email || 'No email'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Registered: {participant.registration_date 
-                            ? new Date(participant.registration_date).toLocaleDateString() 
-                            : 'Unknown date'}
-                        </p>
+                        <div className="space-y-3">
+                          {teamRegistrations.filter(reg => reg.status === 'PENDING').map((registration) => (
+                            <div key={registration.id} className="flex items-center justify-between p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="font-medium text-gray-900">{registration.team.name}</h4>
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                                    Pending
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Owner: {registration.team.owner.full_name} ({registration.team.owner.email})
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Registered by: {registration.registered_by.full_name}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Players: {registration.selected_players.length} selected
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Registered: {new Date(registration.registered_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleAcceptTeamRegistration(registration.id)}
+                                  className="bg-green-600 text-white hover:bg-green-700"
+                                  disabled={participantsLoading}
+                                >
+                                  <Check className="w-4 h-4 mr-1" />
+                                  Accept
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRejectTeamRegistration(registration.id)}
+                                  className="bg-red-600 text-white hover:bg-red-700"
+                                  disabled={participantsLoading}
+                                >
+                                  <X className="w-4 h-4 mr-1" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          participant.payment_status === 'paid' 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {participant.payment_status || 'pending'}
-                        </span>
-                        <Button
-                          size="sm"
-                          onClick={() => handleRemoveParticipant(participant.id)}
-                          className="bg-red-600 text-white hover:bg-red-700"
-                          disabled={participantsLoading}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    )}
+
+                    {/* Confirmed Registrations */}
+                    {teamRegistrations.filter(reg => reg.status === 'CONFIRMED').length > 0 && (
+                      <div>
+                        <h4 className="text-md font-semibold text-green-600 mb-3 flex items-center">
+                          <UserCheck className="w-4 h-4 mr-2" />
+                          Confirmed Teams ({teamRegistrations.filter(reg => reg.status === 'CONFIRMED').length})
+                        </h4>
+                        <div className="space-y-3">
+                          {teamRegistrations.filter(reg => reg.status === 'CONFIRMED').map((registration) => (
+                            <div key={registration.id} className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                              <div>
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="font-medium text-gray-900">{registration.team.name}</h4>
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                    Confirmed
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Owner: {registration.team.owner.full_name}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  Players: {registration.selected_players.length} selected
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Confirmed: {new Date(registration.registered_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+
+                    {/* Cancelled Registrations */}
+                    {teamRegistrations.filter(reg => reg.status === 'CANCELLED').length > 0 && (
+                      <div>
+                        <h4 className="text-md font-semibold text-red-600 mb-3">
+                          Cancelled Teams ({teamRegistrations.filter(reg => reg.status === 'CANCELLED').length})
+                        </h4>
+                        <div className="space-y-3">
+                          {teamRegistrations.filter(reg => reg.status === 'CANCELLED').map((registration) => (
+                            <div key={registration.id} className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+                              <div>
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h4 className="font-medium text-gray-900">{registration.team.name}</h4>
+                                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                    Cancelled
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  Owner: {registration.team.owner.full_name}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              // Individual Participants View
+              participants && participants.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-semibold text-gray-900 mb-2">No participants yet</h4>
+                  <p className="text-gray-600">Participants will appear here once they register</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Array.isArray(participants) && participants.map((participant) => {
+                    if (!participant || !participant.id) {
+                      return null;
+                    }
+                    
+                    return (
+                      <div key={participant.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div>
+                          <h4 className="font-medium text-gray-900">
+                            {participant.user?.full_name || 'Unknown User'}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {participant.user?.email || 'No email'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Registered: {participant.registration_date 
+                              ? new Date(participant.registration_date).toLocaleDateString() 
+                              : 'Unknown date'}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            participant.payment_status === 'paid' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {participant.payment_status || 'pending'}
+                          </span>
+                          <Button
+                            size="sm"
+                            onClick={() => handleRemoveParticipant(participant.id)}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                            disabled={participantsLoading}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
             )}
           </Card>
         </div>

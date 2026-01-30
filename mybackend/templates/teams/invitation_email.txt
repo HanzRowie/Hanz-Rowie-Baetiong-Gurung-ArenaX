@@ -1,0 +1,28 @@
+TEAM INVITATION - {{ team.name }}
+
+Hello {{ player.full_name }},
+
+{{ sender.full_name }} has invited you to join their team on ArenaX!
+
+TEAM DETAILS:
+- Team Name: {{ team.name }}
+- Sports: {{ sports }}
+- Invited by: {{ sender.full_name }}
+- Team Owner: {{ team.owner.full_name }}
+
+Join this team to participate in tournaments, compete with other teams, and track your performance together!
+
+IMPORTANT: This invitation will expire on {{ expires_at|date:"F j, Y \a\t g:i A" }}. Please respond before then to secure your spot on the team.
+
+TO RESPOND TO THIS INVITATION:
+- Accept: {{ accept_url }}
+- Decline: {{ decline_url }}
+
+If you have any questions about this team or the invitation, you can contact {{ sender.full_name }} directly through the ArenaX platform.
+
+Best regards,
+The ArenaX Team
+
+---
+This invitation was sent through ArenaX. If you didn't expect this invitation, you can safely ignore this email.
+© {{ "now"|date:"Y" }} ArenaX. All rights reserved.

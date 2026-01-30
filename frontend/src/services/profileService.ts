@@ -324,6 +324,39 @@ class ProfileService {
       return { rankings: [], total_players: 0 };
     }
   }
+
+  // Enhanced player statistics and rankings
+  async getPlayerStats(playerId?: string, sport?: string) {
+    const params = new URLSearchParams();
+    if (sport) params.append('sport', sport);
+    
+    const url = playerId 
+      ? `/api/accounts/players/${playerId}/stats/?${params.toString()}`
+      : `/api/accounts/players/stats/?${params.toString()}`;
+      
+    const response = await api.get(url);
+    return response.data;
+  }
+
+  async getSportLeaderboard(sport: string, category: string = 'overall', limit: number = 50) {
+    const params = new URLSearchParams({
+      sport,
+      category,
+      limit: limit.toString()
+    });
+    
+    const response = await api.get(`/api/accounts/players/leaderboard/?${params.toString()}`);
+    return response.data;
+  }
+
+  async getPlayerRankingsBySport(playerId?: string) {
+    const url = playerId 
+      ? `/api/accounts/players/${playerId}/rankings/`
+      : `/api/accounts/players/rankings/`;
+      
+    const response = await api.get(url);
+    return response.data;
+  }
 }
 
 export const profileService = new ProfileService();

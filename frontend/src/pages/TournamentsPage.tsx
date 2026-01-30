@@ -24,6 +24,7 @@ import type { Tournament, TournamentFilters } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
+import QuickTeamRegistrationModal from '@/components/player/QuickTeamRegistrationModal';
 
 // Debounce utility function
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -47,6 +48,7 @@ export default function TournamentsPage() {
   const [selectedSport, setSelectedSport] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedTournamentType, setSelectedTournamentType] = useState('');
+  const [selectedRegistrationType, setSelectedRegistrationType] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
   const [maxEntryFee, setMaxEntryFee] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -57,6 +59,12 @@ export default function TournamentsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'date' | 'title' | 'participants' | 'entry_fee'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Team registration modal
+  const [teamRegistrationModal, setTeamRegistrationModal] = useState<{
+    isOpen: boolean;
+    tournament: Tournament | null;
+  }>({ isOpen: false, tournament: null });
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -77,11 +85,14 @@ export default function TournamentsPage() {
     { value: 'COMPLETED', label: 'Completed' }
   ];
 
+  // Tournament type is now fixed to single elimination only
   const tournamentTypeOptions = [
-    { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' },
-    { value: 'DOUBLE_ELIMINATION', label: 'Double Elimination' },
-    { value: 'ROUND_ROBIN', label: 'Round Robin' },
-    { value: 'SWISS', label: 'Swiss System' }
+    { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' }
+  ];
+
+  const registrationTypeOptions = [
+    { value: 'INDIVIDUAL', label: 'Individual' },
+    { value: 'TEAM', label: 'Team' }
   ];
 
   const sortOptions = [
@@ -107,7 +118,7 @@ export default function TournamentsPage() {
       setCurrentPage(1);
       loadTournaments(true);
     }
-  }, [searchQuery, selectedSport, selectedStatus, selectedTournamentType, selectedLocation, maxEntryFee, dateFrom, dateTo, sortBy, sortOrder]);
+  }, [searchQuery, selectedSport, selectedStatus, selectedTournamentType, selectedRegistrationType, selectedLocation, maxEntryFee, dateFrom, dateTo, sortBy, sortOrder]);
 
   useEffect(() => {
     loadTournaments(true);
@@ -121,6 +132,7 @@ export default function TournamentsPage() {
         sport_type: selectedSport || undefined,
         status: selectedStatus || undefined,
         tournament_type: selectedTournamentType || undefined,
+        registration_type: selectedRegistrationType || undefined,
         location: selectedLocation || undefined,
         entry_fee_max: maxEntryFee ? parseFloat(maxEntryFee) : undefined,
         date_from: dateFrom || undefined,
@@ -176,6 +188,7 @@ export default function TournamentsPage() {
     setSelectedSport('');
     setSelectedStatus('');
     setSelectedTournamentType('');
+    setSelectedRegistrationType('');
     setSelectedLocation('');
     setMaxEntryFee('');
     setDateFrom('');
@@ -197,64 +210,129 @@ export default function TournamentsPage() {
     }
 
     if (user?.role === 'PLAYER') {
-      if (tournament.user_registration_status === 'PENDING') {
-        return (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-not-allowed"
-          >
-            <Clock className="h-4 w-4" />
-            Pending
-          </button>
-        );
-      }
+      // For team tournaments, check team registration status
+      if (tournament.registration_type === 'TEAM') {
+        // Check if user has any teams registered for this tournament
+        if (tournament.user_registration_status === 'PENDING') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-not-allowed"
+            >
+              <Clock className="h-4 w-4" />
+              Team Pending
+            </button>
+          );
+        }
 
-      if (tournament.user_registration_status === 'ACCEPTED') {
-        return (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-100 rounded-lg cursor-not-allowed"
-          >
-            <Trophy className="h-4 w-4" />
-            Registered
-          </button>
-        );
-      }
+        if (tournament.user_registration_status === 'ACCEPTED') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-100 rounded-lg cursor-not-allowed"
+            >
+              <Trophy className="h-4 w-4" />
+              Team Registered
+            </button>
+          );
+        }
 
-      if (tournament.user_registration_status === 'REJECTED') {
-        return (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-100 text-red-800 rounded-lg cursor-not-allowed"
-          >
-            <X className="h-4 w-4" />
-            Rejected
-          </button>
-        );
-      }
+        if (tournament.user_registration_status === 'REJECTED') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-100 text-red-800 rounded-lg cursor-not-allowed"
+            >
+              <X className="h-4 w-4" />
+              Team Rejected
+            </button>
+          );
+        }
 
-      if (!tournament.user_registration_status && tournament.is_registration_open) {
-        return (
-          <button
-            onClick={() => handleRegister(tournament.id)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            <UserPlus className="h-4 w-4" />
-            Register
-          </button>
-        );
-      }
+        if (!tournament.user_registration_status && tournament.is_registration_open) {
+          return (
+            <button
+              onClick={() => setTeamRegistrationModal({ isOpen: true, tournament })}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <Users className="h-4 w-4" />
+              Register Team
+            </button>
+          );
+        }
 
-      if (!tournament.user_registration_status && !tournament.is_registration_open) {
-        return (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
-          >
-            <X className="h-4 w-4" />
-            Closed
-          </button>
-        );
+        if (!tournament.user_registration_status && !tournament.is_registration_open) {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
+            >
+              <X className="h-4 w-4" />
+              Registration Closed
+            </button>
+          );
+        }
+      } else {
+        // Individual tournament logic
+        if (tournament.user_registration_status === 'PENDING') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-not-allowed"
+            >
+              <Clock className="h-4 w-4" />
+              Pending
+            </button>
+          );
+        }
+
+        if (tournament.user_registration_status === 'ACCEPTED') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-100 rounded-lg cursor-not-allowed"
+            >
+              <Trophy className="h-4 w-4" />
+              Registered
+            </button>
+          );
+        }
+
+        if (tournament.user_registration_status === 'REJECTED') {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-100 text-red-800 rounded-lg cursor-not-allowed"
+            >
+              <X className="h-4 w-4" />
+              Rejected
+            </button>
+          );
+        }
+
+        if (!tournament.user_registration_status && tournament.is_registration_open) {
+          return (
+            <button
+              onClick={() => handleRegister(tournament.id)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <UserPlus className="h-4 w-4" />
+              Register
+            </button>
+          );
+        }
+
+        if (!tournament.user_registration_status && !tournament.is_registration_open) {
+          return (
+            <button
+              disabled
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-500 rounded-lg cursor-not-allowed"
+            >
+              <X className="h-4 w-4" />
+              Closed
+            </button>
+          );
+        }
       }
     }
 
@@ -391,6 +469,17 @@ export default function TournamentsPage() {
                   <option value="">All Status</option>
                   {statusOptions.map((status) => (
                     <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedRegistrationType}
+                  onChange={(e) => setSelectedRegistrationType(e.target.value)}
+                  className="px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                >
+                  <option value="">All Types</option>
+                  {registrationTypeOptions.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
 
@@ -726,6 +815,23 @@ export default function TournamentsPage() {
       </main>
 
       <BottomNavigation />
+
+      {/* Team Registration Modal */}
+      {teamRegistrationModal.tournament && (
+        <QuickTeamRegistrationModal
+          isOpen={teamRegistrationModal.isOpen}
+          onClose={() => setTeamRegistrationModal({ isOpen: false, tournament: null })}
+          tournament={{
+            id: teamRegistrationModal.tournament.id,
+            title: teamRegistrationModal.tournament.title,
+            sport_type: teamRegistrationModal.tournament.sport_type,
+            registration_type: teamRegistrationModal.tournament.registration_type
+          }}
+          onSuccess={() => {
+            loadTournaments(true);
+          }}
+        />
+      )}
     </div>
   );
 }

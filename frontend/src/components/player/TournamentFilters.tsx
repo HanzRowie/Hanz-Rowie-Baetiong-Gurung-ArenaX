@@ -44,8 +44,7 @@ interface TournamentFiltersProps {
 }
 
 const SPORT_TYPES = [
-  'Football', 'Futsal', 'Basketball', 'Badminton', 'Cricket',
-  'Volleyball', 'Table Tennis', 'Tennis', 'Chess', 'Esports'
+  'Futsal', 'Badminton'
 ];
 
 const SKILL_LEVELS = [
@@ -53,10 +52,7 @@ const SKILL_LEVELS = [
 ];
 
 const TOURNAMENT_TYPES = [
-  { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' },
-  { value: 'DOUBLE_ELIMINATION', label: 'Double Elimination' },
-  { value: 'ROUND_ROBIN', label: 'Round Robin' },
-  { value: 'SWISS', label: 'Swiss System' }
+  { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' }
 ];
 
 const STATUS_OPTIONS = [

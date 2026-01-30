@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
-  Building2, Calendar, MessageCircle,
+  Building2, Calendar,
   TrendingUp, DollarSign, Clock, CheckCircle,
   XCircle,
   BarChart3, ArrowUpRight
@@ -280,13 +280,6 @@ export default function VenueOwnerDashboard() {
                         >
                           <XCircle className="h-3 w-3" />
                           Reject
-                        </button>
-                        <button
-                          onClick={() => navigate('/chats')}
-                          className="flex items-center gap-1 px-3 py-1.5 border border-gray-300 text-gray-700 text-xs rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          <MessageCircle className="h-3 w-3" />
-                          Chat
                         </button>
                       </div>
                     </div>
