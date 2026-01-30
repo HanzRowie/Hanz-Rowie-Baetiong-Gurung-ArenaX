@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/dateUtils';
-import { 
-  Trophy, User, Calendar, Plus, Eye, 
+import {
+  Trophy, User, Calendar, Plus, Eye,
   Users, Award, BarChart3,
   ChevronLeft, ChevronRight, TrendingUp
 } from 'lucide-react';
@@ -12,16 +12,16 @@ import { tournamentService } from '@/services/tournamentService';
 import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import PlayerCard from '@/components/PlayerCard';
-import SportRankingsCard from '@/components/player/SportRankingsCard';
-import FutsalStatsSummary from '@/components/player/FutsalStatsSummary';
-import VenueBookingsCard from '@/components/player/VenueBookingsCard';
+// import SportRankingsCard from '@/components/player/SportRankingsCard';
+// import FutsalStatsSummary from '@/components/player/FutsalStatsSummary';
+// import VenueBookingsCard from '@/components/player/VenueBookingsCard';
 import { dashboardService, type DashboardStats, type MonthlyStats, type NextTournament, type PlayerProfile } from '@/services/dashboardService';
 import VenueOwnerDashboard from './VenueOwnerDashboard';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  
+
   // Redirect referees to their specific dashboard
   useEffect(() => {
     if (user?.role === UserRole.REFEREE) {
@@ -29,7 +29,7 @@ export default function DashboardPage() {
       return;
     }
   }, [user, navigate]);
-  
+
   // State for dashboard data
   const [myTournaments, setMyTournaments] = useState<any>({ organized_tournaments: [], registered_tournaments: [] });
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
@@ -78,7 +78,7 @@ export default function DashboardPage() {
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('profileUpdated', handleProfileUpdate);
-    
+
     return () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -105,7 +105,7 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Load dashboard data in parallel with individual error handling
       const [
         dashboardStatsData,
@@ -125,18 +125,18 @@ export default function DashboardPage() {
         dashboardService.getMonthlyStats(currentYear).catch(() => []),
         dashboardService.getNextTournament().catch(() => null),
         dashboardService.getPlayerProfile().catch(() => null),
-        tournamentService.getMyTournaments().catch(() => ({ 
-          organized_tournaments: [], 
-          registered_tournaments: [] 
+        tournamentService.getMyTournaments().catch(() => ({
+          organized_tournaments: [],
+          registered_tournaments: []
         }))
       ]);
-      
+
       setStats(dashboardStatsData);
       setMonthlyStats(monthlyStatsData);
       setNextTournament(nextTournamentData);
       setProfile(profileData);
       setMyTournaments(myTournamentsResponse);
-      
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toastService.error('Failed to load dashboard data');
@@ -159,7 +159,7 @@ export default function DashboardPage() {
 
 
   // Use monthly stats from service
-  const maxValue = monthlyStats.length > 0 
+  const maxValue = monthlyStats.length > 0
     ? Math.max(...monthlyStats.map(d => Math.max(d.wins, d.losses)))
     : 10;
 
@@ -257,9 +257,9 @@ export default function DashboardPage() {
                           <div className="flex flex-col items-center">
                             <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-2">
                               {user.profile_picture ? (
-                                <img 
+                                <img
                                   src={user.profile_picture}
-                                  alt="You" 
+                                  alt="You"
                                   className="w-14 h-14 rounded-full object-cover"
                                 />
                               ) : (
@@ -271,9 +271,9 @@ export default function DashboardPage() {
                           <div className="text-2xl font-bold text-gray-300">VS</div>
                           <div className="flex flex-col items-center">
                             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-2">
-                              <img 
+                              <img
                                 src={nextTournament.opponent.avatar || '/images/Card Profile-1.png'}
-                                alt="Opponent" 
+                                alt="Opponent"
                                 className="w-14 h-14 rounded-full object-cover"
                               />
                             </div>
@@ -366,16 +366,16 @@ export default function DashboardPage() {
                         {monthlyStats.slice(0, 8).map((data) => (
                           <div key={data.month} className="flex flex-col items-center space-y-1.5 flex-1">
                             <div className="flex flex-col items-center space-y-0.5 w-full">
-                              <div 
+                              <div
                                 className="w-full bg-blue-500 rounded-t transition-all hover:opacity-80"
-                                style={{ 
+                                style={{
                                   height: `${Math.max((data.wins / maxValue) * 100, 5)}%`,
                                   minHeight: '3px'
                                 }}
                               />
-                              <div 
+                              <div
                                 className="w-full bg-pink-500 rounded-b transition-all hover:opacity-80"
-                                style={{ 
+                                style={{
                                   height: `${Math.max((data.losses / maxValue) * 100, 5)}%`,
                                   minHeight: '3px'
                                 }}
@@ -450,20 +450,6 @@ export default function DashboardPage() {
                 )}
                 */}
 
-                {/* Futsal Stats Summary - Show if player has futsal statistics */}
-                {stats.sport_rankings?.FUTSAL && (
-                  <FutsalStatsSummary 
-                    stats={{
-                      total_matches: stats.total_matches || 0,
-                      total_goals: stats.total_goals || 0,
-                      total_assists: stats.total_assists || 0,
-                      goals_per_match: stats.goals_per_match || 0,
-                      assists_per_match: stats.assists_per_match || 0,
-                      recent_form: stats.recent_form || []
-                    }}
-                    playerName={user.full_name || 'Player'}
-                  />
-                )}
 
                 {/* Venue Bookings Card */}
                 {/* Temporarily commented out - not needed currently
@@ -475,7 +461,7 @@ export default function DashboardPage() {
 
               {/* Right Column - Player Card */}
               <div className="lg:col-span-1">
-                <PlayerCard 
+                <PlayerCard
                   user={{
                     full_name: user.full_name,
                     gender: user.gender,
@@ -580,7 +566,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <button 
+                <button
                   onClick={() => navigate('/tournaments/create')}
                   className="flex items-center gap-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-4 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl group"
                 >
@@ -592,7 +578,7 @@ export default function DashboardPage() {
                     <p className="text-sm opacity-90">Set up a new event</p>
                   </div>
                 </button>
-                
+
                 <button
                   onClick={() => navigate('/tournaments')}
                   className="flex items-center gap-4 border-2 border-gray-200 text-gray-700 px-6 py-4 rounded-xl hover:border-indigo-300 hover:bg-indigo-50 transition-all duration-200 group"
@@ -637,7 +623,7 @@ export default function DashboardPage() {
                   </button>
                 )}
               </div>
-              
+
               {myTournaments?.organized_tournaments?.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl">
                   <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -672,28 +658,27 @@ export default function DashboardPage() {
                             <p className="text-sm text-gray-600">{tournament.sport_type}</p>
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          tournament.status === 'UPCOMING' ? 'bg-blue-100 text-blue-800' :
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${tournament.status === 'UPCOMING' ? 'bg-blue-100 text-blue-800' :
                           tournament.status === 'ONGOING' ? 'bg-green-100 text-green-800' :
-                          tournament.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
+                            tournament.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800' :
+                              'bg-red-100 text-red-800'
+                          }`}>
                           {tournament.status}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
                         <span>{tournament.registered_count}/{tournament.max_participants} participants</span>
                         <span>{new Date(tournament.date).toLocaleDateString()}</span>
                       </div>
-                      
+
                       <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-                        <div 
+                        <div
                           className="bg-gradient-to-r from-purple-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${Math.min((tournament.registered_count / tournament.max_participants) * 100, 100)}%` }}
                         ></div>
                       </div>
-                      
+
                       <button
                         onClick={() => navigate(`/tournaments/${tournament.id}`)}
                         className="w-full bg-white text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium border border-gray-200"
@@ -720,7 +705,7 @@ export default function DashboardPage() {
                     </p>
                     <p className="text-sm text-gray-600">Avg. Fill Rate</p>
                   </div>
-                  
+
                   <div className="text-center">
                     <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <Users className="h-8 w-8 text-blue-600" />
@@ -730,7 +715,7 @@ export default function DashboardPage() {
                     </p>
                     <p className="text-sm text-gray-600">Avg. Participants</p>
                   </div>
-                  
+
                   <div className="text-center">
                     <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <Award className="h-8 w-8 text-purple-600" />
@@ -787,7 +772,7 @@ export default function DashboardPage() {
             <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button 
+                <button
                   onClick={() => navigate('/referee/availability')}
                   className="flex items-center gap-3 bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors"
                 >
@@ -813,7 +798,7 @@ export default function DashboardPage() {
             {/* Upcoming Assignments */}
             <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Upcoming Assignments</h3>
-              
+
               {nextTournament ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-green-50">
