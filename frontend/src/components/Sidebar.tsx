@@ -98,13 +98,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           active: location.pathname === '/my-tournaments',
         },
         {
-          id: 'my-tournaments',
-          label: 'My Tournaments',
-          icon: Settings,
-          path: '/my-tournaments',
-          active: location.pathname === '/my-tournaments',
-        },
-        {
           id: 'venues',
           label: 'Find Venues',
           icon: Building2,
@@ -245,13 +238,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100">
             <div className="flex items-center gap-3">
-              <img
-                src="/images/Logo.jpg"
-                alt="ArenaX Logo"
-                className="h-8 w-8 object-contain rounded-lg"
-              />
+              <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">A</span>
+              </div>
               <span className="text-xl font-bold text-gray-900">ArenaX</span>
             </div>
             <button
@@ -262,45 +253,24 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </button>
           </div>
 
-          {/* User Info */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              {user?.profile_picture ? (
-                <img
-                  src={user.profile_picture}
-                  alt={user.full_name}
-                  className="h-10 w-10 rounded-full object-cover"
-                />
-              ) : (
-                <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                  <User className="h-5 w-5 text-purple-600" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 truncate">{user?.full_name || 'User'}</p>
-                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-              </div>
-            </div>
-          </div>
-
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
             {navItems.map((item) => {
               const IconComponent = item.icon;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleNavigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${item.active
-                    ? 'bg-purple-50 text-purple-600 shadow-sm'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-purple-600'
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${item.active
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                 >
                   <IconComponent
-                    className={`h-5 w-5 ${item.active ? 'text-purple-600' : 'text-gray-500'
+                    className={`h-5 w-5 ${item.active ? 'text-white' : 'text-gray-500'
                       }`}
                   />
-                  <span className={`font-medium ${item.active ? 'text-purple-600' : 'text-gray-700'
+                  <span className={`font-medium ${item.active ? 'text-white' : 'text-gray-700'
                     }`}>
                     {item.label}
                   </span>
@@ -310,7 +280,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-200">
+          <div className="p-4 border-t border-gray-100">
             <div className="text-xs text-gray-500 text-center">
               © 2025 ArenaX
             </div>

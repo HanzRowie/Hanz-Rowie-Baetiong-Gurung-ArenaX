@@ -308,6 +308,35 @@ class MatchScorer:
             if total_goals != team_data['goals']:
                 raise InvalidScoreError("Sum of player goals must equal team goals")
 
+            # Validate goal details if provided
+            goal_details = team_data.get('goal_details', [])
+            if len(goal_details) != team_data['goals']:
+                raise InvalidScoreError(f"Number of goal details ({len(goal_details)}) must match team goals ({team_data['goals']})")
+            
+            for goal_detail in goal_details:
+                if not all(key in goal_detail for key in ['scorer_id', 'minute']):
+                    raise InvalidScoreError("Goal details must include scorer_id and minute")
+                
+                if not (1 <= goal_detail['minute'] <= 90):
+                    raise InvalidScoreError("Goal minute must be between 1 and 90")
+                
+                # Validate goal type if provided
+                valid_goal_types = ['REGULAR', 'PENALTY', 'FREE_KICK', 'OWN_GOAL']
+                if 'goal_type' in goal_detail and goal_detail['goal_type'] not in valid_goal_types:
+                    raise InvalidScoreError(f"Invalid goal type: {goal_detail['goal_type']}")
+
+            # Validate card details if provided
+            card_details = team_data.get('card_details', [])
+            for card_detail in card_details:
+                if not all(key in card_detail for key in ['player_id', 'card_type', 'minute']):
+                    raise InvalidScoreError("Card details must include player_id, card_type, and minute")
+                
+                if card_detail['card_type'] not in ['YELLOW', 'RED']:
+                    raise InvalidScoreError("Card type must be YELLOW or RED")
+                
+                if not (1 <= card_detail['minute'] <= 90):
+                    raise InvalidScoreError("Card minute must be between 1 and 90")
+
     @staticmethod
     def _validate_badminton_sets_data(sets_data: List[Dict[str, Any]]):
         """Validate badminton sets data structure and BWF compliance"""
@@ -339,15 +368,31 @@ class MatchScorer:
         futsal_score, created = FutsalScore.objects.get_or_create(
             match=match,
             team=team,
-            defaults={'goals': team_data['goals']}
+            defaults={
+                'goals': team_data['goals'],
+                'shots_on_target': team_data.get('shots_on_target', 0),
+                'shots_off_target': team_data.get('shots_off_target', 0),
+                'possession_percentage': team_data.get('possession_percentage', 50.0),
+                'fouls': team_data.get('fouls', 0),
+                'yellow_cards': team_data.get('yellow_cards', 0),
+                'red_cards': team_data.get('red_cards', 0)
+            }
         )
         
         if not created:
             futsal_score.goals = team_data['goals']
+            futsal_score.shots_on_target = team_data.get('shots_on_target', 0)
+            futsal_score.shots_off_target = team_data.get('shots_off_target', 0)
+            futsal_score.possession_percentage = team_data.get('possession_percentage', 50.0)
+            futsal_score.fouls = team_data.get('fouls', 0)
+            futsal_score.yellow_cards = team_data.get('yellow_cards', 0)
+            futsal_score.red_cards = team_data.get('red_cards', 0)
             futsal_score.save()
 
-        # Clear existing player stats
+        # Clear existing player stats and goal details
         futsal_score.player_stats.all().delete()
+        futsal_score.goal_details.all().delete()
+        futsal_score.cards.all().delete()
 
         # Create new player stats
         for stat_data in team_data['player_stats']:
@@ -357,8 +402,49 @@ class MatchScorer:
                 player=player,
                 goals=stat_data['goals'],
                 assists=stat_data['assists'],
-                saves=stat_data.get('saves', 0),  # Add saves field with default value
-                minutes_played=stat_data['minutes_played']
+                minutes_played=stat_data['minutes_played'],
+                is_starter=stat_data.get('is_starter', True),
+                shots_on_target=stat_data.get('shots_on_target', 0),
+                shots_off_target=stat_data.get('shots_off_target', 0),
+                tackles=stat_data.get('tackles', 0),
+                interceptions=stat_data.get('interceptions', 0),
+                clearances=stat_data.get('clearances', 0),
+                yellow_cards=stat_data.get('yellow_cards', 0),
+                red_cards=stat_data.get('red_cards', 0),
+                fouls_committed=stat_data.get('fouls_committed', 0),
+                fouls_suffered=stat_data.get('fouls_suffered', 0),
+                passes_completed=stat_data.get('passes_completed', 0),
+                passes_attempted=stat_data.get('passes_attempted', 0)
+            )
+
+        # Create goal details
+        from teams.models import FutsalGoal
+        for goal_data in team_data.get('goal_details', []):
+            scorer = CustomUser.objects.get(id=goal_data['scorer_id'])
+            assist_by = None
+            if goal_data.get('assist_by_id'):
+                assist_by = CustomUser.objects.get(id=goal_data['assist_by_id'])
+            
+            FutsalGoal.objects.create(
+                futsal_score=futsal_score,
+                scorer=scorer,
+                assist_by=assist_by,
+                minute=goal_data['minute'],
+                goal_type=goal_data.get('goal_type', 'REGULAR'),
+                description=goal_data.get('description', '')
+            )
+
+        # Create card details
+        from teams.models import FutsalCard
+        for card_data in team_data.get('card_details', []):
+            player = CustomUser.objects.get(id=card_data['player_id'])
+            FutsalCard.objects.create(
+                futsal_score=futsal_score,
+                player=player,
+                card_type=card_data['card_type'],
+                reason=card_data.get('reason', 'UNSPORTING_BEHAVIOR'),
+                minute=card_data['minute'],
+                description=card_data.get('description', '')
             )
 
         return futsal_score

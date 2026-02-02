@@ -161,6 +161,68 @@ class TournamentService {
     return response.data;
   }
 
+  async recordFutsalMatchScore(
+    tournamentId: string,
+    matchId: string,
+    data: {
+      home_team_data: {
+        goals: number;
+        shots_on_target?: number;
+        shots_off_target?: number;
+        possession_percentage?: number;
+        fouls?: number;
+        yellow_cards?: number;
+        red_cards?: number;
+        player_stats: Array<{
+          player_id: string;
+          goals: number;
+          assists: number;
+          minutes_played: number;
+          is_starter?: boolean;
+        }>;
+        goal_details: Array<{
+          scorer_id: string;
+          assist_by_id?: string;
+          minute: number;
+          goal_type?: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL';
+        }>;
+      };
+      away_team_data: {
+        goals: number;
+        shots_on_target?: number;
+        shots_off_target?: number;
+        possession_percentage?: number;
+        fouls?: number;
+        yellow_cards?: number;
+        red_cards?: number;
+        player_stats: Array<{
+          player_id: string;
+          goals: number;
+          assists: number;
+          minutes_played: number;
+          is_starter?: boolean;
+        }>;
+        goal_details: Array<{
+          scorer_id: string;
+          assist_by_id?: string;
+          minute: number;
+          goal_type?: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL';
+        }>;
+      };
+    }
+  ): Promise<{ success: boolean; match: any; message: string }> {
+    const response = await api.post(`/api/tournaments/${tournamentId}/matches/${matchId}/futsal-score/`, data);
+    return response.data;
+  }
+
+  async getMatchDetails(
+    tournamentId: string,
+    matchId: string
+  ): Promise<{ success: boolean; data: any }> {
+    const response = await api.get(`/api/tournaments/${tournamentId}/matches/${matchId}/details/`);
+    return response.data;
+  }
+
   // Enhanced bracket management endpoints
   async getTournamentBracket(tournamentId: string): Promise<{ 
     bracket: any; 

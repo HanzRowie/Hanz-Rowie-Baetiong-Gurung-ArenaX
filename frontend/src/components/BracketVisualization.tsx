@@ -14,6 +14,7 @@ import {
 import type { Match, Tournament } from '@/types';
 import { tournamentService } from '@/services/tournamentService';
 import toastService from '@/services/toastService';
+import { MatchScorer } from './MatchScorer';
 
 interface BracketVisualizationProps {
   tournament: Tournament;
@@ -156,6 +157,7 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave, isTeamTournament }: 
 export default function BracketVisualization({ tournament, onMatchUpdate, isOrganizer = false }: BracketVisualizationProps) {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [showMatchScorer, setShowMatchScorer] = useState(false);
 
   const isTeamTournament = tournament.participation_type === 'TEAM';
 
@@ -167,7 +169,13 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
 
       if (hasParticipants) {
         setSelectedMatch(match);
-        setShowResultModal(true);
+        
+        // Use detailed scoring for futsal tournaments, basic modal for others
+        if (tournament.sport_type === 'FUTSAL') {
+          setShowMatchScorer(true);
+        } else {
+          setShowResultModal(true);
+        }
       }
     }
   };
@@ -548,6 +556,51 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
           onSave={handleSaveResult}
           isTeamTournament={isTeamTournament}
         />
+      )}
+
+      {/* Match Scorer for Futsal */}
+      {selectedMatch && showMatchScorer && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Record Match Score - {selectedMatch.team1?.name} vs {selectedMatch.team2?.name}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowMatchScorer(false);
+                    setSelectedMatch(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <MatchScorer
+                match={{
+                  ...selectedMatch,
+                  tournament: {
+                    id: tournament.id,
+                    title: tournament.title,
+                    sport_type: tournament.sport_type as 'FUTSAL' | 'BADMINTON',
+                    registration_type: tournament.registration_type as 'TEAM' | 'INDIVIDUAL'
+                  }
+                }}
+                onScoreRecorded={(updatedMatch) => {
+                  setShowMatchScorer(false);
+                  setSelectedMatch(null);
+                  onMatchUpdate?.();
+                }}
+                onClose={() => {
+                  setShowMatchScorer(false);
+                  setSelectedMatch(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -165,33 +165,6 @@ export class TeamService {
   }
 
   // Match scoring methods
-  static async recordFutsalMatchScore(
-    matchId: string,
-    homeTeamData: {
-      goals: number;
-      player_stats: Array<{
-        player_id: string;
-        goals: number;
-        assists: number;
-        minutes_played: number;
-      }>;
-    },
-    awayTeamData: {
-      goals: number;
-      player_stats: Array<{
-        player_id: string;
-        goals: number;
-        assists: number;
-        minutes_played: number;
-      }>;
-    }
-  ): Promise<ApiResponse<any>> {
-    const response = await api.post(`${this.BASE_URL}/matches/${matchId}/score/futsal/`, {
-      home_team_data: homeTeamData,
-      away_team_data: awayTeamData
-    });
-    return response.data;
-  }
 
   static async recordBadmintonMatchScore(
     matchId: string,
@@ -229,6 +202,29 @@ export class TeamService {
 
   static async getMatchDetails(matchId: string): Promise<ApiResponse<any>> {
     const response = await api.get(`${this.BASE_URL}/matches/${matchId}/`);
+    return response.data;
+  }
+
+  static async recordFutsalMatchScore(
+    matchId: string,
+    homeTeamData: any,
+    awayTeamData: any
+  ): Promise<ApiResponse<any>> {
+    // We need to get the tournament ID from the match first
+    const matchDetails = await this.getMatchDetails(matchId);
+    if (!matchDetails.success) {
+      throw new Error('Failed to get match details');
+    }
+
+    const tournamentId = matchDetails.data.tournament.id;
+    
+    const response = await api.post(
+      `/api/tournaments/${tournamentId}/matches/${matchId}/futsal-score/`,
+      {
+        home_team_data: homeTeamData,
+        away_team_data: awayTeamData
+      }
+    );
     return response.data;
   }
 }

@@ -12,6 +12,7 @@ export { default as ConnectionRequestCard } from './ConnectionRequestCard';
 // Match Scoring Components
 export { default as MatchScorer } from './MatchScorer';
 export { default as FutsalScoreForm } from './FutsalScoreForm';
+export { default as ModernFutsalScorer } from './ModernFutsalScorer';
 export { default as BadmintonScoreForm } from './BadmintonScoreForm';
 export { default as MatchScoringInterface } from './MatchScoringInterface';
 

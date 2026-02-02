@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/design-system/components/Card';
 import { Button } from '@/design-system/components/Button';
 import { Modal } from '@/design-system/components/Modal';
-import { TeamService } from '@/services/teamService';
-import { FutsalScoreForm } from './FutsalScoreForm';
+import { tournamentService } from '@/services/tournamentService';
+import { ModernFutsalScorer } from './ModernFutsalScorer';
 import { BadmintonScoreForm } from './BadmintonScoreForm';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -14,7 +14,7 @@ interface Match {
     id: string;
     title: string;
     sport_type: 'FUTSAL' | 'BADMINTON';
-    registration_type: 'TEAM' | 'INDIVIDUAL';
+    registration_type?: 'TEAM' | 'INDIVIDUAL';
   };
   round_number: number;
   match_number: number;
@@ -80,7 +80,12 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
 
   const loadMatchDetails = async () => {
     try {
-      const response = await TeamService.getMatchDetails(match.id);
+      if (!match.tournament?.id) {
+        toast.error('Tournament information not available');
+        return;
+      }
+      
+      const response = await tournamentService.getMatchDetails(match.tournament.id, match.id);
       if (response.success) {
         setMatchDetails(response.data);
       }
@@ -96,31 +101,35 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
       return;
     }
 
+    if (!match.tournament?.id) {
+      toast.error('Tournament information not available');
+      return;
+    }
+
     setIsLoading(true);
     try {
       let response;
       
       if (match.tournament.sport_type === 'FUTSAL') {
-        response = await TeamService.recordFutsalMatchScore(
+        response = await tournamentService.recordFutsalMatchScore(
+          match.tournament.id,
           match.id,
-          scoreData.homeTeamData,
-          scoreData.awayTeamData
+          scoreData
         );
       } else if (match.tournament.sport_type === 'BADMINTON') {
-        response = await TeamService.recordBadmintonMatchScore(
-          match.id,
-          scoreData.setsData
-        );
+        // TODO: Implement badminton scoring
+        toast.error('Badminton scoring not yet implemented');
+        return;
       }
 
       if (response?.success) {
         toast.success('Match score recorded successfully');
         setIsOpen(false);
         if (onScoreRecorded) {
-          onScoreRecorded(response.data);
+          onScoreRecorded(response.match);
         }
       } else {
-        toast.error(response?.error || 'Failed to record match score');
+        toast.error(response?.message || 'Failed to record match score');
       }
     } catch (error: any) {
       console.error('Failed to record match score:', error);
@@ -136,18 +145,38 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
       return;
     }
 
+    if (!match.tournament?.id) {
+      toast.error('Tournament information not available');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const response = await TeamService.updateMatchScore(match.id, scoreData);
+      let response;
       
-      if (response?.success) {
+      if (match.tournament.sport_type === 'FUTSAL') {
+        response = await tournamentService.recordFutsalMatchScore(
+          match.tournament.id,
+          match.id,
+          scoreData
+        );
+      } else {
+        // For non-futsal tournaments, use the basic update method
+        response = await tournamentService.updateMatchResult(
+          match.tournament.id,
+          match.id,
+          scoreData
+        );
+      }
+      
+      if (response?.success || response?.match) {
         toast.success('Match score updated successfully');
         setIsOpen(false);
         if (onScoreRecorded) {
-          onScoreRecorded(response.data);
+          onScoreRecorded(response.match || response.data);
         }
       } else {
-        toast.error(response?.error || 'Failed to update match score');
+        toast.error(response?.message || 'Failed to update match score');
       }
     } catch (error: any) {
       console.error('Failed to update match score:', error);
@@ -158,7 +187,10 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   };
 
   const getMatchTitle = () => {
-    if (match.tournament.registration_type === 'TEAM') {
+    // Check if it's a team tournament by looking for team1/team2 properties
+    const isTeamTournament = match.team1 || match.team2;
+    
+    if (isTeamTournament) {
       const team1Name = match.team1?.name || 'TBD';
       const team2Name = match.team2?.name || 'TBD';
       return `${team1Name} vs ${team2Name}`;
@@ -172,7 +204,10 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   const getScoreDisplay = () => {
     if (match.status !== 'COMPLETED') return null;
     
-    if (match.tournament.registration_type === 'TEAM') {
+    // Check if it's a team tournament by looking for team scores
+    const isTeamTournament = match.team1_score !== undefined || match.team2_score !== undefined;
+    
+    if (isTeamTournament) {
       return `${match.team1_score || 0} - ${match.team2_score || 0}`;
     } else {
       return `${match.player1_score || 0} - ${match.player2_score || 0}`;
@@ -191,7 +226,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
             <div>
               <h3 className="text-lg font-semibold">{getMatchTitle()}</h3>
               <p className="text-sm text-gray-600">
-                {match.tournament.title} - Round {match.round_number}, Match {match.match_number}
+                {match.tournament?.title || 'Tournament'} - Round {match.round_number}, Match {match.match_number}
               </p>
               {getScoreDisplay() && (
                 <p className="text-lg font-bold text-blue-600 mt-1">
@@ -209,7 +244,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
                 {match.status}
               </span>
               <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                {match.tournament.sport_type}
+                {match.tournament?.sport_type || 'UNKNOWN'}
               </span>
             </div>
           </CardTitle>
@@ -257,12 +292,12 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
           setIsOpen(false);
           if (onClose) onClose();
         }}
-        title={`${match.status === 'COMPLETED' ? 'Match Details' : 'Record Match Score'} - ${getMatchTitle()}`}
-        size="lg"
+        title=""
+        size="xl"
       >
         <div className="space-y-4">
-          {match.tournament.sport_type === 'FUTSAL' ? (
-            <FutsalScoreForm
+          {match.tournament?.sport_type === 'FUTSAL' ? (
+            <ModernFutsalScorer
               match={matchDetails || match}
               onSubmit={match.status === 'COMPLETED' ? handleUpdateScore : handleScoreSubmit}
               onCancel={() => setIsOpen(false)}

@@ -33,7 +33,9 @@ interface PlayerStat {
 
 interface GoalDetail {
   scorer_id: string;
+  scorer_name?: string;
   assist_by_id?: string;
+  assist_by_name?: string;
   minute: number;
   goal_type: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL';
   description?: string;
@@ -126,20 +128,10 @@ export const FutsalScoreForm: React.FC<FutsalScoreFormProps> = ({
 
   const loadTeamRosters = async () => {
     try {
-      if (match.team1?.id && match.team2?.id) {
-        const [homeTeamDetails, awayTeamDetails] = await Promise.all([
-          TeamService.getTeamDetails(match.team1.id),
-          TeamService.getTeamDetails(match.team2.id)
-        ]);
-
-        setAvailablePlayers({
-          home: homeTeamDetails.members || [],
-          away: awayTeamDetails.members || []
-        });
-
-        // Initialize player stats with actual team members
-        initializePlayerStatsWithRoster(homeTeamDetails.members || [], awayTeamDetails.members || []);
-      }
+      // For now, skip loading team rosters due to permission restrictions
+      // The organizer doesn't have access to team details
+      console.log('Skipping team roster loading - using fallback player initialization');
+      initializePlayerStats();
     } catch (error) {
       console.error('Failed to load team rosters:', error);
       toast.error('Failed to load team rosters');
@@ -391,7 +383,9 @@ export const FutsalScoreForm: React.FC<FutsalScoreFormProps> = ({
         ...prev.goal_details,
         {
           scorer_id: '',
+          scorer_name: '',
           assist_by_id: '',
+          assist_by_name: '',
           minute: 1,
           goal_type: 'REGULAR' as const,
           description: ''
@@ -740,35 +734,57 @@ export const FutsalScoreForm: React.FC<FutsalScoreFormProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Scorer</label>
-                      <select
-                        value={goal.scorer_id}
-                        onChange={(e) => updateGoalDetail(team, index, 'scorer_id', e.target.value)}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        disabled={isReadOnly}
-                      >
-                        <option value="">Select Scorer</option>
-                        {availablePlayers[team].map(player => (
-                          <option key={player.id} value={player.id}>
-                            {player.full_name || player.name}
-                          </option>
-                        ))}
-                      </select>
+                      {availablePlayers[team].length > 0 ? (
+                        <select
+                          value={goal.scorer_id}
+                          onChange={(e) => updateGoalDetail(team, index, 'scorer_id', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          disabled={isReadOnly}
+                        >
+                          <option value="">Select Scorer</option>
+                          {availablePlayers[team].map(player => (
+                            <option key={player.id} value={player.id}>
+                              {player.full_name || player.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Scorer name"
+                          value={goal.scorer_name || ''}
+                          onChange={(e) => updateGoalDetail(team, index, 'scorer_name', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          disabled={isReadOnly}
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Assist</label>
-                      <select
-                        value={goal.assist_by_id || ''}
-                        onChange={(e) => updateGoalDetail(team, index, 'assist_by_id', e.target.value || undefined)}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        disabled={isReadOnly}
-                      >
-                        <option value="">No Assist</option>
-                        {availablePlayers[team].map(player => (
-                          <option key={player.id} value={player.id}>
-                            {player.full_name || player.name}
-                          </option>
-                        ))}
-                      </select>
+                      {availablePlayers[team].length > 0 ? (
+                        <select
+                          value={goal.assist_by_id || ''}
+                          onChange={(e) => updateGoalDetail(team, index, 'assist_by_id', e.target.value || undefined)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          disabled={isReadOnly}
+                        >
+                          <option value="">No Assist</option>
+                          {availablePlayers[team].map(player => (
+                            <option key={player.id} value={player.id}>
+                              {player.full_name || player.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Assist by (optional)"
+                          value={goal.assist_by_name || ''}
+                          onChange={(e) => updateGoalDetail(team, index, 'assist_by_name', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          disabled={isReadOnly}
+                        />
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Minute</label>

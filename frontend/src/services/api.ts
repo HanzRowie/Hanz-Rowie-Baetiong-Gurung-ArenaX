@@ -14,7 +14,7 @@ import type { RefreshTokenRequest, RefreshTokenResponse, ApiError } from '@/type
 // Create axios instance with enhanced configuration
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // 10 second timeout
+  timeout: 30000, // 30 second timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

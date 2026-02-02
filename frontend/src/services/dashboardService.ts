@@ -254,9 +254,12 @@ class DashboardService {
   // Legacy methods (keeping for backward compatibility)
   async getDashboardStats(): Promise<DashboardStats> {
     try {
+      console.log('Fetching dashboard stats...');
       const response = await api.get(API_ENDPOINTS.DASHBOARD.STATS);
+      console.log('Dashboard stats response:', response.data);
       return response.data;
     } catch (error) {
+      console.warn('Dashboard stats API failed, using fallback data:', error);
       // Return mock data if API fails
       return {
         upcomingMatches: 2,
@@ -271,9 +274,12 @@ class DashboardService {
 
   async getMonthlyStats(year: number): Promise<MonthlyStats[]> {
     try {
+      console.log(`Fetching monthly stats for year ${year}...`);
       const response = await api.get(`${API_ENDPOINTS.DASHBOARD.MONTHLY_STATS}?year=${year}`);
+      console.log('Monthly stats response:', response.data);
       return response.data;
     } catch (error) {
+      console.warn('Monthly stats API failed, using fallback data:', error);
       // Return mock data if API fails
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return months.map((month) => ({
@@ -287,10 +293,12 @@ class DashboardService {
 
   async getNextTournament(): Promise<NextTournament | null> {
     try {
+      console.log('Fetching next tournament...');
       const response = await api.get(API_ENDPOINTS.DASHBOARD.NEXT_TOURNAMENT);
+      console.log('Next tournament response:', response.data);
       return response.data.next_tournament;
     } catch (error) {
-      console.warn('Next tournament endpoint not available, using fallback');
+      console.warn('Next tournament endpoint not available, using fallback:', error);
       // Return null instead of mock data to avoid confusion
       return null;
     }

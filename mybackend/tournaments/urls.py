@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from . import futsal_scoring_views
 
 router = DefaultRouter()
 router.register(r'tournaments', views.TournamentViewSet)
@@ -30,6 +31,10 @@ urlpatterns = [
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/', views.remove_tournament_participant, name='remove_tournament_participant'),
     path('<uuid:tournament_id>/referees/<uuid:referee_id>/', views.remove_tournament_referee, name='remove_tournament_referee'),
     path('teams/<uuid:team_id>/available/', views.team_available_tournaments, name='team_available_tournaments'),
+    
+    # Futsal scoring endpoints
+    path('<uuid:tournament_id>/matches/<uuid:match_id>/futsal-score/', futsal_scoring_views.record_futsal_match_score, name='record_futsal_score'),
+    path('<uuid:tournament_id>/matches/<uuid:match_id>/details/', futsal_scoring_views.get_match_details, name='match_details'),
     
     # Router patterns last
     path('', include(router.urls)),
