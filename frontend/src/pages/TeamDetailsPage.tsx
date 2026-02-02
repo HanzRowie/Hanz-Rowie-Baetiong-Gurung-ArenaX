@@ -7,14 +7,17 @@ import {
   Crown, 
   Shield, 
   Star,
-  Settings,
   UserPlus,
   ArrowLeft,
   Mail,
   Phone,
   Award,
   TrendingUp,
-  Activity
+  Activity,
+  MoreVertical,
+  UserMinus,
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import { tournamentService, toastService } from '@/services';
@@ -23,7 +26,8 @@ import LoadingSkeleton from '@/components/LoadingSkeleton';
 import { PlayerSelectionModal } from '@/components/team/PlayerSelectionModal';
 import { TournamentSelectionModal } from '@/components/team/TournamentSelectionModal';
 import { InvitationSender } from '@/components/team/InvitationSender';
-import type { Team } from '@/types/team.types';
+import { RoleAssignmentModal } from '@/components/team/RoleAssignmentModal';
+import type { Team, TeamMembership } from '@/types/team.types';
 import type { Tournament } from '@/types/tournament.types';
 
 interface TeamDetailsPageProps {}
@@ -41,8 +45,13 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
   const [showTournamentSelection, setShowTournamentSelection] = useState(false);
   const [showPlayerSelection, setShowPlayerSelection] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedMembership, setSelectedMembership] = useState<TeamMembership | null>(null);
   const [availableTournaments, setAvailableTournaments] = useState<Tournament[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
+  const [showMemberMenu, setShowMemberMenu] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showKickConfirm, setShowKickConfirm] = useState<TeamMembership | null>(null);
 
   useEffect(() => {
     if (teamId) {
@@ -111,10 +120,16 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
     setShowInviteModal(true);
   };
 
-  const handleTeamSettings = () => {
-    // For now, navigate to team analytics page or show a simple alert
-    // In a full implementation, this would open a comprehensive team settings modal
-    navigate(`/teams/analytics?teamId=${team?.id}`);
+  const handleManageMemberRole = (membership: TeamMembership) => {
+    setSelectedMembership(membership);
+    setShowRoleModal(true);
+  };
+
+  const handleRoleUpdated = (updatedTeam: Team) => {
+    setTeam(updatedTeam);
+    setShowRoleModal(false);
+    setSelectedMembership(null);
+    toastService.success('Member role updated successfully!');
   };
 
   const handleRegistrationComplete = () => {
@@ -128,6 +143,45 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
     setShowInviteModal(false);
     loadTeamDetails(); // Refresh team data
     toastService.success('Invitation sent successfully!');
+  };
+
+  const handleLeaveTeam = async () => {
+    if (!team || !user) return;
+    
+    try {
+      const response = await TeamService.removeMember(team.id, user.id);
+      if (response.success) {
+        toastService.success('You have left the team successfully');
+        navigate('/teams');
+      } else {
+        toastService.error(response.error || 'Failed to leave team');
+      }
+    } catch (error: any) {
+      console.error('Error leaving team:', error);
+      toastService.error('Failed to leave team');
+    } finally {
+      setShowLeaveConfirm(false);
+    }
+  };
+
+  const handleKickMember = async (membership: TeamMembership) => {
+    if (!team) return;
+    
+    try {
+      const response = await TeamService.removeMember(team.id, membership.player.id);
+      if (response.success) {
+        toastService.success(`${membership.player.full_name} has been removed from the team`);
+        loadTeamDetails(); // Refresh team data
+      } else {
+        toastService.error(response.error || 'Failed to remove member');
+      }
+    } catch (error: any) {
+      console.error('Error removing member:', error);
+      toastService.error('Failed to remove member');
+    } finally {
+      setShowKickConfirm(null);
+      setShowMemberMenu(null);
+    }
   };
 
   const getRoleIcon = (role: string) => {
@@ -224,22 +278,13 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
             </div>
             
             {canManage && (
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={handleInvitePlayers}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Invite Players
-                </button>
-                <button 
-                  onClick={handleTeamSettings}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  Manage Team
-                </button>
-              </div>
+              <button 
+                onClick={handleInvitePlayers}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <UserPlus className="w-4 h-4" />
+                Invite Players
+              </button>
             )}
           </div>
         </div>
@@ -357,10 +402,10 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
                 {activeTab === 'members' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-4">
                       <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
                       <span className="text-sm text-gray-600">
-                        {team.member_count} members
+                        {team.member_count} / {team.max_size} members
                       </span>
                     </div>
                     
@@ -371,42 +416,113 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                           const roleOrder = { OWNER: 0, LEADER: 1, MEMBER: 2 };
                           return roleOrder[a.role as keyof typeof roleOrder] - roleOrder[b.role as keyof typeof roleOrder];
                         })
-                        .map((membership) => (
-                          <div
-                            key={membership.id}
-                            className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  {membership.player.full_name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">
-                                  {membership.player.full_name}
-                                </p>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Mail className="w-3 h-3" />
-                                  {membership.player.email}
+                        .map((membership) => {
+                          const isCurrentUser = user?.id === membership.player.id;
+                          const canKick = canManage && membership.role !== 'OWNER' && !isCurrentUser;
+                          const canLeave = isCurrentUser && membership.role !== 'OWNER';
+                          
+                          return (
+                            <div
+                              key={membership.id}
+                              className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                            >
+                              <div className="flex items-center gap-4 flex-1">
+                                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <span className="text-lg font-semibold text-white">
+                                    {membership.player.full_name.charAt(0).toUpperCase()}
+                                  </span>
                                 </div>
-                                <p className="text-xs text-gray-500">
-                                  Joined {new Date(membership.joined_at).toLocaleDateString()}
-                                </p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="font-semibold text-gray-900 truncate">
+                                      {membership.player.full_name}
+                                      {isCurrentUser && (
+                                        <span className="ml-2 text-xs text-blue-600">(You)</span>
+                                      )}
+                                    </p>
+                                    {getRoleBadge(membership.role)}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                                    <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                                    <span className="truncate">{membership.player.email}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Joined {new Date(membership.joined_at).toLocaleDateString()}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                              {getRoleBadge(membership.role)}
-                              {canManage && membership.role !== 'OWNER' && (
-                                <button className="text-gray-400 hover:text-gray-600">
-                                  <Settings className="w-4 h-4" />
-                                </button>
+                              
+                              {(canKick || canLeave || (canManage && membership.role !== 'OWNER')) && (
+                                <div className="relative ml-4">
+                                  <button 
+                                    onClick={() => setShowMemberMenu(showMemberMenu === membership.id ? null : membership.id)}
+                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Options"
+                                  >
+                                    <MoreVertical className="w-5 h-5" />
+                                  </button>
+                                  
+                                  {showMemberMenu === membership.id && (
+                                    <>
+                                      <div 
+                                        className="fixed inset-0 z-10" 
+                                        onClick={() => setShowMemberMenu(null)}
+                                      />
+                                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                                        {canManage && membership.role !== 'OWNER' && !isCurrentUser && (
+                                          <button
+                                            onClick={() => handleManageMemberRole(membership)}
+                                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                          >
+                                            <Shield className="w-4 h-4" />
+                                            Change Role
+                                          </button>
+                                        )}
+                                        
+                                        {canKick && (
+                                          <button
+                                            onClick={() => {
+                                              setShowKickConfirm(membership);
+                                              setShowMemberMenu(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                          >
+                                            <UserMinus className="w-4 h-4" />
+                                            Remove Member
+                                          </button>
+                                        )}
+                                        
+                                        {canLeave && (
+                                          <button
+                                            onClick={() => {
+                                              setShowLeaveConfirm(true);
+                                              setShowMemberMenu(null);
+                                            }}
+                                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                          >
+                                            <LogOut className="w-4 h-4" />
+                                            Leave Team
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
+                    
+                    {canManage && !team.is_full && (
+                      <button
+                        onClick={handleInvitePlayers}
+                        className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors"
+                      >
+                        <UserPlus className="w-5 h-5" />
+                        Invite More Players
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -595,30 +711,40 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
             {/* Actions */}
             {canManage && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Actions</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
                 <div className="space-y-3">
                   <button 
                     onClick={handleRegisterForTournament}
-                    className="w-full flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                   >
-                    <Trophy className="w-4 h-4" />
+                    <Trophy className="w-5 h-5" />
                     Register for Tournament
                   </button>
                   <button 
                     onClick={handleInvitePlayers}
-                    className="w-full flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                   >
-                    <UserPlus className="w-4 h-4" />
+                    <UserPlus className="w-5 h-5" />
                     Invite Players
                   </button>
-                  <button 
-                    onClick={handleTeamSettings}
-                    className="w-full flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Team Settings
-                  </button>
                 </div>
+              </div>
+            )}
+
+            {/* Leave Team Button for non-owners */}
+            {userRole && userRole !== 'OWNER' && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Membership</h3>
+                <button 
+                  onClick={() => setShowLeaveConfirm(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Leave Team
+                </button>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  You can be invited back later
+                </p>
               </div>
             )}
 
@@ -680,6 +806,100 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
           team={team}
           onInvitationSent={handleInvitationSent}
         />
+      )}
+
+      {/* Role Assignment Modal */}
+      {showRoleModal && team && selectedMembership && (
+        <RoleAssignmentModal
+          isOpen={showRoleModal}
+          onClose={() => {
+            setShowRoleModal(false);
+            setSelectedMembership(null);
+          }}
+          membership={selectedMembership}
+          team={team}
+          onRoleUpdated={handleRoleUpdated}
+        />
+      )}
+
+      {/* Leave Team Confirmation Modal */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <LogOut className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Leave Team</h3>
+                <p className="text-sm text-gray-600">Are you sure you want to leave this team?</p>
+              </div>
+            </div>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-yellow-800">
+                <strong>Warning:</strong> You will lose access to team tournaments and activities. 
+                You'll need to be invited again to rejoin.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLeaveTeam}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Leave Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kick Member Confirmation Modal */}
+      {showKickConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <UserMinus className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Remove Member</h3>
+                <p className="text-sm text-gray-600">
+                  Remove {showKickConfirm.player.full_name} from the team?
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-red-800">
+                <strong>Warning:</strong> This member will be removed from all team activities 
+                and tournaments. They can be invited back later.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowKickConfirm(null)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleKickMember(showKickConfirm)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Remove Member
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

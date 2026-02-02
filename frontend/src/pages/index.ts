@@ -24,6 +24,7 @@ export { default as TeamsPage } from './TeamsPage';
 export { default as TeamDetailsPage } from './TeamDetailsPage';
 export { default as TeamAnalyticsPage } from './TeamAnalyticsPage';
 export { default as MyStatsPage } from './MyStatsPage';
+export { default as PlayerStatisticsPage } from './PlayerStatisticsPage';
 export { default as RefereeAvailabilityPage } from './RefereeAvailabilityPage';
 export { default as RefereeBookingsPage } from './RefereeBookingsPage';
 export { default as RefereeSchedulePage } from './RefereeSchedulePage';

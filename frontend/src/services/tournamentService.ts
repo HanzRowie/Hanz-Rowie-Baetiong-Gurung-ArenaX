@@ -45,7 +45,7 @@ export interface TournamentFilters {
 class TournamentService {
   async createTournament(data: CreateTournamentData): Promise<{ tournament: Tournament; message: string }> {
     const formData = new FormData();
-    
+
     // Add all fields to FormData
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
@@ -62,7 +62,7 @@ class TournamentService {
         'Content-Type': 'multipart/form-data',
       },
     });
-    
+
     return response.data;
   }
 
@@ -103,7 +103,7 @@ class TournamentService {
 
   async getTournamentDetail(tournamentId: string): Promise<{ tournament: Tournament }> {
     const response = await api.get(API_ENDPOINTS.TOURNAMENTS.BY_ID(tournamentId));
-    
+
     // Handle both wrapped and direct responses
     if (response.data.tournament) {
       // Response is wrapped: {tournament: {...}}
@@ -147,14 +147,14 @@ class TournamentService {
   }
 
   async updateMatchResult(
-    tournamentId: string, 
-    matchId: string, 
-    data: { 
-      player1_score?: number; 
-      player2_score?: number; 
-      team1_score?: number; 
-      team2_score?: number; 
-      winner_id?: string 
+    tournamentId: string,
+    matchId: string,
+    data: {
+      player1_score?: number;
+      player2_score?: number;
+      team1_score?: number;
+      team2_score?: number;
+      winner_id?: string
     }
   ): Promise<{ match: Match; message: string }> {
     const response = await api.put(API_ENDPOINTS.TOURNAMENTS.MATCH_RESULT(tournamentId, matchId), data);
@@ -209,6 +209,7 @@ class TournamentService {
           goal_type?: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL';
         }>;
       };
+      is_final?: boolean;
     }
   ): Promise<{ success: boolean; match: any; message: string }> {
     const response = await api.post(`/api/tournaments/${tournamentId}/matches/${matchId}/futsal-score/`, data);
@@ -224,9 +225,9 @@ class TournamentService {
   }
 
   // Enhanced bracket management endpoints
-  async getTournamentBracket(tournamentId: string): Promise<{ 
-    bracket: any; 
-    matches: Match[]; 
+  async getTournamentBracket(tournamentId: string): Promise<{
+    bracket: any;
+    matches: Match[];
     rounds: number;
     current_round: number;
   }> {
@@ -266,8 +267,8 @@ class TournamentService {
     return response.data;
   }
 
-  async finalizeTournament(tournamentId: string): Promise<{ 
-    message: string; 
+  async finalizeTournament(tournamentId: string): Promise<{
+    message: string;
     winner: any;
     final_standings: any[];
   }> {
@@ -301,17 +302,17 @@ class TournamentService {
   }
 
   async bulkRejectParticipants(tournamentId: string, participantIds: string[], reason?: string): Promise<{ message: string; rejected_count: number }> {
-    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.BULK_REJECT_PARTICIPANTS(tournamentId), { 
+    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.BULK_REJECT_PARTICIPANTS(tournamentId), {
       participant_ids: participantIds,
-      reason 
+      reason
     });
     return response.data;
   }
 
-  async getTournamentParticipants(tournamentId: string, status?: string): Promise<{ 
-    participants: any[]; 
-    status_counts: any; 
-    max_participants: number 
+  async getTournamentParticipants(tournamentId: string, status?: string): Promise<{
+    participants: any[];
+    status_counts: any;
+    max_participants: number
   }> {
     const params = status ? `?status=${status}` : '';
     const response = await api.get(`${API_ENDPOINTS.TOURNAMENTS.PARTICIPANTS(tournamentId)}${params}`);

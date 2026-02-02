@@ -36,8 +36,8 @@ interface Tournament {
   entry_fee: number;
   prize_pool: number;
   status: string;
-  venue_name: string;
-  venue_location: string;
+  venue: string;
+  venue_address: string;
   participants_count: number;
   created_by: {
     id: string;
@@ -309,181 +309,217 @@ const TournamentManagementPage: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{tournament.title}</h1>
-          <p className="text-gray-600">Manage your tournament</p>
-        </div>
-        <div className="flex space-x-3">
-          <Button 
-            onClick={() => navigate(`/tournaments/${tournamentId}`)}
-            className="bg-gray-100 text-gray-700 hover:bg-gray-200"
-          >
-            <Eye className="w-4 h-4 mr-2" />
-            View Public Page
-          </Button>
-          <Button 
-            onClick={() => navigate('/my-tournaments')}
-            className="bg-purple-600 text-white hover:bg-purple-700"
-          >
-            Back to Tournaments
-          </Button>
-        </div>
-      </div>
-
-      {/* Tournament Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="p-6">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-blue-600 mr-3" />
-            <div>
-              <p className="text-sm text-gray-600">Participants</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {tournament.participants_count}/{tournament.max_participants}
-              </p>
-            </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{tournament.title}</h1>
+            <p className="text-gray-600">Manage your tournament</p>
           </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center">
-            <Trophy className="w-8 h-8 text-yellow-600 mr-3" />
-            <div>
-              <p className="text-sm text-gray-600">Prize Pool</p>
-              <p className="text-2xl font-bold text-gray-900">${tournament.prize_pool}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center">
-            <DollarSign className="w-8 h-8 text-green-600 mr-3" />
-            <div>
-              <p className="text-sm text-gray-600">Entry Fee</p>
-              <p className="text-2xl font-bold text-gray-900">${tournament.entry_fee}</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center">
-            <Clock className="w-8 h-8 text-purple-600 mr-3" />
-            <div>
-              <p className="text-sm text-gray-600">Status</p>
-              <p className="text-2xl font-bold text-gray-900 capitalize">{tournament.status}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Navigation Tabs */}
-      <Card className="p-4 mb-6">
-        <div className="flex space-x-1">
-          {[
-            { key: 'overview', label: 'Overview', icon: Eye },
-            { key: 'participants', label: 'Participants', icon: Users },
-            { key: 'referees', label: 'Referees', icon: UserPlus },
-            { key: 'settings', label: 'Settings', icon: Settings }
-          ].map(({ key, label, icon: Icon }) => (
+          <div className="flex space-x-3">
             <button
-              key={key}
-              onClick={() => setActiveTab(key as any)}
-              className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === key
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
+              onClick={() => navigate(`/tournaments/${tournamentId}`)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Icon className="w-4 h-4 mr-2" />
-              {label}
+              <Eye className="w-4 h-4" />
+              View Public Page
             </button>
-          ))}
+            <button
+              onClick={() => navigate('/my-tournaments')}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Back to Tournaments
+            </button>
+          </div>
         </div>
-      </Card>
+
+        {/* Tournament Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <Users className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="text-2xl font-bold text-gray-900">
+                {tournament.participants_count}/{tournament.max_participants}
+              </span>
+            </div>
+            <p className="text-sm font-medium text-gray-600">Participants</p>
+            <p className="text-xs text-gray-500 mt-1">Registered / Total</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-yellow-50 rounded-lg">
+                <Trophy className="w-6 h-6 text-yellow-600" />
+              </div>
+              <span className="text-2xl font-bold text-gray-900">NPR {tournament.prize_pool}</span>
+            </div>
+            <p className="text-sm font-medium text-gray-600">Prize Pool</p>
+            <p className="text-xs text-gray-500 mt-1">Total rewards</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-green-50 rounded-lg">
+                <DollarSign className="w-6 h-6 text-green-600" />
+              </div>
+              <span className="text-2xl font-bold text-gray-900">NPR {tournament.entry_fee}</span>
+            </div>
+            <p className="text-sm font-medium text-gray-600">Entry Fee</p>
+            <p className="text-xs text-gray-500 mt-1">Per participant</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <Clock className="w-6 h-6 text-purple-600" />
+              </div>
+              <span className={`text-2xl font-bold ${
+                tournament.status === 'UPCOMING' ? 'text-blue-600' :
+                tournament.status === 'ONGOING' ? 'text-green-600' :
+                tournament.status === 'COMPLETED' ? 'text-gray-600' :
+                'text-red-600'
+              }`}>
+                {tournament.status}
+              </span>
+            </div>
+            <p className="text-sm font-medium text-gray-600">Status</p>
+            <p className="text-xs text-gray-500 mt-1">Current state</p>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200">
+            {[
+              { key: 'overview', label: 'Overview', icon: Eye },
+              { key: 'participants', label: 'Participants', icon: Users },
+              { key: 'referees', label: 'Referees', icon: UserPlus },
+              { key: 'settings', label: 'Settings', icon: Settings }
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key as any)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 text-sm font-medium transition-colors border-b-2 ${
+                  activeTab === key
+                    ? 'border-purple-600 text-purple-600 bg-purple-50'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Tournament Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Sport Type</p>
-                <p className="font-medium">{tournament.sport_type}</p>
+          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Tournament Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">Sport Type</p>
+                <p className="text-base font-semibold text-gray-900">{tournament.sport_type}</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Tournament Type</p>
-                <p className="font-medium">{tournament.tournament_type.replace('_', ' ')}</p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">Tournament Type</p>
+                <p className="text-base font-semibold text-gray-900">{tournament.tournament_type.replace('_', ' ')}</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Date & Time</p>
-                <p className="font-medium">
-                  {new Date(tournament.date).toLocaleDateString()} at {tournament.start_time}
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">Date & Time</p>
+                <p className="text-base font-semibold text-gray-900">
+                  {new Date(tournament.date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </p>
+                <p className="text-sm text-gray-600">{tournament.start_time} - {tournament.end_time}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-500">Registration Deadline</p>
+                <p className="text-base font-semibold text-gray-900">
+                  {new Date(tournament.registration_deadline).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
                 </p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Registration Deadline</p>
-                <p className="font-medium">
-                  {new Date(tournament.registration_deadline).toLocaleDateString()}
+              <div className="space-y-1 md:col-span-2">
+                <p className="text-sm font-medium text-gray-500">Venue</p>
+                <p className="text-base font-semibold text-gray-900">
+                  {tournament.venue || 'Venue not specified'}
                 </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Venue</p>
-                <p className="font-medium">{tournament.venue_name}</p>
-                <p className="text-sm text-gray-500">{tournament.venue_location}</p>
+                {tournament.venue_address && (
+                  <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {tournament.venue_address}
+                  </p>
+                )}
               </div>
             </div>
             {tournament.description && (
-              <div className="mt-6">
-                <p className="text-sm text-gray-600 mb-2">Description</p>
-                <p className="text-gray-900">{tournament.description}</p>
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-500 mb-3">Description</p>
+                <p className="text-gray-700 leading-relaxed">{tournament.description}</p>
               </div>
             )}
-          </Card>
+          </div>
         </div>
       )}
 
       {activeTab === 'participants' && (
         <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-gray-900">
                 {tournament?.registration_type === 'TEAM' ? 'Team Registrations' : 'Participants'}
               </h3>
               <div className="flex items-center gap-4">
-                <p className="text-sm text-gray-600">
-                  {tournament?.registration_type === 'TEAM' 
-                    ? `${teamRegistrations.filter(t => t.status === 'CONFIRMED').length} of ${tournament.max_participants} confirmed`
-                    : `${participants.length} of ${tournament.max_participants} registered`
-                  }
-                </p>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Registration Progress</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {tournament?.registration_type === 'TEAM' 
+                      ? `${teamRegistrations.filter(t => t.status === 'CONFIRMED').length} / ${tournament.max_participants}`
+                      : `${participants.length} / ${tournament.max_participants}`
+                    }
+                  </p>
+                </div>
                 {tournament?.registration_type === 'TEAM' && tournament.status === 'OPEN' && (
-                  <Button 
+                  <button
                     onClick={handleGenerateBracket}
-                    className="bg-green-600 text-white hover:bg-green-700"
                     disabled={teamRegistrations.filter(t => t.status === 'CONFIRMED').length < 2}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Play className="w-4 h-4 mr-2" />
+                    <Play className="w-4 h-4" />
                     Generate Bracket
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
             
             {participantsLoading ? (
-              <div className="flex justify-center py-8">
-                <LoadingSkeleton variant="text" className="w-32" />
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
               </div>
             ) : tournament?.registration_type === 'TEAM' ? (
               // Team Registrations View
               <>
                 {teamRegistrations.length === 0 ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-16">
                     <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h4 className="text-lg font-semibold text-gray-900 mb-2">No team registrations yet</h4>
-                    <p className="text-gray-600">Teams will appear here once they register</p>
+                    <p className="text-gray-600">Teams will appear here once they register for your tournament</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -607,10 +643,10 @@ const TournamentManagementPage: React.FC = () => {
             ) : (
               // Individual Participants View
               participants && participants.length === 0 ? (
-                <div className="text-center py-8">
+                <div className="text-center py-16">
                   <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <h4 className="text-lg font-semibold text-gray-900 mb-2">No participants yet</h4>
-                  <p className="text-gray-600">Participants will appear here once they register</p>
+                  <p className="text-gray-600">Participants will appear here once they register for your tournament</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -657,39 +693,40 @@ const TournamentManagementPage: React.FC = () => {
                 </div>
               )
             )}
-          </Card>
+          </div>
         </div>
       )}
 
       {activeTab === 'referees' && (
         <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-semibold text-gray-900">Referee Assignments</h3>
-              <Button 
+              <button
                 onClick={handleAddReferee}
-                className="bg-purple-600 text-white hover:bg-purple-700"
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               >
-                <UserPlus className="w-4 h-4 mr-2" />
+                <UserPlus className="w-4 h-4" />
                 Add Referee
-              </Button>
+              </button>
             </div>
             
             {refereesLoading ? (
-              <div className="flex justify-center py-8">
-                <LoadingSkeleton variant="text" className="w-32" />
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
               </div>
             ) : referees && referees.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-16">
                 <UserPlus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                 <h4 className="text-lg font-semibold text-gray-900 mb-2">No referees assigned</h4>
-                <p className="text-gray-600 mb-4">Add referees to manage your tournament matches</p>
-                <Button 
+                <p className="text-gray-600 mb-6">Add referees to manage your tournament matches professionally</p>
+                <button
                   onClick={handleAddReferee}
-                  className="bg-purple-600 text-white hover:bg-purple-700"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                 >
+                  <UserPlus className="w-5 h-5" />
                   Add First Referee
-                </Button>
+                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -741,33 +778,44 @@ const TournamentManagementPage: React.FC = () => {
                 })}
               </div>
             )}
-          </Card>
+          </div>
         </div>
       )}
 
       {activeTab === 'settings' && (
         <div className="space-y-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Tournament Settings</h3>
+          <div className="bg-white rounded-lg shadow-sm p-8 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6">Tournament Settings</h3>
             <div className="space-y-4">
-              <Button 
+              <button
                 onClick={handleEditTournament}
-                className="w-full justify-start bg-gray-100 text-gray-700 hover:bg-gray-200"
+                className="w-full flex items-center gap-3 px-6 py-4 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg transition-all text-left group"
               >
-                <Edit className="w-4 h-4 mr-2" />
-                Edit Tournament Details
-              </Button>
-              <Button 
+                <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                  <Edit className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900">Edit Tournament Details</p>
+                  <p className="text-sm text-gray-600">Update tournament information, dates, and settings</p>
+                </div>
+              </button>
+              <button
                 onClick={handleDeleteTournament}
-                className="w-full justify-start bg-red-600 text-white hover:bg-red-700"
+                className="w-full flex items-center gap-3 px-6 py-4 bg-white hover:bg-red-50 border border-red-300 rounded-lg transition-all text-left group"
               >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Tournament
-              </Button>
+                <div className="p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-red-900">Delete Tournament</p>
+                  <p className="text-sm text-red-600">Permanently remove this tournament (cannot be undone)</p>
+                </div>
+              </button>
             </div>
-          </Card>
+          </div>
         </div>
       )}
+    </div>
     </div>
   );
 };

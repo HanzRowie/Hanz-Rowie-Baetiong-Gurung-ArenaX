@@ -15,6 +15,7 @@ interface GoalEvent {
   assist_by_name?: string;
   minute: number;
   goal_type: 'REGULAR' | 'PENALTY' | 'FREE_KICK' | 'OWN_GOAL';
+  description?: string;
 }
 
 interface TeamData {
@@ -32,7 +33,7 @@ interface TeamData {
 
 interface ModernFutsalScorerProps {
   match: any;
-  onSubmit: (data: { homeTeamData: TeamData; awayTeamData: TeamData }) => void;
+  onSubmit: (data: { home_team_data: TeamData; away_team_data: TeamData; is_final?: boolean }) => void;
   onCancel: () => void;
   isLoading?: boolean;
   isReadOnly?: boolean;
@@ -57,7 +58,7 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
     goal_details: [],
     card_details: []
   });
-  
+
   const [awayTeamData, setAwayTeamData] = useState<TeamData>({
     goals: 0,
     shots_on_target: 0,
@@ -79,7 +80,6 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
     away: []
   });
 
-  const [isFinalScore, setIsFinalScore] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
@@ -89,16 +89,17 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
   const loadTeamRosters = async () => {
     try {
       console.log('Loading team rosters for match:', match);
-      
+
       // Use match details endpoint which includes team members for organizers
-      if (match.team1_members && match.team2_members) {
+      if (match.team1_members && match.team2_members &&
+        match.team1_members.length > 0 && match.team2_members.length > 0) {
         // Members already loaded from match details
         const homePlayers = match.team1_members.map((m: any) => ({
           id: m.id,
           name: m.full_name,
           full_name: m.full_name
         }));
-        
+
         const awayPlayers = match.team2_members.map((m: any) => ({
           id: m.id,
           name: m.full_name,
@@ -112,10 +113,73 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           home: homePlayers,
           away: awayPlayers
         });
-        
-        toast.success(`Loaded ${homePlayers.length} home players and ${awayPlayers.length} away players`);
+
+        // toast.success(`Loaded ${homePlayers.length} home players and ${awayPlayers.length} away players`);
       } else {
-        toast.error('Team member information not available. Please refresh the page.');
+        console.warn('Team member data missing:', {
+          team1_members: match.team1_members,
+          team2_members: match.team2_members
+        });
+        // Only show error if we truly don't have the data
+        if (!match.team1_members || !match.team2_members) {
+          toast.error('Team member information not available. Please refresh the page.');
+        }
+      }
+
+      // Load existing scores if available
+      if (match.futsal_scores && match.futsal_scores.length > 0) {
+        console.log('[DEBUG] Found existing futsal scores:', match.futsal_scores);
+        console.log('[DEBUG] Current Team IDs:', {
+          home: match.team1?.id,
+          away: match.team2?.id
+        });
+
+        match.futsal_scores.forEach((score: any) => {
+          console.log('[DEBUG] Processing score for team:', score.team.id, score.team.name);
+
+          const teamData: TeamData = {
+            goals: score.goals,
+            shots_on_target: score.shots_on_target,
+            shots_off_target: score.shots_off_target,
+            possession_percentage: score.possession_percentage,
+            fouls: score.fouls,
+            yellow_cards: score.yellow_cards,
+            red_cards: score.red_cards,
+            player_stats: [], // derived on save
+            goal_details: score.goal_details.map((g: any) => ({
+              scorer_id: g.scorer.id,
+              scorer_name: g.scorer.name,
+              assist_by_id: g.assist_by?.id,
+              assist_by_name: g.assist_by?.name,
+              minute: g.minute,
+              goal_type: g.goal_type,
+              description: g.description
+            })),
+            card_details: []
+          };
+
+          const scoreTeamId = String(score.team.id);
+          const homeTeamId = match.team1 ? String(match.team1.id) : '';
+          const awayTeamId = match.team2 ? String(match.team2.id) : '';
+
+          console.log(`[DEBUG] Comparing IDs: ScoreTeam=${scoreTeamId} vs Home=${homeTeamId} / Away=${awayTeamId}`);
+
+          if (homeTeamId && scoreTeamId === homeTeamId) {
+            console.log('[DEBUG] Setting home team data', teamData);
+            setHomeTeamData(teamData);
+          } else if (awayTeamId && scoreTeamId === awayTeamId) {
+            console.log('[DEBUG] Setting away team data', teamData);
+            setAwayTeamData(teamData);
+          } else {
+            console.warn('[DEBUG] Score team ID did not match either home or away team!');
+          }
+        });
+      } else {
+        console.log('[DEBUG] No existing futsal scores found in match object', {
+          hasFutsalScores: !!match.futsal_scores,
+          length: match.futsal_scores?.length,
+          keys: Object.keys(match)
+        });
       }
     } catch (error) {
       console.error('Failed to load team rosters:', error);
@@ -150,9 +214,9 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
     return newErrors.length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent | React.MouseEvent, isFinal: boolean = false) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       toast.error('Please fix validation errors');
       return;
@@ -161,11 +225,11 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
     // Calculate player stats from goal details
     const calculatePlayerStats = (goalDetails: GoalEvent[], players: Player[]) => {
       const statsMap = new Map();
-      
+
       goalDetails.forEach(goal => {
         // Count goals
         if (goal.scorer_id) {
-          const current = statsMap.get(goal.scorer_id) || { 
+          const current = statsMap.get(goal.scorer_id) || {
             player_id: goal.scorer_id,
             player_name: goal.scorer_name || players.find(p => p.id === goal.scorer_id)?.full_name || '',
             goals: 0,
@@ -176,10 +240,10 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           current.goals += 1;
           statsMap.set(goal.scorer_id, current);
         }
-        
+
         // Count assists
         if (goal.assist_by_id) {
-          const current = statsMap.get(goal.assist_by_id) || { 
+          const current = statsMap.get(goal.assist_by_id) || {
             player_id: goal.assist_by_id,
             player_name: goal.assist_by_name || players.find(p => p.id === goal.assist_by_id)?.full_name || '',
             goals: 0,
@@ -191,7 +255,7 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           statsMap.set(goal.assist_by_id, current);
         }
       });
-      
+
       return Array.from(statsMap.values());
     };
 
@@ -206,14 +270,15 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
       away_team_data: {
         ...awayTeamData,
         player_stats: awayPlayerStats
-      }
+      },
+      is_final: isFinal
     });
   };
 
   const incrementScore = (team: 'home' | 'away') => {
     const setter = team === 'home' ? setHomeTeamData : setAwayTeamData;
-    setter(prev => ({ 
-      ...prev, 
+    setter(prev => ({
+      ...prev,
       goals: prev.goals + 1,
       goal_details: [
         ...prev.goal_details,
@@ -232,10 +297,10 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
   const decrementScore = (team: 'home' | 'away') => {
     const setter = team === 'home' ? setHomeTeamData : setAwayTeamData;
     const data = team === 'home' ? homeTeamData : awayTeamData;
-    
+
     if (data.goals > 0) {
-      setter(prev => ({ 
-        ...prev, 
+      setter(prev => ({
+        ...prev,
         goals: Math.max(0, prev.goals - 1),
         goal_details: prev.goal_details.slice(0, -1)
       }));
@@ -244,13 +309,13 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
 
   const updateGoalDetail = (team: 'home' | 'away', goalIndex: number, field: keyof GoalEvent, value: any) => {
     const setter = team === 'home' ? setHomeTeamData : setAwayTeamData;
-    
+
     setter(prev => ({
       ...prev,
       goal_details: prev.goal_details.map((goal, index) => {
         if (index === goalIndex) {
           const updated = { ...goal, [field]: value };
-          
+
           // Auto-fill names when IDs are selected
           if (field === 'scorer_id' && value) {
             const player = availablePlayers[team].find(p => p.id === value);
@@ -264,7 +329,7 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
               updated.assist_by_name = player.full_name || player.name;
             }
           }
-          
+
           return updated;
         }
         return goal;
@@ -274,7 +339,7 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
 
   const removeGoalDetail = (team: 'home' | 'away', goalIndex: number) => {
     const setter = team === 'home' ? setHomeTeamData : setAwayTeamData;
-    
+
     setter(prev => ({
       ...prev,
       goals: Math.max(0, prev.goals - 1),
@@ -288,9 +353,8 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
     teamData: TeamData,
     isWinner: boolean
   ) => (
-    <div className={`relative bg-white rounded-2xl p-6 shadow-sm border-2 ${
-      isWinner ? 'border-purple-500' : 'border-gray-200'
-    }`}>
+    <div className={`relative bg-white rounded-2xl p-6 shadow-sm border-2 ${isWinner ? 'border-purple-500' : 'border-gray-200'
+      }`}>
       {isWinner && (
         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
           <span className="bg-purple-600 text-white text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wide">
@@ -298,12 +362,12 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           </span>
         </div>
       )}
-      
+
       <div className="text-center mb-6">
         <h3 className="text-sm font-medium text-purple-600 uppercase tracking-wide mb-2">
           {teamName} {team === 'home' ? '(HOME)' : '(AWAY)'}
         </h3>
-        
+
         <div className="flex items-center justify-center gap-4">
           <button
             type="button"
@@ -313,11 +377,11 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           >
             <Minus className="h-5 w-5 text-gray-700" />
           </button>
-          
+
           <div className="text-6xl font-bold text-gray-900 min-w-[80px]">
             {teamData.goals}
           </div>
-          
+
           <button
             type="button"
             onClick={() => incrementScore(team)}
@@ -354,7 +418,7 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
             </p>
           </div>
         )}
-        
+
         {teamData.goal_details.map((goal, index) => (
           <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <div className="grid grid-cols-12 gap-3 items-start">
@@ -390,11 +454,13 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
                   disabled={isReadOnly}
                 >
                   <option value="">None</option>
-                  {availablePlayers[team].map(player => (
-                    <option key={player.id} value={player.id}>
-                      {player.full_name || player.name}
-                    </option>
-                  ))}
+                  {availablePlayers[team]
+                    .filter(p => !goal.scorer_id || p.id !== goal.scorer_id)
+                    .map(player => (
+                      <option key={player.id} value={player.id}>
+                        {player.full_name || player.name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -450,83 +516,92 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
   const isAwayWinner = awayTeamData.goals > homeTeamData.goals;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Breadcrumb */}
-      <div className="text-sm text-gray-600">
-        <span>ArenaX</span>
-        <span className="mx-2">/</span>
-        <span>{match.tournament?.title || 'Futsal League Winter \'24'}</span>
-        <span className="mx-2">/</span>
-        <span className="text-gray-900 font-medium">Match #{match.match_number || '482'} Scoring</span>
-      </div>
-
-      {/* Title */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Match Scoring: {homeTeamName} vs. {awayTeamName}
-        </h1>
-        <p className="text-gray-600">
-          Record goals, assists, and timing for precise statistics.
-        </p>
-      </div>
-
-      {/* Errors */}
-      {errors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h4>
-          <ul className="text-sm text-red-700 space-y-1">
-            {errors.map((error, index) => (
-              <li key={index}>• {error}</li>
-            ))}
-          </ul>
+    <div className="flex flex-col h-[85vh] max-h-[800px]">
+      {/* Fixed Header */}
+      <div className="flex-none p-6 border-b border-gray-200 bg-white">
+        <div className="text-sm text-gray-600 mb-1">
+          <span>ArenaX</span>
+          <span className="mx-2">/</span>
+          <span>{match.tournament?.title || 'Futsal League Winter \'24'}</span>
+          <span className="mx-2">/</span>
+          <span className="text-gray-900 font-medium">Match #{match.match_number || '482'} Scoring</span>
         </div>
-      )}
-
-      {/* Score Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {renderTeamScoreCard('home', homeTeamName, homeTeamData, isHomeWinner)}
-        {renderTeamScoreCard('away', awayTeamName, awayTeamData, isAwayWinner)}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {homeTeamName} vs. {awayTeamName}
+          </h1>
+          <p className="text-gray-500 text-sm">
+            Record goals, assists, and timing for precise statistics.
+          </p>
+        </div>
       </div>
 
-      {/* Goal Events */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {renderGoalEvents('home', homeTeamName, homeTeamData)}
-        {renderGoalEvents('away', awayTeamName, awayTeamData)}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <form id="futsal-score-form" onSubmit={handleSubmit} className="space-y-6">
+          {/* Errors */}
+          {errors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h4>
+              <ul className="text-sm text-red-700 space-y-1">
+                {errors.map((error, index) => (
+                  <li key={index}>• {error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Score Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {renderTeamScoreCard('home', homeTeamName, homeTeamData, isHomeWinner)}
+            {renderTeamScoreCard('away', awayTeamName, awayTeamData, isAwayWinner)}
+          </div>
+
+          {/* Goal Events */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {renderGoalEvents('home', homeTeamName, homeTeamData)}
+            {renderGoalEvents('away', awayTeamName, awayTeamData)}
+          </div>
+        </form>
       </div>
 
-      {/* Actions */}
+      {/* Fixed Footer Actions */}
       {!isReadOnly && (
-        <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isFinalScore}
-                onChange={(e) => setIsFinalScore(e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <span className="text-sm font-medium text-gray-700">Final Score</span>
-            </label>
+        <div className="flex-none p-6 border-t border-gray-200 bg-white">
+          <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={onCancel}
-              className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+              className="text-sm text-gray-600 hover:text-gray-900 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors"
               disabled={isLoading}
             >
-              Discard Changes
+              Cancel
             </button>
-          </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30"
-          >
-            {isLoading ? 'Saving...' : 'Save Match Results'}
-          </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, false)}
+                disabled={isLoading}
+                className="px-6 py-2.5 bg-white border border-purple-200 text-purple-700 hover:bg-purple-50 rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Saving...' : 'Update Score'}
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, true)}
+                disabled={isLoading}
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30 flex items-center gap-2"
+              >
+                <span>End Match</span>
+                <span className="bg-purple-500 rounded px-1.5 py-0.5 text-xs">Final</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </form>
+    </div>
   );
 };
 

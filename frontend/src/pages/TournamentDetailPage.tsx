@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Calendar, MapPin, Users, Trophy, DollarSign, 
+import {
+  Calendar, MapPin, Users, Trophy, DollarSign,
   UserPlus, ArrowLeft, Settings, Play, Award, Info,
   CheckCircle, XCircle, AlertCircle, Download, Share2,
   Edit, UserCheck, UserX, MessageCircle
@@ -17,7 +17,7 @@ export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +28,10 @@ export default function TournamentDetailPage() {
   const [participantSearch, setParticipantSearch] = useState('');
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
 
+  const getTournamentsPath = () => {
+    return user?.role === 'ORGANIZER' ? '/my-tournaments' : '/tournaments';
+  };
+
   useEffect(() => {
     if (tournamentId) {
       loadTournament();
@@ -37,11 +41,11 @@ export default function TournamentDetailPage() {
   const loadTournament = async () => {
     try {
       setLoading(true);
-      
+
       // Load tournament details
       const response = await tournamentService.getTournamentDetail(tournamentId!);
       setTournament(response.tournament);
-      
+
       // Load detailed participants for organizers, or basic participant info for others
       if (user?.role === 'ORGANIZER') {
         try {
@@ -96,7 +100,7 @@ export default function TournamentDetailPage() {
         toastService.error('This tournament requires team registration. Please register as a team from the Teams page.');
         return;
       }
-      
+
       setRegistering(true);
       await tournamentService.registerForTournament(tournamentId!);
       await loadTournament(); // Reload to update registration status
@@ -150,9 +154,9 @@ export default function TournamentDetailPage() {
   const handleExportParticipants = () => {
     // Export participants to CSV
     if (!participants || participants.length === 0) return;
-    
+
     const csvContent = [
-      tournament?.participation_type === 'TEAM' 
+      tournament?.participation_type === 'TEAM'
         ? ['Team Name', 'Registered By', 'Status', 'Registration Date', 'Selected Players']
         : ['Name', 'Email', 'Status', 'Registration Date'],
       ...participants.map(participant => {
@@ -174,7 +178,7 @@ export default function TournamentDetailPage() {
         }
       })
     ].map(row => row.join(',')).join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -186,55 +190,71 @@ export default function TournamentDetailPage() {
 
   const handleAcceptParticipants = async () => {
     if (selectedParticipants.length === 0) return;
-    
+
     try {
-      if (selectedParticipants.length === 1) {
-        // Single accept
-        await tournamentService.acceptParticipant(tournamentId!, selectedParticipants[0]);
-        toastService.success('Participant accepted successfully!');
-      } else {
-        // Bulk accept
-        const response = await tournamentService.bulkAcceptParticipants(tournamentId!, selectedParticipants);
-        toastService.success(`${response.accepted_count} participants accepted successfully!`);
-      }
-      
+      let acceptedCount = 0;
+      // Process all selected participants in parallel
+      await Promise.all(selectedParticipants.map(async (participantId) => {
+        const participant = participants.find(p => p.id === participantId);
+        if (!participant) return;
+
+        if (participant.type === 'team') {
+          await tournamentService.acceptTeamParticipant(tournamentId!, participant.id);
+        } else {
+          await tournamentService.acceptParticipant(tournamentId!, participant.id);
+        }
+        acceptedCount++;
+      }));
+
+      toastService.success(`${acceptedCount} participants accepted successfully!`);
       setSelectedParticipants([]);
       await loadTournament(); // Reload to update participant list
     } catch (err: any) {
-      toastService.error(err.message || 'Failed to accept participants');
+      console.error('Error accepting participants:', err);
+      toastService.error(err.message || 'Failed to accept participants. Some may have been processed.');
+      // Reload to reflect any successful changes
+      await loadTournament();
     }
   };
 
   const handleRejectParticipants = async () => {
     if (selectedParticipants.length === 0) return;
-    
+
     const reason = prompt('Please provide a reason for rejection (optional):');
-    
+
     try {
-      if (selectedParticipants.length === 1) {
-        // Single reject
-        await tournamentService.rejectParticipant(tournamentId!, selectedParticipants[0], reason || undefined);
-        toastService.success('Participant rejected successfully!');
-      } else {
-        // Bulk reject
-        const response = await tournamentService.bulkRejectParticipants(tournamentId!, selectedParticipants, reason || undefined);
-        toastService.success(`${response.rejected_count} participants rejected successfully!`);
-      }
-      
+      let rejectedCount = 0;
+      // Process all selected participants in parallel
+      await Promise.all(selectedParticipants.map(async (participantId) => {
+        const participant = participants.find(p => p.id === participantId);
+        if (!participant) return;
+
+        if (participant.type === 'team') {
+          await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
+        } else {
+          await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+        }
+        rejectedCount++;
+      }));
+
+      toastService.success(`${rejectedCount} participants rejected successfully!`);
       setSelectedParticipants([]);
       await loadTournament(); // Reload to update participant list
     } catch (err: any) {
-      toastService.error(err.message || 'Failed to reject participants');
+      console.error('Error rejecting participants:', err);
+      toastService.error(err.message || 'Failed to reject participants. Some may have been processed.');
+      // Reload to reflect any successful changes
+      await loadTournament();
     }
   };
 
   const filteredParticipants = participants?.filter(participant => {
     if (participant.type === 'team') {
       return participant.team.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-             (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
+        (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
     } else {
       return participant.user.full_name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-             (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
+        (participant.status && participant.status.toLowerCase().includes(participantSearch.toLowerCase()));
     }
   }) || [];
 
@@ -270,9 +290,9 @@ export default function TournamentDetailPage() {
   };
 
   const canUserRegister = () => {
-    return user?.role === 'PLAYER' && 
-           tournament?.is_registration_open && 
-           !isUserRegistered();
+    return user?.role === 'PLAYER' &&
+      tournament?.is_registration_open &&
+      !isUserRegistered();
   };
 
   const isOrganizer = () => {
@@ -298,7 +318,7 @@ export default function TournamentDetailPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Tournament Not Found</h2>
           <p className="text-gray-600 mb-4">{error || 'The tournament you are looking for does not exist.'}</p>
           <button
-            onClick={() => navigate('/tournaments')}
+            onClick={() => navigate(getTournamentsPath())}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
           >
             Back to Tournaments
@@ -315,13 +335,13 @@ export default function TournamentDetailPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate('/tournaments')}
+              onClick={() => navigate(getTournamentsPath())}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
               Back to Tournaments
             </button>
-            
+
             {isOrganizer() && (
               <div className="flex items-center gap-2">
                 <button
@@ -331,7 +351,7 @@ export default function TournamentDetailPage() {
                   <Share2 className="h-4 w-4" />
                   Share
                 </button>
-                
+
                 {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && (
                   <button
                     onClick={handleGenerateBracket}
@@ -341,16 +361,16 @@ export default function TournamentDetailPage() {
                     Generate Bracket
                   </button>
                 )}
-                
-                <button 
+
+                <button
                   onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
                   className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
                 >
                   <Edit className="h-4 w-4" />
                   Edit
                 </button>
-                
-                <button 
+
+                <button
                   onClick={() => navigate(`/tournaments/${tournament.id}/manage`)}
                   className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
                 >
@@ -374,7 +394,7 @@ export default function TournamentDetailPage() {
             <div className="absolute inset-0 bg-black bg-opacity-20"></div>
           </div>
         )}
-        
+
         <div className="absolute inset-0 flex items-end">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 w-full">
             <div className="flex items-end justify-between">
@@ -388,7 +408,7 @@ export default function TournamentDetailPage() {
                 <h1 className="text-4xl font-bold mb-2">{tournament.title}</h1>
                 <p className="text-lg opacity-90">Organized by {tournament.organizer.name}</p>
               </div>
-              
+
               <div className="flex flex-col gap-2">
                 {canUserRegister() && (
                   <button
@@ -400,7 +420,7 @@ export default function TournamentDetailPage() {
                     {registering ? 'Registering...' : 'Register Now'}
                   </button>
                 )}
-                
+
                 {isUserRegistered() && tournament.status === 'UPCOMING' && (
                   <button
                     onClick={handleWithdraw}
@@ -410,7 +430,7 @@ export default function TournamentDetailPage() {
                     Withdraw
                   </button>
                 )}
-                
+
                 {isUserRegistered() && (
                   <div className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg">
                     <CheckCircle className="h-5 w-5" />
@@ -441,11 +461,10 @@ export default function TournamentDetailPage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${
-                        activeTab === tab.id
+                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
                           ? 'border-purple-500 text-purple-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       <tab.icon className="h-4 w-4" />
                       {tab.label}
@@ -521,13 +540,13 @@ export default function TournamentDetailPage() {
                           Participants ({tournament.registered_count}/{tournament.max_participants})
                         </h3>
                         <div className="w-full max-w-md bg-gray-200 rounded-full h-2 mt-2">
-                          <div 
-                            className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                          <div
+                            className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                             style={{ width: `${Math.min((tournament.registered_count / tournament.max_participants) * 100, 100)}%` }}
                           ></div>
                         </div>
                       </div>
-                      
+
                       {isOrganizer() && participants && participants.length > 0 && (
                         <div className="flex items-center gap-2">
                           <button
@@ -537,17 +556,17 @@ export default function TournamentDetailPage() {
                             <Download className="h-4 w-4" />
                             Export
                           </button>
-                          
+
                           {selectedParticipants.length > 0 && (
                             <div className="flex items-center gap-2">
-                              <button 
+                              <button
                                 onClick={handleAcceptParticipants}
                                 className="flex items-center gap-2 px-3 py-2 text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors"
                               >
                                 <UserCheck className="h-4 w-4" />
                                 Accept ({selectedParticipants.length})
                               </button>
-                              <button 
+                              <button
                                 onClick={handleRejectParticipants}
                                 className="flex items-center gap-2 px-3 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
                               >
@@ -594,7 +613,7 @@ export default function TournamentDetailPage() {
                                 className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                               />
                             )}
-                            
+
                             <div className="flex items-center gap-3 flex-1">
                               <div className="relative">
                                 {participant.type === 'team' ? (
@@ -622,7 +641,7 @@ export default function TournamentDetailPage() {
                                   <span className="text-xs font-bold text-gray-600">#{index + 1}</span>
                                 </div>
                               </div>
-                              
+
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   {participant.type === 'team' ? (
@@ -636,12 +655,11 @@ export default function TournamentDetailPage() {
                                     <p className="font-medium text-gray-900">{participant.user.full_name}</p>
                                   )}
                                   {participant.status && (
-                                    <span className={`px-2 py-1 text-xs rounded-full ${
-                                      participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
-                                      participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                      participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                                      'bg-gray-100 text-gray-800'
-                                    }`}>
+                                    <span className={`px-2 py-1 text-xs rounded-full ${participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
+                                        participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                          participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                            'bg-gray-100 text-gray-800'
+                                      }`}>
                                       {participant.status}
                                     </span>
                                   )}
@@ -665,7 +683,7 @@ export default function TournamentDetailPage() {
 
                             <div className="flex items-center gap-2">
                               {participant.type === 'team' && (
-                                <button 
+                                <button
                                   onClick={() => {
                                     // Show team details modal with selected players
                                     alert(`Team: ${participant.team.name}\nSelected Players:\n${participant.selected_players.map((p: any) => `• ${p.full_name}`).join('\n')}`);
@@ -676,9 +694,9 @@ export default function TournamentDetailPage() {
                                   View Players
                                 </button>
                               )}
-                              
+
                               {participant.type === 'individual' && user?.role === 'PLAYER' && participant.user.id !== user.id && (
-                                <button 
+                                <button
                                   onClick={() => navigate('/chats', { state: { startChatWith: participant.user.id } })}
                                   className="flex items-center gap-2 px-3 py-2 text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-50 transition-colors"
                                 >
@@ -686,10 +704,10 @@ export default function TournamentDetailPage() {
                                   Message
                                 </button>
                               )}
-                              
+
                               {isOrganizer() && participant.status === 'PENDING' && (
                                 <div className="flex items-center gap-1">
-                                  <button 
+                                  <button
                                     onClick={async () => {
                                       try {
                                         if (participant.type === 'team') {
@@ -710,7 +728,7 @@ export default function TournamentDetailPage() {
                                   >
                                     <UserCheck className="h-4 w-4" />
                                   </button>
-                                  <button 
+                                  <button
                                     onClick={async () => {
                                       const reason = prompt('Please provide a reason for rejection (optional):');
                                       try {
@@ -849,14 +867,14 @@ export default function TournamentDetailPage() {
           </div>
         </div>
       </div>
-      
+
       {/* Share Modal */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Share Tournament</h3>
             <p className="text-gray-600 mb-4">Share this tournament with others</p>
-            
+
             <div className="flex items-center gap-2 mb-4">
               <input
                 type="text"
@@ -874,7 +892,7 @@ export default function TournamentDetailPage() {
                 Copy
               </button>
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowShareModal(false)}
@@ -892,7 +910,7 @@ export default function TournamentDetailPage() {
           </div>
         </div>
       )}
-      
+
       <BottomNavigation />
     </div>
   );

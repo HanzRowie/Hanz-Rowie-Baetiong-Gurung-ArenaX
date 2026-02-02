@@ -67,6 +67,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [matchDetails, setMatchDetails] = useState<Match | null>(null);
 
   // Check if user is authorized to score matches
@@ -79,12 +80,13 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   }, [isOpen, match.id]);
 
   const loadMatchDetails = async () => {
+    setIsDetailsLoading(true);
     try {
       if (!match.tournament?.id) {
         toast.error('Tournament information not available');
         return;
       }
-      
+
       const response = await tournamentService.getMatchDetails(match.tournament.id, match.id);
       if (response.success) {
         setMatchDetails(response.data);
@@ -92,6 +94,8 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
     } catch (error) {
       console.error('Failed to load match details:', error);
       toast.error('Failed to load match details');
+    } finally {
+      setIsDetailsLoading(false);
     }
   };
 
@@ -109,7 +113,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
     setIsLoading(true);
     try {
       let response;
-      
+
       if (match.tournament.sport_type === 'FUTSAL') {
         response = await tournamentService.recordFutsalMatchScore(
           match.tournament.id,
@@ -153,7 +157,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
     setIsLoading(true);
     try {
       let response;
-      
+
       if (match.tournament.sport_type === 'FUTSAL') {
         response = await tournamentService.recordFutsalMatchScore(
           match.tournament.id,
@@ -168,12 +172,12 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
           scoreData
         );
       }
-      
-      if (response?.success || response?.match) {
+
+      if ((response as any)?.success || (response as any)?.match) {
         toast.success('Match score updated successfully');
         setIsOpen(false);
         if (onScoreRecorded) {
-          onScoreRecorded(response.match || response.data);
+          onScoreRecorded((response as any).match || (response as any).data);
         }
       } else {
         toast.error(response?.message || 'Failed to update match score');
@@ -189,7 +193,7 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   const getMatchTitle = () => {
     // Check if it's a team tournament by looking for team1/team2 properties
     const isTeamTournament = match.team1 || match.team2;
-    
+
     if (isTeamTournament) {
       const team1Name = match.team1?.name || 'TBD';
       const team2Name = match.team2?.name || 'TBD';
@@ -203,10 +207,10 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
 
   const getScoreDisplay = () => {
     if (match.status !== 'COMPLETED') return null;
-    
+
     // Check if it's a team tournament by looking for team scores
     const isTeamTournament = match.team1_score !== undefined || match.team2_score !== undefined;
-    
+
     if (isTeamTournament) {
       return `${match.team1_score || 0} - ${match.team2_score || 0}`;
     } else {
@@ -235,12 +239,11 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                match.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+              <span className={`px-2 py-1 rounded text-xs font-medium ${match.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
                 match.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                match.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800' :
-                'bg-gray-100 text-gray-800'
-              }`}>
+                  match.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                }`}>
                 {match.status}
               </span>
               <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
@@ -265,7 +268,10 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
             <div className="flex gap-2">
               {canScoreMatch && (
                 <Button
-                  onClick={() => setIsOpen(true)}
+                  onClick={() => {
+                    setIsDetailsLoading(true);
+                    setIsOpen(true);
+                  }}
                   variant={match.status === 'COMPLETED' ? 'secondary' : 'primary'}
                   size="sm"
                 >
@@ -274,7 +280,10 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
               )}
               {match.status === 'COMPLETED' && (
                 <Button
-                  onClick={() => setIsOpen(true)}
+                  onClick={() => {
+                    setIsDetailsLoading(true);
+                    setIsOpen(true);
+                  }}
                   variant="secondary"
                   size="sm"
                 >
@@ -296,7 +305,12 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
         size="xl"
       >
         <div className="space-y-4">
-          {match.tournament?.sport_type === 'FUTSAL' ? (
+          {isDetailsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+              <span className="ml-3 text-gray-600">Loading match details...</span>
+            </div>
+          ) : match.tournament?.sport_type === 'FUTSAL' ? (
             <ModernFutsalScorer
               match={matchDetails || match}
               onSubmit={match.status === 'COMPLETED' ? handleUpdateScore : handleScoreSubmit}

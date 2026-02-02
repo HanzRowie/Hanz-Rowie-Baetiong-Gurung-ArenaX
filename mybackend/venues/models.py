@@ -148,30 +148,48 @@ class VenueBooking(models.Model):
         
         # Check if venue is available for this date/time
         if self.venue and self.date and self.start_time and self.end_time:
-            if not self.venue.is_available_at_time(self.date, self.start_time, self.end_time):
-                # Get more specific error message
-                operating_hours = self.venue.get_operating_hours(self.date)
-                if not operating_hours:
-                    raise ValidationError("Venue is not operating on this date")
+            # Check if venue is operating on this day
+            weekday = self.date.weekday() + 1  # Convert to 1-7 (Monday=1)
+            if self.venue.operating_days and weekday not in self.venue.operating_days:
+                raise ValidationError(f"Venue is not operating on this day of the week")
+            
+            # Check for venue availability overrides
+            venue_availability = VenueAvailability.objects.filter(
+                venue=self.venue,
+                date=self.date
+            ).first()
+            
+            if venue_availability:
+                if not venue_availability.is_available:
+                    raise ValidationError(f"Venue is marked as unavailable on this date")
                 
-                if (self.start_time < operating_hours['opening_time'] or 
-                    self.end_time > operating_hours['closing_time']):
+                # Check if time is within availability hours
+                if (self.start_time < venue_availability.opening_time or 
+                    self.end_time > venue_availability.closing_time):
                     raise ValidationError(
-                        f"Booking time must be within operating hours: "
-                        f"{operating_hours['opening_time']} - {operating_hours['closing_time']}"
+                        f"Booking time must be within venue hours: "
+                        f"{venue_availability.opening_time} - {venue_availability.closing_time}"
                     )
-                
-                # Check for overlapping bookings
-                conflicting_bookings = VenueBooking.objects.filter(
-                    venue=self.venue,
-                    date=self.date,
-                    start_time__lt=self.end_time,
-                    end_time__gt=self.start_time,
-                    status__in=['CONFIRMED', 'PENDING']
-                ).exclude(pk=self.pk)
-                
-                if conflicting_bookings.exists():
-                    raise ValidationError("This time slot conflicts with an existing booking")
+            else:
+                # Use default operating hours
+                if (self.start_time < self.venue.default_opening_time or 
+                    self.end_time > self.venue.default_closing_time):
+                    raise ValidationError(
+                        f"Booking time must be within venue hours: "
+                        f"{self.venue.default_opening_time} - {self.venue.default_closing_time}"
+                    )
+            
+            # Check for overlapping bookings
+            conflicting_bookings = VenueBooking.objects.filter(
+                venue=self.venue,
+                date=self.date,
+                start_time__lt=self.end_time,
+                end_time__gt=self.start_time,
+                status__in=['CONFIRMED', 'PENDING']
+            ).exclude(pk=self.pk)
+            
+            if conflicting_bookings.exists():
+                raise ValidationError("This time slot conflicts with an existing booking")
 
     def save(self, *args, **kwargs):
         # Calculate amount based on duration and price_per_hour

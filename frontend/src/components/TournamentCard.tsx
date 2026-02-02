@@ -252,14 +252,24 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
           </div>
         </div>
 
-        {/* Action Button */}
-        <button
-          onClick={() => navigate(`/tournaments/${tournament.id}`)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-        >
-          <Eye className="h-4 w-4" />
-          {showActions ? 'Manage Tournament' : 'View Details'}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate(`/tournaments/${tournament.id}`)}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            <Eye className="h-4 w-4" />
+            {showActions ? 'Manage' : 'View'}
+          </button>
+          {showActions && (
+            <button
+              onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-indigo-200 text-indigo-600 text-sm font-semibold rounded-xl hover:bg-indigo-50 transition-all duration-200"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

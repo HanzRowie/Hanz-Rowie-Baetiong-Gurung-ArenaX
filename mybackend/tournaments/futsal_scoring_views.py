@@ -98,6 +98,8 @@ def record_futsal_match_score(request, tournament_id, match_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        is_final = data.get('is_final', True)
+        
         with transaction.atomic():
             # Record team scores
             home_score = record_team_futsal_score(match, match.team1, home_team_data)
@@ -114,19 +116,24 @@ def record_futsal_match_score(request, tournament_id, match_id):
                 match.winning_team = match.team2
             # No winner for draws
             
-            match.status = 'COMPLETED'
+            if is_final:
+                match.status = 'COMPLETED'
+            else:
+                match.status = 'IN_PROGRESS'
+                
             match.save()
             
-            # Try to advance winner to next round
-            try:
-                from teams.services.match_scorer import MatchScorer
-                MatchScorer._advance_winner_to_next_round(match)
-            except Exception as e:
-                print(f"Warning: Could not advance winner: {e}")
+            # Try to advance winner to next round ONLY if final
+            if is_final and match.status == 'COMPLETED':
+                try:
+                    from teams.services.match_scorer import MatchScorer
+                    MatchScorer._advance_winner_to_next_round(match)
+                except Exception as e:
+                    print(f"Warning: Could not advance winner: {e}")
             
             return Response({
                 'success': True,
-                'message': 'Match score recorded successfully',
+                'message': 'Match score recorded successfully' if is_final else 'Match score updated',
                 'match': {
                     'id': str(match.id),
                     'status': match.status,
@@ -300,7 +307,7 @@ def get_match_details(request, tournament_id, match_id):
                 ]
         
         # Add futsal scores if available
-        if tournament.sport_type == 'FUTSAL' and match.status == 'COMPLETED':
+        if tournament.sport_type == 'FUTSAL':
             futsal_scores = []
             for futsal_score in match.futsal_scores.all():
                 score_data = {

@@ -31,6 +31,7 @@ urlpatterns = [
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/', views.remove_tournament_participant, name='remove_tournament_participant'),
     path('<uuid:tournament_id>/referees/<uuid:referee_id>/', views.remove_tournament_referee, name='remove_tournament_referee'),
     path('teams/<uuid:team_id>/available/', views.team_available_tournaments, name='team_available_tournaments'),
+    path('<uuid:tournament_id>/registered-players/', views.tournament_registered_players, name='tournament_registered_players'),
     
     # Futsal scoring endpoints
     path('<uuid:tournament_id>/matches/<uuid:match_id>/futsal-score/', futsal_scoring_views.record_futsal_match_score, name='record_futsal_score'),

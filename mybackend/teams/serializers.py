@@ -181,15 +181,35 @@ class InvitationSerializer(serializers.ModelSerializer):
 
 class InvitationCreateSerializer(serializers.Serializer):
     """Serializer for creating team invitations"""
-    player_id = serializers.UUIDField()
+    player_id = serializers.UUIDField(required=False, allow_null=True)
+    player_email = serializers.EmailField(required=False, allow_null=True)
     
-    def validate_player_id(self, value):
-        """Validate that player exists and is a player"""
-        try:
-            player = User.objects.get(id=value, role='PLAYER')
-        except User.DoesNotExist:
-            raise serializers.ValidationError("Player not found or not a player")
-        return value
+    def validate(self, data):
+        """Validate that either player_id or player_email is provided"""
+        player_id = data.get('player_id')
+        player_email = data.get('player_email')
+        
+        if not player_id and not player_email:
+            raise serializers.ValidationError("Either player_id or player_email must be provided")
+        
+        if player_id and player_email:
+            raise serializers.ValidationError("Provide either player_id or player_email, not both")
+        
+        # If email is provided, look up the player
+        if player_email:
+            try:
+                player = User.objects.get(email=player_email.lower(), role='PLAYER')
+                data['player_id'] = player.id
+            except User.DoesNotExist:
+                raise serializers.ValidationError({"player_email": "No player found with this email address"})
+        else:
+            # Validate player_id
+            try:
+                player = User.objects.get(id=player_id, role='PLAYER')
+            except User.DoesNotExist:
+                raise serializers.ValidationError({"player_id": "Player not found or not a player"})
+        
+        return data
 
 
 class InvitationResponseSerializer(serializers.Serializer):

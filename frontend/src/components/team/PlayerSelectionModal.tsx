@@ -34,17 +34,49 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMembership[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alreadyRegisteredPlayers, setAlreadyRegisteredPlayers] = useState<Set<string>>(new Set());
+  const [registeredPlayersInfo, setRegisteredPlayersInfo] = useState<Map<string, string>>(new Map());
 
-  // Load team members when modal opens
+  // Load team members and already registered players when modal opens
   useEffect(() => {
-    const loadTeamMembers = async () => {
-      if (!isOpen || !team.id) return;
+    const loadData = async () => {
+      if (!isOpen || !team.id || !tournament.id) return;
       
       setLoading(true);
       try {
-        const response = await TeamService.getTeam(team.id);
-        if (response.success && response.data) {
-          setTeamMembers(response.data.memberships.filter(m => m.is_active));
+        // Load team members
+        const teamResponse = await TeamService.getTeam(team.id);
+        if (teamResponse.success && teamResponse.data) {
+          setTeamMembers(teamResponse.data.memberships.filter(m => m.is_active));
+        }
+
+        // Load already registered players for this tournament
+        try {
+          const registeredResponse = await fetch(
+            `${import.meta.env.VITE_API_URL}/api/tournaments/${tournament.id}/registered-players/`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+              },
+            }
+          );
+
+          if (registeredResponse.ok) {
+            const data = await registeredResponse.json();
+            const playerIds = new Set<string>();
+            const playerInfo = new Map<string, string>();
+            
+            data.registered_players.forEach((player: any) => {
+              playerIds.add(player.player_id);
+              playerInfo.set(player.player_id, player.team_name);
+            });
+            
+            setAlreadyRegisteredPlayers(playerIds);
+            setRegisteredPlayersInfo(playerInfo);
+          }
+        } catch (err) {
+          console.error('Error loading registered players:', err);
+          // Don't fail the whole modal if this fails
         }
       } catch (error) {
         console.error('Error loading team members:', error);
@@ -54,8 +86,8 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
       }
     };
 
-    loadTeamMembers();
-  }, [isOpen, team.id]);
+    loadData();
+  }, [isOpen, team.id, tournament.id]);
 
   const getPlayerRequirements = (): PlayerRequirements => {
     const sport = tournament.sport_type.toUpperCase();
@@ -101,6 +133,13 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
   };
 
   const handlePlayerToggle = (playerId: string, isStarter: boolean) => {
+    // Check if player is already registered with another team
+    if (alreadyRegisteredPlayers.has(playerId)) {
+      const teamName = registeredPlayersInfo.get(playerId);
+      setError(`This player is already registered for this tournament with ${teamName}`);
+      return;
+    }
+
     if (isStarter) {
       // Handle starter selection
       if (starterPlayers.includes(playerId)) {
@@ -224,14 +263,20 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {teamMembers.map((membership) => {
                 const playerSelection = isPlayerSelected(membership.player.id);
-                const canBeStarter = canSelectAsStarter(membership.player.id);
-                const canBeSubstitute = canSelectAsSubstitute(membership.player.id);
+                const isAlreadyRegistered = alreadyRegisteredPlayers.has(membership.player.id);
+                const registeredTeamName = registeredPlayersInfo.get(membership.player.id);
+                const canBeStarter = !isAlreadyRegistered && (canSelectAsStarter(membership.player.id));
+                const canBeSubstitute = !isAlreadyRegistered && (canSelectAsSubstitute(membership.player.id));
                 
                 return (
                   <div
                     key={membership.id}
                     className={`p-4 border rounded-lg ${
-                      playerSelection ? 'border-primary-500 bg-primary-50' : 'border-gray-300'
+                      isAlreadyRegistered 
+                        ? 'border-red-300 bg-red-50 opacity-60' 
+                        : playerSelection 
+                          ? 'border-primary-500 bg-primary-50' 
+                          : 'border-gray-300'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -247,6 +292,11 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                           <p className="text-xs text-gray-500">
                             {membership.role} • Joined {new Date(membership.joined_at).toLocaleDateString()}
                           </p>
+                          {isAlreadyRegistered && (
+                            <p className="text-xs text-red-600 font-medium mt-1">
+                              ⚠️ Already registered with {registeredTeamName}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -256,7 +306,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                           type="button"
                           variant={playerSelection === 'starter' ? 'primary' : 'secondary'}
                           size="sm"
-                          disabled={!canBeStarter && playerSelection !== 'starter'}
+                          disabled={isAlreadyRegistered || (!canBeStarter && playerSelection !== 'starter')}
                           onClick={() => handlePlayerToggle(membership.player.id, true)}
                         >
                           {playerSelection === 'starter' ? 'Starter ✓' : 'Starter'}
@@ -267,7 +317,7 @@ export const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                           type="button"
                           variant={playerSelection === 'substitute' ? 'primary' : 'ghost'}
                           size="sm"
-                          disabled={!canBeSubstitute && playerSelection !== 'substitute'}
+                          disabled={isAlreadyRegistered || (!canBeSubstitute && playerSelection !== 'substitute')}
                           onClick={() => handlePlayerToggle(membership.player.id, false)}
                         >
                           {playerSelection === 'substitute' ? 'Sub ✓' : 'Sub'}

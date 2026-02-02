@@ -66,22 +66,24 @@ export const InvitationList: React.FC<InvitationListProps> = ({
     loadInvitations();
   }, [teamId, showPending]);
 
-  const handleInvitationResponse = async (invitationId: string, response: 'ACCEPT' | 'DECLINE') => {
+  const handleInvitationResponse = async (invitationId: string, response: 'ACCEPTED' | 'DECLINED') => {
     setRespondingToId(invitationId);
 
     try {
       const result = await TeamService.respondToInvitation(invitationId, { response });
 
       if (result.success) {
-        // Update the invitation status locally
-        setInvitations(prev =>
-          prev.map(inv =>
-            inv.id === invitationId
-              ? { ...inv, status: response === 'ACCEPT' ? 'ACCEPTED' : 'DECLINED', responded_at: new Date().toISOString() }
-              : inv
-          )
-        );
+        // Remove the invitation from the list immediately
+        setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+        
+        // Call the update callback to refresh parent data
         onInvitationUpdate?.();
+        
+        // Show success message
+        const message = response === 'ACCEPTED' 
+          ? 'Invitation accepted! You are now a member of the team.' 
+          : 'Invitation declined.';
+        alert(message);
       } else {
         alert(result.error || 'Failed to respond to invitation');
       }
@@ -208,7 +210,7 @@ export const InvitationList: React.FC<InvitationListProps> = ({
                     size="sm"
                     loading={respondingToId === invitation.id}
                     disabled={respondingToId === invitation.id}
-                    onClick={() => handleInvitationResponse(invitation.id, 'DECLINE')}
+                    onClick={() => handleInvitationResponse(invitation.id, 'DECLINED')}
                   >
                     Decline
                   </Button>
@@ -217,7 +219,7 @@ export const InvitationList: React.FC<InvitationListProps> = ({
                     size="sm"
                     loading={respondingToId === invitation.id}
                     disabled={respondingToId === invitation.id}
-                    onClick={() => handleInvitationResponse(invitation.id, 'ACCEPT')}
+                    onClick={() => handleInvitationResponse(invitation.id, 'ACCEPTED')}
                   >
                     Accept
                   </Button>

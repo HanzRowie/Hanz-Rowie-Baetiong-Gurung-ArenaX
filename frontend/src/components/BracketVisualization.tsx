@@ -169,7 +169,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
 
       if (hasParticipants) {
         setSelectedMatch(match);
-        
+
         // Use detailed scoring for futsal tournaments, basic modal for others
         if (tournament.sport_type === 'FUTSAL') {
           setShowMatchScorer(true);
@@ -235,10 +235,6 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             <p className="text-yellow-800 text-sm">
               Need at least {tournament.min_participants || 2} participants to generate bracket.
               Currently have {tournament.registered_count}.
-            </p>
-            {/* Debug info - remove in production */}
-            <p className="text-xs text-gray-600 mt-2">
-              Debug: min_participants={tournament.min_participants}, registered_count={tournament.registered_count}
             </p>
           </div>
         )}
@@ -328,7 +324,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             <span className="font-medium">{name}</span>
             {participantType === 'team' && (
               <div className="text-xs text-gray-500">
-                2 players {/* For doubles badminton */}
+                Team
               </div>
             )}
           </div>
@@ -434,9 +430,9 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                           <div key={match.id} className="relative">
                             <div
                               className={`border-2 rounded-lg overflow-hidden transition-all duration-200 ${getMatchStatusColor(match.status)} ${isOrganizer && match.status !== 'COMPLETED' &&
-                                  (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2))
-                                  ? 'cursor-pointer hover:shadow-md'
-                                  : ''
+                                (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2))
+                                ? 'cursor-pointer hover:shadow-md'
+                                : ''
                                 }`}
                               onClick={() => handleMatchClick(match)}
                             >
@@ -449,8 +445,8 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                                   </span>
                                   <div className="flex items-center gap-2">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${match.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                        match.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                                          'bg-gray-100 text-gray-800'
+                                      match.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-gray-100 text-gray-800'
                                       }`}>
                                       {match.status.replace('_', ' ')}
                                     </span>
@@ -577,7 +573,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              
+
               <MatchScorer
                 match={{
                   ...selectedMatch,

@@ -387,7 +387,14 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
               {invitationsLoading ? (
                 <LoadingSkeleton className="h-64" />
               ) : (
-                <InvitationList showPending={true} />
+                <InvitationList 
+                  showPending={true} 
+                  onInvitationUpdate={() => {
+                    // Invalidate both invitations and teams queries to refresh counts
+                    queryClient.invalidateQueries({ queryKey: ['teams', 'invitations'] });
+                    queryClient.invalidateQueries({ queryKey: ['teams', 'my-teams'] });
+                  }}
+                />
               )}
             </div>
           )}

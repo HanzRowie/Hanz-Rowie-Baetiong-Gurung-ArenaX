@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, Settings, ClipboardList } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -84,18 +84,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       return [
         commonItems[0], // Dashboard
         {
-          id: 'tournaments',
-          label: 'Tournaments',
-          icon: Trophy,
-          path: '/tournaments',
-          active: location.pathname.startsWith('/tournaments') && !location.pathname.includes('/create'),
-        },
-        {
           id: 'my-tournaments',
           label: 'My Tournaments',
-          icon: Settings,
+          icon: Trophy,
           path: '/my-tournaments',
-          active: location.pathname === '/my-tournaments',
+          active: location.pathname === '/my-tournaments' || location.pathname.startsWith('/tournaments'),
         },
         {
           id: 'venues',
@@ -125,6 +118,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: Users,
           path: '/teams',
           active: location.pathname.startsWith('/teams'),
+        },
+        {
+          id: 'player-statistics',
+          label: 'Player Stats',
+          icon: BarChart3,
+          path: '/player-statistics',
+          active: location.pathname === '/player-statistics',
         },
         {
           id: 'venues',

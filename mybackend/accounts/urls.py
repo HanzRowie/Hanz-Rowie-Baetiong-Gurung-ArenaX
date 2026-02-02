@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import player_statistics_views
 
 # URL patterns for accounts app
 urlpatterns = [
@@ -51,4 +52,9 @@ urlpatterns = [
     path('players/leaderboard/', views.get_sport_leaderboard, name='get_sport_leaderboard'),
     path('players/rankings/', views.get_player_rankings, name='get_player_rankings'),
     path('players/<uuid:player_id>/rankings/', views.get_player_rankings, name='get_player_rankings_by_id'),
+    
+    # Global player statistics endpoints (new)
+    path('statistics/global/', player_statistics_views.get_global_player_statistics, name='get_global_player_statistics'),
+    path('statistics/player/<uuid:player_id>/', player_statistics_views.get_player_detailed_statistics, name='get_player_detailed_statistics'),
+    path('statistics/player/', player_statistics_views.get_player_detailed_statistics, name='get_my_detailed_statistics'),
 ]

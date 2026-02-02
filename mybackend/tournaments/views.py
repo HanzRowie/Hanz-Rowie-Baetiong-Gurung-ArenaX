@@ -172,8 +172,7 @@ def create_tournament(request):
         # If a venue is selected, create a booking for it
         venue_booking = None
         if linked_venue_id:
-            from venues.models import Venue, VenueBooking
-            from venues.views import book_venue
+            from venues.models import Venue, VenueBooking, VenueAvailability
             from datetime import datetime
             
             try:
@@ -196,48 +195,26 @@ def create_tournament(request):
                 start_time_obj = datetime.strptime(booking_data['start_time'], '%H:%M').time()
                 end_time_obj = datetime.strptime(booking_data['end_time'], '%H:%M').time()
                 
-                # Check venue availability (similar logic to book_venue)
-                from venues.models import VenueAvailability
-                
-                # Check for availability slots
-                available_slots = VenueAvailability.objects.filter(
-                    venue=venue,
-                    date=booking_data['date'],
-                    is_available=True
-                ).filter(
-                    opening_time__lte=booking_data['start_time'],
-                    closing_time__gte=booking_data['end_time']
-                )
-                
-                has_availability_slots = VenueAvailability.objects.filter(venue=venue, date=booking_data['date']).exists()
-                
-                if has_availability_slots and not available_slots.exists():
-                    return Response({'error': 'Selected venue is not available for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Check for conflicting bookings
-                conflicting_bookings = VenueBooking.objects.filter(
-                    venue=venue,
-                    date=booking_data['date'],
-                    status__in=['PENDING', 'CONFIRMED']
-                ).filter(
-                    start_time__lt=end_time_obj,
-                    end_time__gt=start_time_obj
-                )
-                
-                if conflicting_bookings.exists():
-                    return Response({'error': 'Selected venue is already booked for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
+                # Parse date
+                if isinstance(booking_data['date'], str):
+                    date_obj = datetime.strptime(booking_data['date'], '%Y-%m-%d').date()
+                else:
+                    date_obj = booking_data['date']
                 
                 # Create the venue booking
-                venue_booking = VenueBooking.objects.create(
+                venue_booking = VenueBooking(
                     venue=venue,
                     user=request.user,
-                    date=booking_data['date'],
+                    date=date_obj,
                     start_time=start_time_obj,
                     end_time=end_time_obj,
                     purpose=booking_data['purpose'],
                     notes=booking_data['notes'],
                     status='CONFIRMED'  # Auto-confirm tournament bookings
                 )
+                
+                # This will run validation and save
+                venue_booking.save()
                 
                 # Update tournament data with venue info
                 data['venue'] = venue.name
@@ -247,8 +224,20 @@ def create_tournament(request):
                 
             except Venue.DoesNotExist:
                 return Response({'error': 'Selected venue does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+            except ValidationError as e:
+                # Return the validation error messages
+                error_messages = e.message_dict if hasattr(e, 'message_dict') else {'__all__': [str(e)]}
+                return Response({
+                    'error': 'Venue booking validation failed',
+                    'details': error_messages
+                }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                return Response({'error': f'Venue booking failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+                import traceback
+                error_details = traceback.format_exc()
+                print(f"Venue booking error: {error_details}")
+                return Response({
+                    'error': f'Venue booking failed: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Create the tournament
         serializer = TournamentSerializer(data=data)
@@ -268,7 +257,12 @@ def create_tournament(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
     except Exception as e:
-        return Response({'error': f'Tournament creation failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Tournament creation error: {error_details}")
+        return Response({
+            'error': f'Tournament creation failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
@@ -840,6 +834,29 @@ def register_team_for_tournament(request, tournament_id):
                 'error': 'All selected players must be active team members'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Check if any selected players are already registered for this tournament with another team
+        existing_registrations = TeamTournamentRegistration.objects.filter(
+            tournament=tournament
+        ).prefetch_related('selected_players')
+        
+        already_registered_players = []
+        for reg in existing_registrations:
+            for player in reg.selected_players.all():
+                if player.id in selected_player_uuids:
+                    already_registered_players.append({
+                        'player_name': player.full_name,
+                        'team_name': reg.team.name
+                    })
+        
+        if already_registered_players:
+            player_details = ', '.join([
+                f"{p['player_name']} (already with {p['team_name']})" 
+                for p in already_registered_players
+            ])
+            return Response({
+                'error': f'The following players are already registered for this tournament with another team: {player_details}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Create team tournament registration
         registration = TeamTournamentRegistration.objects.create(
             tournament=tournament,
@@ -956,6 +973,57 @@ def team_available_tournaments(request, team_id):
             'error': f'Failed to fetch available tournaments: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tournament_registered_players(request, tournament_id):
+    """Get all players already registered for a tournament across all teams"""
+    try:
+        from teams.models import TeamTournamentRegistration
+        
+        # Get tournament
+        try:
+            tournament = Tournament.objects.get(id=tournament_id)
+        except Tournament.DoesNotExist:
+            return Response({
+                'error': 'Tournament not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all team registrations for this tournament
+        team_registrations = TeamTournamentRegistration.objects.filter(
+            tournament=tournament
+        ).prefetch_related('selected_players', 'team')
+        
+        # Collect all registered players with their team info
+        registered_players = []
+        player_ids_set = set()
+        
+        for registration in team_registrations:
+            for player in registration.selected_players.all():
+                if player.id not in player_ids_set:
+                    player_ids_set.add(player.id)
+                    registered_players.append({
+                        'player_id': str(player.id),
+                        'player_name': player.full_name,
+                        'player_email': player.email,
+                        'team_id': str(registration.team.id),
+                        'team_name': registration.team.name,
+                        'registration_status': registration.status
+                    })
+        
+        return Response({
+            'tournament_id': str(tournament.id),
+            'tournament_title': tournament.title,
+            'registered_players': registered_players,
+            'total_players': len(registered_players)
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to fetch registered players: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_tournament_bracket(request, tournament_id):
@@ -1051,19 +1119,39 @@ def generate_single_elimination_bracket(tournament, participants):
     # Calculate how many rounds we need
     total_rounds = math.ceil(math.log2(next_power_of_2))
     
-    # Create the bracket structure round by round
-    current_participants = participants_list[:]
+    # Intelligent Bye Distribution:
+    # Instead of random shuffle including Nones (which risks None vs None),
+    # we explicitly pair teams with Nones (Byes) and remaining teams with each other.
     
-    # If we have byes, we need to place them strategically
-    if byes_needed > 0:
-        # Add placeholder "BYE" entries to make it a power of 2
-        for i in range(byes_needed):
-            current_participants.append(None)  # None represents a bye
+    # Teams that get a bye (advance automatically)
+    # We take the first 'byes_needed' teams
+    teams_with_bye = participants_list[:byes_needed]
     
-    # Now we have exactly next_power_of_2 participants (including byes)
-    # Generate matches for each round
+    # Teams that must play in Round 1
+    teams_playing = participants_list[byes_needed:]
+    
+    # Prepare pairs for Round 1
+    round_1_pairs = []
+    
+    # 1. Pair teams that play each other
+    for i in range(0, len(teams_playing), 2):
+        round_1_pairs.append((teams_playing[i], teams_playing[i+1]))
+        
+    # 2. Pair bye teams with None
+    for team in teams_with_bye:
+        round_1_pairs.append((team, None))
+        
+    # Shuffle the placement of matches in the bracket
+    random.shuffle(round_1_pairs)
+    
+    # Flatten to get the participant list for the loop
+    current_round_participants = []
+    for p1, p2 in round_1_pairs:
+        current_round_participants.extend([p1, p2])
+        
+    # Round 1 generation logic continues below...
     round_number = 1
-    current_round_participants = current_participants[:]
+    # current_round_participants is already set above
     
     # Only create matches for the first round with actual participants
     # Future rounds will be created as empty matches that get filled when winners advance
@@ -1085,20 +1173,21 @@ def generate_single_elimination_bracket(tournament, participants):
             timezone.datetime.combine(tournament.date, tournament.start_time)
         ) + match_time_offset
         
-        # Handle bye matches (where one participant is None)
-        if participant1 is None and participant2 is None:
-            # Both are byes, skip this match - no one advances
-            continue
-        elif participant1 is None:
-            # Participant2 gets a bye, advances automatically
-            first_round_participants.append(participant2)
-            continue
-        elif participant2 is None:
-            # Participant1 gets a bye, advances automatically
-            first_round_participants.append(participant1)
-            continue
+        # Handle BYE scenarios - CRITICAL FIX
+        # We must create a Match object even for a BYE, so the graph is connected
+        # and we can track the "winner" advancing from a specific match ID.
         
-        # Create actual match between two real participants
+        is_bye = (participant1 is None or participant2 is None)
+        
+        # If double bye (both None), skip.
+        if participant1 is None and participant2 is None:
+            continue
+            
+        # Determine status and notes
+        current_status = 'COMPLETED' if is_bye else 'SCHEDULED'
+        notes = 'BYE' if is_bye else ''
+        
+        # Create the match object
         if tournament.registration_type == 'INDIVIDUAL':
             match = Match.objects.create(
                 tournament=tournament,
@@ -1107,8 +1196,15 @@ def generate_single_elimination_bracket(tournament, participants):
                 player1=participant1,
                 player2=participant2,
                 scheduled_time=match_time,
-                status='SCHEDULED'
+                status=current_status,
+                notes=notes
             )
+            
+            if is_bye:
+                winner = participant1 if participant1 else participant2
+                match.winner = winner
+                match.save()
+                
         else:  # TEAM
             match = Match.objects.create(
                 tournament=tournament,
@@ -1117,61 +1213,75 @@ def generate_single_elimination_bracket(tournament, participants):
                 team1=participant1,
                 team2=participant2,
                 scheduled_time=match_time,
-                status='SCHEDULED'
+                status=current_status,
+                notes=notes
             )
+            
+            if is_bye:
+                winner = participant1 if participant1 else participant2
+                match.winning_team = winner
+                match.save()
         
         matches.append(match)
-        first_round_matches.append(match)
         match_number += 1
         
-        # The winner of this match will advance (to be determined later)
-        first_round_participants.append(None)  # Placeholder for winner
+    print(f"Created {len(matches)} matches in round 1 (including BYEs)")
     
-    # Now create empty matches for all subsequent rounds
-    current_round_size = len(first_round_matches) + len([p for p in first_round_participants if p is not None])
-    current_round = 2
+    # Generate subsequent rounds (empty placeholders)
+    # Since we now create matches for BYEs, the number of matches in Round 1
+    # is exactly next_power_of_2 / 2.
     
-    while current_round_size > 1:
-        next_round_size = current_round_size // 2
+    current_round_matches_count = len(matches)
+    
+    while current_round_matches_count > 1:
+        round_number += 1
+        matches_in_this_round = current_round_matches_count // 2
         
-        for i in range(next_round_size):
+        print(f"Round {round_number}: Creating {matches_in_this_round} matches")
+        
+        for i in range(matches_in_this_round):
             match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
             match_time = timezone.make_aware(
                 timezone.datetime.combine(tournament.date, tournament.start_time)
             ) + match_time_offset
             
-            # Create empty match for future winners
             if tournament.registration_type == 'INDIVIDUAL':
-                match = Match.objects.create(
+                 match = Match.objects.create(
                     tournament=tournament,
-                    round_number=current_round,
+                    round_number=round_number,
                     match_number=match_number,
-                    player1=None,
-                    player2=None,
                     scheduled_time=match_time,
                     status='SCHEDULED',
-                    notes=f'Round {current_round} - Winners from previous round will be assigned'
+                    notes='Winners from previous round will be assigned'
                 )
-            else:  # TEAM
-                match = Match.objects.create(
+            else:
+                 match = Match.objects.create(
                     tournament=tournament,
-                    round_number=current_round,
+                    round_number=round_number,
                     match_number=match_number,
-                    team1=None,
-                    team2=None,
                     scheduled_time=match_time,
                     status='SCHEDULED',
-                    notes=f'Round {current_round} - Winners from previous round will be assigned'
+                    notes='Winners from previous round will be assigned'
                 )
             
             matches.append(match)
             match_number += 1
+            
+        current_round_matches_count = matches_in_this_round
         
-        current_round_size = next_round_size
-        current_round += 1
+    # Auto-advance winners from BYE matches
+    # We must do this AFTER creating all rounds so the target matches exist
+    from teams.services.match_scorer import MatchScorer
+    print("Auto-advancing BYE winners...")
+    for m in matches:
+        if m.round_number == 1 and m.notes == 'BYE':
+            try:
+                MatchScorer._advance_winner_to_next_round(m)
+            except Exception as e:
+                print(f"Failed to advance Bye match {m.id}: {e}")
     
-    print(f"Created {len(matches)} matches across {current_round - 1} rounds")
-    print(f"Round structure: {[len([m for m in matches if m.round_number == r]) for r in range(1, current_round)]}")
+    print(f"Created {len(matches)} matches across {round_number} rounds")
+    print(f"Round structure: {[len([m for m in matches if m.round_number == r]) for r in range(1, round_number + 1)]}")
     
     return matches
 

@@ -44,6 +44,7 @@ import TeamsPage from './pages/TeamsPage';
 import TeamDetailsPage from './pages/TeamDetailsPage';
 import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
 import MyStatsPage from './pages/MyStatsPage';
+import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -88,6 +89,10 @@ export const router = createBrowserRouter([
       {
         path: 'my-stats',
         element: <MyStatsPage />,
+      },
+      {
+        path: 'player-statistics',
+        element: <PlayerStatisticsPage />,
       },
       // Tournament routes
       {

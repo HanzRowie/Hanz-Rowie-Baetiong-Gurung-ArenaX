@@ -88,7 +88,7 @@ export interface InvitationCreateRequest {
 }
 
 export interface InvitationResponse {
-  response: 'ACCEPT' | 'DECLINE';
+  response: 'ACCEPTED' | 'DECLINED';
 }
 
 export interface TeamMemberAddRequest {

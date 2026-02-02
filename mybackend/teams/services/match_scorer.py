@@ -531,7 +531,22 @@ class MatchScorer:
         ).order_by('match_number')
         
         if not next_round_matches.exists():
-            print(f"No matches found in round {next_round} - this might be the final match")
+            print(f"No matches found in round {next_round} - this is the final match")
+            
+            # This was the final match, so the tournament is complete
+            tournament = match.tournament
+            tournament.status = 'COMPLETED'
+            
+            if tournament.registration_type == 'TEAM':
+                tournament.winner_team = winner
+                # Also set the winner attribute for backward compatibility/display
+                # Note: You might need to adjust this based on your exact model structure
+                # asking user to verify if tournament.winner exists on model or just winner_team
+            else:
+                tournament.winner = winner
+                
+            tournament.save()
+            print(f"Tournament {tournament.title} completed. Winner: {winner}")
             return
         
         print(f"Found {next_round_matches.count()} matches in round {next_round}")
