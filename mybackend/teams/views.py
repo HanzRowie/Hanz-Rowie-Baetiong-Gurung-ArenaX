@@ -5,14 +5,16 @@ from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from django.http import Http404
 from django.db.models import Q
-from .models import Team, TeamMembership, Invitation, ActivityHistory
+from django.utils import timezone
+from .models import Team, TeamMembership, Invitation, ActivityHistory, TeamJoinRequest
 from .services import ActivityHistoryService, TeamManager, RoleManager, InvitationManager, MatchScorer
 from tournaments.models import Match
 from .serializers import (
     TeamSerializer, TeamCreateSerializer, TeamUpdateSerializer, TeamListSerializer,
     TeamMembershipSerializer, InvitationSerializer, InvitationCreateSerializer,
     InvitationResponseSerializer, TeamMemberAddSerializer, TeamMemberRoleUpdateSerializer,
-    OwnershipTransferSerializer
+    OwnershipTransferSerializer, TeamJoinRequestSerializer, TeamJoinRequestCreateSerializer,
+    TeamJoinRequestResponseSerializer
 )
 from accounts.decorators import role_required
 from .error_handlers import team_error_handler
@@ -1780,6 +1782,359 @@ def get_match_details(request, match_id):
         return Response({
             'success': False,
             'error': 'Match not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An unexpected error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# Team Join Request Endpoints
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@role_required('PLAYER')
+def request_to_join_team(request, team_id):
+    """
+    Send a request to join a team.
+    
+    Optional fields:
+    - message: Optional message to team owner/leaders
+    """
+    try:
+        team = Team.objects.get(id=team_id, is_active=True)
+        
+        # Check if team is full
+        if team.is_full:
+            return Response({
+                'success': False,
+                'error': 'Team is full'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if player is already a member
+        existing_membership = TeamMembership.objects.filter(
+            team=team,
+            player=request.user,
+            is_active=True
+        ).exists()
+        
+        if existing_membership:
+            return Response({
+                'success': False,
+                'error': 'You are already a member of this team'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if there's already a pending request
+        existing_request = TeamJoinRequest.objects.filter(
+            team=team,
+            player=request.user,
+            status='PENDING'
+        ).exists()
+        
+        if existing_request:
+            return Response({
+                'success': False,
+                'error': 'You already have a pending request to join this team'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if there's a pending invitation
+        pending_invitation = Invitation.objects.filter(
+            team=team,
+            player=request.user,
+            status='PENDING'
+        ).exists()
+        
+        if pending_invitation:
+            return Response({
+                'success': False,
+                'error': 'You have a pending invitation to join this team. Please respond to the invitation instead.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate request data
+        serializer = TeamJoinRequestCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create join request
+        join_request = TeamJoinRequest.objects.create(
+            team=team,
+            player=request.user,
+            message=serializer.validated_data.get('message', '')
+        )
+        
+        # Record activity
+        ActivityHistory.objects.create(
+            team=team,
+            event_type='JOIN_REQUEST_SENT',
+            description=f"{request.user.full_name} requested to join the team",
+            performed_by=request.user,
+            metadata={
+                'player_id': str(request.user.id),
+                'player_name': request.user.full_name,
+                'request_id': str(join_request.id)
+            }
+        )
+        
+        # Return join request data
+        join_request_serializer = TeamJoinRequestSerializer(join_request)
+        return Response({
+            'success': True,
+            'data': join_request_serializer.data,
+            'message': 'Join request sent successfully'
+        }, status=status.HTTP_201_CREATED)
+        
+    except Team.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Team not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An unexpected error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@role_required('PLAYER')
+def list_team_join_requests(request, team_id):
+    """
+    List join requests for a specific team.
+    Only team owner and leaders can view join requests.
+    
+    Query parameters:
+    - status: Filter by status ('PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED')
+    """
+    try:
+        team = Team.objects.get(id=team_id, is_active=True)
+        
+        # Check if user is a team owner or leader
+        membership = TeamMembership.objects.filter(
+            team=team,
+            player=request.user,
+            is_active=True,
+            role__in=['OWNER', 'LEADER']
+        ).first()
+        
+        if not membership:
+            return Response({
+                'success': False,
+                'error': 'Only team owners and leaders can view join requests'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get join requests
+        status_filter = request.GET.get('status')
+        join_requests = TeamJoinRequest.objects.filter(team=team).select_related('player', 'responded_by')
+        
+        if status_filter and status_filter in ['PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED']:
+            join_requests = join_requests.filter(status=status_filter)
+        
+        join_requests = join_requests.order_by('-created_at')
+        
+        # Serialize join requests
+        serializer = TeamJoinRequestSerializer(join_requests, many=True)
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'count': len(join_requests)
+        })
+        
+    except Team.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Team not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An unexpected error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@role_required('PLAYER')
+def list_my_join_requests(request):
+    """
+    List join requests sent by the current player.
+    """
+    try:
+        # Get join requests sent by the current user
+        join_requests = TeamJoinRequest.objects.filter(
+            player=request.user
+        ).select_related('team__owner', 'responded_by').order_by('-created_at')
+        
+        # Serialize join requests
+        serializer = TeamJoinRequestSerializer(join_requests, many=True)
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'count': len(join_requests)
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An unexpected error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@role_required('PLAYER')
+def respond_to_join_request(request, request_id):
+    """
+    Respond to a team join request (accept or decline).
+    Only team owner and leaders can respond.
+    
+    Required fields:
+    - response: 'ACCEPTED' or 'DECLINED'
+    """
+    try:
+        join_request = TeamJoinRequest.objects.select_related('team', 'player').get(id=request_id)
+        
+        # Check if user is a team owner or leader
+        membership = TeamMembership.objects.filter(
+            team=join_request.team,
+            player=request.user,
+            is_active=True,
+            role__in=['OWNER', 'LEADER']
+        ).first()
+        
+        if not membership:
+            return Response({
+                'success': False,
+                'error': 'Only team owners and leaders can respond to join requests'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if request can be responded to
+        if not join_request.can_respond():
+            return Response({
+                'success': False,
+                'error': f'This request has already been {join_request.status.lower()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate response
+        serializer = TeamJoinRequestResponseSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        response_action = serializer.validated_data['response']
+        
+        # If accepting, check if team is full
+        if response_action == 'ACCEPTED':
+            if join_request.team.is_full:
+                return Response({
+                    'success': False,
+                    'error': 'Team is full'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add player to team
+            membership = TeamMembership.objects.create(
+                team=join_request.team,
+                player=join_request.player,
+                role='MEMBER'
+            )
+            
+            # Record activity
+            ActivityHistory.objects.create(
+                team=join_request.team,
+                event_type='JOIN_REQUEST_ACCEPTED',
+                description=f"{join_request.player.full_name}'s join request was accepted by {request.user.full_name}",
+                performed_by=request.user,
+                metadata={
+                    'player_id': str(join_request.player.id),
+                    'player_name': join_request.player.full_name,
+                    'accepted_by_id': str(request.user.id),
+                    'accepted_by_name': request.user.full_name
+                }
+            )
+        else:
+            # Record activity for declined request
+            ActivityHistory.objects.create(
+                team=join_request.team,
+                event_type='JOIN_REQUEST_DECLINED',
+                description=f"{join_request.player.full_name}'s join request was declined by {request.user.full_name}",
+                performed_by=request.user,
+                metadata={
+                    'player_id': str(join_request.player.id),
+                    'player_name': join_request.player.full_name,
+                    'declined_by_id': str(request.user.id),
+                    'declined_by_name': request.user.full_name
+                }
+            )
+        
+        # Update join request
+        join_request.status = response_action
+        join_request.responded_at = timezone.now()
+        join_request.responded_by = request.user
+        join_request.save()
+        
+        response_text = 'accepted' if response_action == 'ACCEPTED' else 'declined'
+        return Response({
+            'success': True,
+            'message': f'Join request {response_text} successfully'
+        })
+        
+    except TeamJoinRequest.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Join request not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': f'An unexpected error occurred: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@role_required('PLAYER')
+def cancel_join_request(request, request_id):
+    """
+    Cancel a pending join request.
+    Only the player who sent the request can cancel it.
+    """
+    try:
+        join_request = TeamJoinRequest.objects.select_related('team').get(
+            id=request_id,
+            player=request.user
+        )
+        
+        # Check if request can be cancelled
+        if not join_request.can_respond():
+            return Response({
+                'success': False,
+                'error': f'Cannot cancel a request that has been {join_request.status.lower()}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update status to cancelled
+        join_request.status = 'CANCELLED'
+        join_request.save()
+        
+        return Response({
+            'success': True,
+            'message': 'Join request cancelled successfully'
+        })
+        
+    except TeamJoinRequest.DoesNotExist:
+        return Response({
+            'success': False,
+            'error': 'Join request not found or you do not have permission to cancel it'
         }, status=status.HTTP_404_NOT_FOUND)
     
     except Exception as e:

@@ -106,6 +106,44 @@ export class TeamService {
     return response.data;
   }
 
+  // Join request operations
+  static async requestToJoinTeam(
+    teamId: string,
+    message?: string
+  ): Promise<ApiResponse<any>> {
+    const response = await api.post(`${this.BASE_URL}/${teamId}/join-requests/send/`, {
+      message: message || ''
+    });
+    return response.data;
+  }
+
+  static async getTeamJoinRequests(teamId: string, status?: string): Promise<ApiResponse<any[]>> {
+    const response = await api.get(`${this.BASE_URL}/${teamId}/join-requests/`, {
+      params: status ? { status } : undefined
+    });
+    return response.data;
+  }
+
+  static async getMyJoinRequests(): Promise<ApiResponse<any[]>> {
+    const response = await api.get(`${this.BASE_URL}/join-requests/`);
+    return response.data;
+  }
+
+  static async respondToJoinRequest(
+    requestId: string,
+    response: 'ACCEPTED' | 'DECLINED'
+  ): Promise<ApiResponse<void>> {
+    const res = await api.post(`${this.BASE_URL}/join-requests/${requestId}/respond/`, {
+      response
+    });
+    return res.data;
+  }
+
+  static async cancelJoinRequest(requestId: string): Promise<ApiResponse<void>> {
+    const response = await api.delete(`${this.BASE_URL}/join-requests/${requestId}/cancel/`);
+    return response.data;
+  }
+
   // Analytics and reporting methods
   static async getTeamActivityStatistics(teamId: string): Promise<ApiResponse<any>> {
     const response = await api.get(`${this.BASE_URL}/${teamId}/activity/statistics/`);

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Team, TeamMembership, Invitation, ActivityHistory
+from .models import Team, TeamMembership, Invitation, ActivityHistory, TeamJoinRequest
 
 User = get_user_model()
 
@@ -286,3 +286,32 @@ class TeamListSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'owner', 'created_at', 'member_count', 'is_active', 'is_full'
         ]
+
+
+class TeamJoinRequestSerializer(serializers.ModelSerializer):
+    """Serializer for team join requests"""
+    team = TeamSerializer(read_only=True)
+    player = UserBasicSerializer(read_only=True)
+    responded_by = UserBasicSerializer(read_only=True)
+    can_respond = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = TeamJoinRequest
+        fields = [
+            'id', 'team', 'player', 'status', 'message', 
+            'created_at', 'responded_at', 'responded_by', 'can_respond'
+        ]
+        read_only_fields = [
+            'id', 'team', 'player', 'created_at', 
+            'responded_at', 'responded_by', 'can_respond'
+        ]
+
+
+class TeamJoinRequestCreateSerializer(serializers.Serializer):
+    """Serializer for creating team join requests"""
+    message = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
+class TeamJoinRequestResponseSerializer(serializers.Serializer):
+    """Serializer for responding to join requests"""
+    response = serializers.ChoiceField(choices=['ACCEPTED', 'DECLINED'])

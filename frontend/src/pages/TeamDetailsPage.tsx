@@ -17,7 +17,8 @@ import {
   MoreVertical,
   UserMinus,
   LogOut,
-  Trash2
+  Trash2,
+  Edit
 } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import { tournamentService, toastService } from '@/services';
@@ -277,15 +278,26 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
               </div>
             </div>
             
-            {canManage && (
-              <button 
-                onClick={handleInvitePlayers}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <UserPlus className="w-4 h-4" />
-                Invite Players
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {userRole === 'OWNER' && (
+                <button 
+                  onClick={() => navigate(`/teams/${teamId}/edit`)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <Edit className="w-4 h-4" />
+                  Edit Team
+                </button>
+              )}
+              {canManage && (
+                <button 
+                  onClick={handleInvitePlayers}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invite Players
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

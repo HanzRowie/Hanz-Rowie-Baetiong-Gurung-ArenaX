@@ -7,7 +7,7 @@ import uuid
 class Team(models.Model):
     """
     Core team model representing a group of players organized for tournaments.
-    Supports multiple sports and has a maximum size limit of 15 players.
+    Supports multiple sports and has a maximum size limit of 50 players.
     """
     SPORT_CHOICES = (
         ('FUTSAL', 'Futsal'),
@@ -25,7 +25,7 @@ class Team(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    max_size = models.IntegerField(default=15)
+    max_size = models.IntegerField(default=50)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -169,6 +169,55 @@ class Invitation(models.Model):
         return False
 
 
+class TeamJoinRequest(models.Model):
+    """
+    Manages player requests to join teams.
+    Players can request to join teams that are looking for members.
+    """
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('DECLINED', 'Declined'),
+        ('CANCELLED', 'Cancelled'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='join_requests')
+    player = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.CASCADE,
+        related_name='team_join_requests',
+        limit_choices_to={'role': 'PLAYER'}
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    message = models.TextField(blank=True, help_text="Optional message from player")
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    responded_by = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='team_join_responses',
+        limit_choices_to={'role': 'PLAYER'}
+    )
+
+    class Meta:
+        unique_together = ('team', 'player')
+        indexes = [
+            models.Index(fields=['player', 'status']),
+            models.Index(fields=['team', 'status']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.player.full_name} request to join {self.team.name} ({self.status})"
+
+    def can_respond(self):
+        """Check if request can still be responded to"""
+        return self.status == 'PENDING'
+
+
 class ActivityHistory(models.Model):
     """
     Tracks all team-related events and changes over time.
@@ -185,6 +234,9 @@ class ActivityHistory(models.Model):
         ('INVITATION_SENT', 'Invitation Sent'),
         ('INVITATION_ACCEPTED', 'Invitation Accepted'),
         ('INVITATION_DECLINED', 'Invitation Declined'),
+        ('JOIN_REQUEST_SENT', 'Join Request Sent'),
+        ('JOIN_REQUEST_ACCEPTED', 'Join Request Accepted'),
+        ('JOIN_REQUEST_DECLINED', 'Join Request Declined'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

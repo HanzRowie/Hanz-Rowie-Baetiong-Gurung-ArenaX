@@ -12,6 +12,7 @@ import type { ExtendedUserProfile } from '@/types';
 import type { User as UserType } from '@/types/auth.types';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
+import PlayerStatsDashboard from '@/components/PlayerStatsDashboard';
 import toastService from '@/services/toastService';
 import { useDispatch } from 'react-redux';
 import { updateUser } from '@/store/authSlice';
@@ -1073,6 +1074,14 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
+
+              {/* League Tournament Player Statistics */}
+              {profile?.role === 'PLAYER' && !isEditing && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6">League Tournament Statistics</h3>
+                  <PlayerStatsDashboard />
+                </div>
+              )}
 
               {/* Privacy Settings */}
               {isOwnProfile && (

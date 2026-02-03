@@ -7,6 +7,8 @@ import type { Venue } from '@/types/venue.types';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
 import TimePicker from '@/components/TimePicker';
+import TournamentTypeSelector from '@/components/TournamentTypeSelector';
+import LeagueOptionsForm, { type LeagueOptions } from '@/components/LeagueOptionsForm';
 
 export default function CreateTournamentPage() {
   const navigate = useNavigate();
@@ -21,7 +23,7 @@ export default function CreateTournamentPage() {
     title: '',
     description: '',
     sport_type: '',
-    tournament_type: 'SINGLE_ELIMINATION',
+    tournament_type: 'knockout' as 'knockout' | 'league', // Updated to support both types
     registration_type: 'INDIVIDUAL', // New field
     team_size: '5', // New field for team tournaments
     allow_substitutes: false, // New field
@@ -40,6 +42,12 @@ export default function CreateTournamentPage() {
     rules: '',
   });
 
+  // League-specific options
+  const [leagueOptions, setLeagueOptions] = useState<LeagueOptions>({
+    roundRobinType: 'single',
+    startDate: undefined,
+  });
+
   const [tournamentImage, setTournamentImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -47,9 +55,6 @@ export default function CreateTournamentPage() {
     'FUTSAL',
     'BADMINTON',
   ];
-
-  // Tournament type is now fixed to single elimination only
-  const tournamentType = 'SINGLE_ELIMINATION';
 
   const registrationTypes = [
     { value: 'INDIVIDUAL', label: 'Individual Players' },
@@ -94,12 +99,12 @@ export default function CreateTournamentPage() {
       if (formData.sport_type === 'FUTSAL') {
         newRegistrationType = 'TEAM'; // Futsal is always team-based
       }
-      
+
       if (newRegistrationType === 'TEAM') {
         const newTeamSize = getTeamSizeForSport(formData.sport_type);
         const newMaxSubstitutes = getMaxSubstitutesForSport(formData.sport_type);
         const allowSubs = formData.sport_type === 'FUTSAL';
-        
+
         setFormData(prev => ({
           ...prev,
           registration_type: newRegistrationType,
@@ -146,7 +151,7 @@ export default function CreateTournamentPage() {
         startTimeCheck: !!formData.start_time,
         customVenueCheck: !useCustomVenue
       });
-      
+
       if (formData.date && formData.start_time && !useCustomVenue) {
         setLoadingVenues(true);
         try {
@@ -170,7 +175,7 @@ export default function CreateTournamentPage() {
         console.log('Detailed checks:', {
           'formData.date exists': !!formData.date,
           'formData.date value': formData.date,
-          'formData.start_time exists': !!formData.start_time, 
+          'formData.start_time exists': !!formData.start_time,
           'formData.start_time value': formData.start_time,
           'useCustomVenue': useCustomVenue,
           'condition result': !!(formData.date && formData.start_time && !useCustomVenue)
@@ -188,6 +193,47 @@ export default function CreateTournamentPage() {
     setIsLoading(true);
 
     try {
+      // Validate tournament type
+      if (!formData.tournament_type || (formData.tournament_type !== 'knockout' && formData.tournament_type !== 'league')) {
+        throw new Error('Please select a valid tournament type (Knockout or League)');
+      }
+
+      // Validate league-specific requirements
+      if (formData.tournament_type === 'league') {
+        if (!leagueOptions.roundRobinType) {
+          throw new Error('Please select a round-robin format for league tournaments');
+        }
+        if (leagueOptions.roundRobinType !== 'single' && leagueOptions.roundRobinType !== 'double') {
+          throw new Error('Invalid round-robin format selected');
+        }
+      }
+
+      // Validate scores are non-negative
+      if (parseFloat(formData.entry_fee) < 0) {
+        throw new Error('Entry fee cannot be negative');
+      }
+      if (formData.prize_pool && parseFloat(formData.prize_pool) < 0) {
+        throw new Error('Prize pool cannot be negative');
+      }
+
+      // Validate participant counts
+      const maxParticipants = parseInt(formData.max_participants);
+      const minParticipants = parseInt(formData.min_participants);
+
+      if (minParticipants < 2) {
+        throw new Error('Minimum participants must be at least 2');
+      }
+      if (maxParticipants < minParticipants) {
+        throw new Error('Maximum participants must be greater than or equal to minimum participants');
+      }
+
+      // Validate time
+      if (formData.start_time && formData.end_time) {
+        if (formData.start_time >= formData.end_time) {
+          throw new Error('End time must be after start time');
+        }
+      }
+
       // Prepare registration deadline (24 hours before tournament by default)
       const tournamentDateTime = new Date(`${formData.date}T${formData.start_time}`);
       const defaultDeadline = new Date(tournamentDateTime.getTime() - 24 * 60 * 60 * 1000);
@@ -196,7 +242,7 @@ export default function CreateTournamentPage() {
         title: formData.title,
         description: formData.description,
         sport_type: formData.sport_type,
-        tournament_type: tournamentType, // Always single elimination
+        tournament_type: formData.tournament_type, // Now supports 'knockout' or 'league'
         registration_type: formData.registration_type,
         team_size: formData.registration_type === 'TEAM' ? parseInt(formData.team_size) : undefined,
         allow_substitutes: formData.registration_type === 'TEAM' ? formData.allow_substitutes : undefined,
@@ -208,12 +254,17 @@ export default function CreateTournamentPage() {
         venue_address: formData.venue_address,
         linked_venue_id: formData.linked_venue_id || undefined, // Include selected venue
         entry_fee: parseFloat(formData.entry_fee),
-        max_participants: parseInt(formData.max_participants),
-        min_participants: parseInt(formData.min_participants),
+        max_participants: maxParticipants,
+        min_participants: minParticipants,
         registration_deadline: formData.registration_deadline || defaultDeadline.toISOString(),
         prize_pool: formData.prize_pool ? parseFloat(formData.prize_pool) : undefined,
         rules: formData.rules,
         tournament_image: tournamentImage || undefined,
+        // League-specific options
+        ...(formData.tournament_type === 'league' && {
+          round_robin_type: leagueOptions.roundRobinType,
+          league_start_date: leagueOptions.startDate || formData.date,
+        }),
       };
 
       console.log('Submitting tournament data:', tournamentData);
@@ -422,9 +473,8 @@ export default function CreateTournamentPage() {
                     id="registration_type"
                     value={formData.registration_type}
                     onChange={(e) => setFormData({ ...formData, registration_type: e.target.value })}
-                    className={`w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white ${
-                      formData.sport_type === 'FUTSAL' ? 'bg-gray-100 cursor-not-allowed' : ''
-                    }`}
+                    className={`w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white ${formData.sport_type === 'FUTSAL' ? 'bg-gray-100 cursor-not-allowed' : ''
+                      }`}
                     required
                     disabled={isLoading || formData.sport_type === 'FUTSAL'}
                   >
@@ -437,6 +487,22 @@ export default function CreateTournamentPage() {
                 </div>
               </div>
             </div>
+
+            {/* Tournament Type Selection */}
+            <TournamentTypeSelector
+              value={formData.tournament_type}
+              onChange={(type) => setFormData({ ...formData, tournament_type: type })}
+              disabled={isLoading}
+            />
+
+            {/* League Options - Show only when league type is selected */}
+            {formData.tournament_type === 'league' && (
+              <LeagueOptionsForm
+                options={leagueOptions}
+                onChange={setLeagueOptions}
+                disabled={isLoading}
+              />
+            )}
 
             {/* Team-specific settings */}
             {formData.registration_type === 'TEAM' && (
@@ -530,7 +596,17 @@ export default function CreateTournamentPage() {
                   value={formData.start_time}
                   onChange={(value) => {
                     console.log('Start time changed:', value);
-                    setFormData({ ...formData, start_time: value });
+                    let newEndTime = formData.end_time;
+
+                    // If end_time is empty, default to 1 hour after start_time
+                    if (!newEndTime && value) {
+                      const [hours, minutes] = value.split(':').map(Number);
+                      const date = new Date();
+                      date.setHours(hours + 1, minutes, 0, 0);
+                      newEndTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                    }
+
+                    setFormData({ ...formData, start_time: value, end_time: newEndTime });
                   }}
                   placeholder="Select start time"
                   required
@@ -621,7 +697,7 @@ export default function CreateTournamentPage() {
                       </p>
                     </div>
                   )}
-                  
+
                   {availableVenues.length === 0 && formData.date && formData.start_time && !loadingVenues && (
                     <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-center gap-2 text-yellow-700">

@@ -146,6 +146,11 @@ class TournamentService {
     return response.data;
   }
 
+  async generateSchedule(tournamentId: string): Promise<{ message: string; matches_created: number; matches: any[] }> {
+    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.GENERATE_SCHEDULE(tournamentId));
+    return response.data;
+  }
+
   async updateMatchResult(
     tournamentId: string,
     matchId: string,
@@ -224,6 +229,23 @@ class TournamentService {
     return response.data;
   }
 
+  async submitMatchResult(
+    tournamentId: string,
+    matchId: string,
+    data: {
+      home_score: number;
+      away_score: number;
+      player_stats: Array<{
+        player_id: string;
+        goals: number;
+        assists: number;
+      }>;
+    }
+  ): Promise<{ success: boolean; match: any; message: string }> {
+    const response = await api.post(`/api/tournaments/${tournamentId}/matches/${matchId}/submit_result/`, data);
+    return response.data;
+  }
+
   // Enhanced bracket management endpoints
   async getTournamentBracket(tournamentId: string): Promise<{
     bracket: any;
@@ -232,6 +254,14 @@ class TournamentService {
     current_round: number;
   }> {
     const response = await api.get(API_ENDPOINTS.TOURNAMENTS.BRACKET(tournamentId));
+    return response.data;
+  }
+
+  async getTournamentMatches(tournamentId: string): Promise<{
+    matches: Match[];
+    total_matches: number;
+  }> {
+    const response = await api.get(`/api/tournaments/${tournamentId}/matches/`);
     return response.data;
   }
 
@@ -324,6 +354,21 @@ class TournamentService {
     return response.data.available_tournaments || [];
   }
 
+  async getStandings(tournamentId: string): Promise<any[]> {
+    const response = await api.get(API_ENDPOINTS.TOURNAMENTS.STANDINGS(tournamentId));
+    return response.data.standings || response.data || [];
+  }
+
+  async getTopScorers(tournamentId: string): Promise<any[]> {
+    const response = await api.get(API_ENDPOINTS.TOURNAMENTS.TOP_SCORERS(tournamentId));
+    return response.data.top_scorers || response.data || [];
+  }
+
+  async getTopAssists(tournamentId: string): Promise<any[]> {
+    const response = await api.get(API_ENDPOINTS.TOURNAMENTS.TOP_ASSISTS(tournamentId));
+    return response.data.top_assists || response.data || [];
+  }
+
   // Team participant management methods
   async acceptTeamParticipant(tournamentId: string, registrationId: string): Promise<{ message: string; team: any }> {
     const response = await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/accept/`);
@@ -332,6 +377,22 @@ class TournamentService {
 
   async rejectTeamParticipant(tournamentId: string, registrationId: string, reason?: string): Promise<{ message: string; team: any }> {
     const response = await api.put(`/api/tournaments/${tournamentId}/team-participants/${registrationId}/reject/`, { reason });
+    return response.data;
+  }
+
+  async getMyPlayerStats(tournamentId?: string): Promise<any> {
+    const params = tournamentId ? `?tournament_id=${tournamentId}` : '';
+    const response = await api.get(`/api/player-stats/my_stats/${params}`);
+    return response.data;
+  }
+
+  async getTournamentPlayerStats(tournamentId: string, playerId?: string): Promise<any> {
+    const params = new URLSearchParams();
+    params.append('tournament_id', tournamentId);
+    if (playerId) {
+      params.append('player_id', playerId);
+    }
+    const response = await api.get(`/api/player-stats/tournament_stats/?${params.toString()}`);
     return response.data;
   }
 }

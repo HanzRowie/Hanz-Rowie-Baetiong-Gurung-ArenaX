@@ -55,6 +55,7 @@ interface Tournament {
   id: string;
   title: string;
   sport_type: 'FUTSAL' | 'BADMINTON';
+  tournament_type?: 'knockout' | 'league' | 'round_robin';
   registration_type: 'TEAM' | 'INDIVIDUAL';
   status: string;
 }
@@ -100,6 +101,7 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
         id: t.id,
         title: t.title,
         sport_type: t.sport_type as 'FUTSAL' | 'BADMINTON',
+        tournament_type: (t as any).tournament_type,
         registration_type: (t as any).registration_type || 'INDIVIDUAL',
         status: t.status
       }));
@@ -120,8 +122,32 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
     
     setIsLoading(true);
     try {
-      const response = await tournamentService.getTournamentBracket(selectedTournament);
-      const tournamentMatches = response.matches || [];
+      // Get the selected tournament to check its type
+      const selectedTournamentData = tournaments.find(t => t.id === selectedTournament);
+      
+      console.log('Loading matches for tournament:', selectedTournamentData);
+      
+      let tournamentMatches = [];
+      
+      // Use different endpoint based on tournament type
+      if (selectedTournamentData?.tournament_type === 'league' || selectedTournamentData?.tournament_type === 'round_robin') {
+        // For league/round-robin tournaments, use the matches endpoint
+        console.log('Using matches endpoint for league/round-robin tournament');
+        const response = await tournamentService.getTournamentMatches(selectedTournament);
+        tournamentMatches = response.matches || [];
+      } else {
+        // For knockout tournaments, use the bracket endpoint
+        console.log('Using bracket endpoint for knockout tournament');
+        try {
+          const response = await tournamentService.getTournamentBracket(selectedTournament);
+          tournamentMatches = response.matches || [];
+        } catch (error: any) {
+          // If bracket endpoint fails, fall back to matches endpoint
+          console.log('Bracket endpoint failed, falling back to matches endpoint');
+          const response = await tournamentService.getTournamentMatches(selectedTournament);
+          tournamentMatches = response.matches || [];
+        }
+      }
       
       // Map to our Match interface
       const mappedMatches: Match[] = tournamentMatches.map((m: any) => ({

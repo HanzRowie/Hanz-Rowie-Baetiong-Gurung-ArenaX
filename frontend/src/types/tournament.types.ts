@@ -3,7 +3,7 @@ export interface Tournament {
   title: string;
   description: string;
   sport_type: string;
-  tournament_type: 'SINGLE_ELIMINATION'; // Only single elimination supported
+  tournament_type: 'SINGLE_ELIMINATION' | 'knockout' | 'league'; // Tournament format types
   participation_type: 'INDIVIDUAL' | 'TEAM'; // New field for team-based tournaments
   date: string;
   start_time: string;

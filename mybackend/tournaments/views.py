@@ -1,11 +1,12 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from accounts.decorators import jwt_required
 from accounts.models import CustomUser
 from accounts.utils import decode_jwt
+from django.core.exceptions import ValidationError
 import uuid
 
 from .models import Tournament, TournamentRegistration, Match
@@ -42,6 +43,220 @@ class TournamentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(registration_type=registration_type)
 
         return queryset.order_by('-created_at')
+    
+    def update(self, request, *args, **kwargs):
+        """Override update to prevent tournament type change after matches exist"""
+        instance = self.get_object()
+        
+        # Check if tournament_type is being changed
+        new_tournament_type = request.data.get('tournament_type')
+        if new_tournament_type and new_tournament_type != instance.tournament_type:
+            # Check if matches exist
+            if Match.objects.filter(tournament=instance).exists():
+                return Response({
+                    'error': 'Cannot change tournament type after matches have been created.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return super().update(request, *args, **kwargs)
+    
+    @action(detail=True, methods=['post'])
+    def generate_schedule(self, request, pk=None):
+        """Generate round-robin schedule for league tournament"""
+        tournament = self.get_object()
+        
+        # Check if user is the organizer
+        if request.user != tournament.organizer:
+            return Response({
+                'error': 'Only tournament organizers can generate schedules'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Validate tournament type
+        if tournament.tournament_type != 'league':
+            return Response({
+                'error': 'Schedule generation is only available for league tournaments'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get teams for this tournament
+        if tournament.registration_type == 'TEAM':
+            from teams.models import TeamTournamentRegistration
+            team_registrations = TeamTournamentRegistration.objects.filter(
+                tournament=tournament,
+                status='CONFIRMED'
+            ).select_related('team')
+            teams = [reg.team for reg in team_registrations]
+        else:
+            return Response({
+                'error': 'League tournaments currently only support team registration'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate minimum teams
+        if len(teams) < 2:
+            return Response({
+                'error': f'At least 2 teams are required to generate a schedule. Current teams: {len(teams)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if schedule already exists
+        existing_matches = Match.objects.filter(tournament=tournament).count()
+        if existing_matches > 0:
+            return Response({
+                'error': f'Tournament already has {existing_matches} matches. Delete existing matches before regenerating schedule.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate schedule
+        try:
+            from tournaments.services.schedule_generator import RoundRobinScheduleGenerator
+            
+            generator = RoundRobinScheduleGenerator()
+            double_round_robin = request.data.get('double_round_robin', False)
+            
+            matches = generator.generate_and_save_schedule(
+                tournament=tournament,
+                teams=teams,
+                double_round_robin=double_round_robin
+            )
+            
+            return Response({
+                'message': 'Schedule generated successfully',
+                'tournament_id': str(tournament.id),
+                'matches_created': len(matches),
+                'rounds': max(m.round_number for m in matches),
+                'double_round_robin': double_round_robin
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to generate schedule: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def standings(self, request, pk=None):
+        """Get current standings for league tournament"""
+        tournament = self.get_object()
+        
+        # Validate tournament type
+        if tournament.tournament_type != 'league':
+            return Response({
+                'error': 'Standings are only available for league tournaments'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from tournaments.services.standings_calculator import LeagueStandingsCalculator
+            
+            calculator = LeagueStandingsCalculator()
+            standings = calculator.calculate_standings(str(tournament.id))
+            
+            # Convert StandingsRow objects to dictionaries
+            standings_data = [
+                {
+                    'position': row.position,
+                    'team_name': row.team_name,
+                    'team_id': row.team_id,
+                    'played': row.played,
+                    'won': row.won,
+                    'drawn': row.drawn,
+                    'lost': row.lost,
+                    'goals_for': row.goals_for,
+                    'goals_against': row.goals_against,
+                    'goal_difference': row.goal_difference,
+                    'points': row.points
+                }
+                for row in standings
+            ]
+            
+            return Response({
+                'tournament_id': str(tournament.id),
+                'tournament_name': tournament.title,
+                'standings': standings_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to calculate standings: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def top_scorers(self, request, pk=None):
+        """Get top scorers for tournament"""
+        tournament = self.get_object()
+        
+        # Validate tournament type
+        if tournament.tournament_type != 'league':
+            return Response({
+                'error': 'Player statistics are only available for league tournaments'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from tournaments.services.player_stats_aggregator import PlayerStatsAggregator
+            
+            aggregator = PlayerStatsAggregator()
+            limit = int(request.query_params.get('limit', 10))
+            top_scorers = aggregator.get_top_scorers(str(tournament.id), limit=limit)
+            
+            # Convert PlayerStats objects to dictionaries
+            scorers_data = [
+                {
+                    'rank': player.rank,
+                    'player_id': player.player_id,
+                    'player_name': player.player_name,
+                    'team_name': player.team_name,
+                    'goals': player.goals,
+                    'assists': player.assists
+                }
+                for player in top_scorers
+            ]
+            
+            return Response({
+                'tournament_id': str(tournament.id),
+                'tournament_name': tournament.title,
+                'top_scorers': scorers_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to get top scorers: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def top_assists(self, request, pk=None):
+        """Get top assist providers for tournament"""
+        tournament = self.get_object()
+        
+        # Validate tournament type
+        if tournament.tournament_type != 'league':
+            return Response({
+                'error': 'Player statistics are only available for league tournaments'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from tournaments.services.player_stats_aggregator import PlayerStatsAggregator
+            
+            aggregator = PlayerStatsAggregator()
+            limit = int(request.query_params.get('limit', 10))
+            top_assists = aggregator.get_top_assists(str(tournament.id), limit=limit)
+            
+            # Convert PlayerStats objects to dictionaries
+            assists_data = [
+                {
+                    'rank': player.rank,
+                    'player_id': player.player_id,
+                    'player_name': player.player_name,
+                    'team_name': player.team_name,
+                    'goals': player.goals,
+                    'assists': player.assists
+                }
+                for player in top_assists
+            ]
+            
+            return Response({
+                'tournament_id': str(tournament.id),
+                'tournament_name': tournament.title,
+                'top_assists': assists_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to get top assists: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class TournamentRegistrationViewSet(viewsets.ModelViewSet):
     queryset = TournamentRegistration.objects.all()
@@ -172,17 +387,29 @@ def create_tournament(request):
         # If a venue is selected, create a booking for it
         venue_booking = None
         if linked_venue_id:
-            from venues.models import Venue, VenueBooking, VenueAvailability
-            from datetime import datetime
+            from venues.models import Venue, VenueBooking
+            from datetime import datetime, timedelta
             
             try:
                 venue = Venue.objects.get(id=linked_venue_id)
                 
+                start_time_str = data.get('start_time')
+                end_time_str = data.get('end_time')
+                
+                # Default to 1 hour after start_time if not provided or empty
+                if not end_time_str and start_time_str:
+                    try:
+                        start_dt = datetime.strptime(start_time_str, '%H:%M')
+                        end_dt = start_dt + timedelta(hours=1)
+                        end_time_str = end_dt.strftime('%H:%M')
+                    except Exception:
+                        end_time_str = start_time_str
+
                 # Create venue booking data
                 booking_data = {
                     'date': data.get('date'),
-                    'start_time': data.get('start_time'),
-                    'end_time': data.get('end_time', data.get('start_time')),  # Use start_time if end_time not provided
+                    'start_time': start_time_str,
+                    'end_time': end_time_str,
                     'purpose': f"Tournament: {data.get('title', 'Tournament')}",
                     'notes': f"Automatically booked for tournament creation. Tournament ID will be updated after creation."
                 }
@@ -355,6 +582,339 @@ def update_match_result(request, tournament_id, match_id):
 class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Match.objects.all().order_by('round_number', 'match_number')
     serializer_class = MatchSerializer
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=True, methods=['post'])
+    def submit_result(self, request, pk=None):
+        """
+        Submit match result with player statistics for league tournaments.
+        
+        Request body:
+        {
+            "home_score": 3,
+            "away_score": 2,
+            "player_stats": [
+                {"player_id": "uuid", "goals": 2, "assists": 1},
+                {"player_id": "uuid", "goals": 1, "assists": 0},
+                ...
+            ]
+        }
+        """
+        match = self.get_object()
+        tournament = match.tournament
+        
+        # Check if user is the organizer
+        if request.user != tournament.organizer:
+            return Response({
+                'error': 'Only tournament organizers can submit match results'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Validate tournament type
+        if tournament.tournament_type != 'league':
+            return Response({
+                'error': 'Player statistics submission is only available for league tournaments'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get data from request
+        home_score = request.data.get('home_score')
+        away_score = request.data.get('away_score')
+        player_stats = request.data.get('player_stats', [])
+        
+        # Validate scores are provided
+        if home_score is None or away_score is None:
+            return Response({
+                'error': 'Both home_score and away_score are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate scores are non-negative integers
+        try:
+            home_score = int(home_score)
+            away_score = int(away_score)
+            if home_score < 0 or away_score < 0:
+                return Response({
+                    'error': 'Scores must be non-negative integers'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({
+                'error': 'Scores must be valid integers'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get teams from match
+        home_team = match.team1
+        away_team = match.team2
+        
+        if not home_team or not away_team:
+            return Response({
+                'error': 'Match does not have both teams assigned'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate player statistics
+        from teams.models import TeamMembership
+        from tournaments.models import PlayerMatchStats
+        
+        home_goals_sum = 0
+        away_goals_sum = 0
+        validated_stats = []
+        seen_players = set()  # Track players to prevent duplicates
+        
+        for stat in player_stats:
+            player_id = stat.get('player_id')
+            goals = stat.get('goals', 0)
+            assists = stat.get('assists', 0)
+            
+            if not player_id:
+                return Response({
+                    'error': 'Each player stat must include player_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check for duplicate player entries
+            if player_id in seen_players:
+                return Response({
+                    'error': f'Duplicate statistics entry for player {player_id}. Each player can only have one statistics entry per match.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            seen_players.add(player_id)
+            
+            # Validate goals and assists are non-negative
+            try:
+                goals = int(goals)
+                assists = int(assists)
+                if goals < 0 or assists < 0:
+                    return Response({
+                        'error': 'Goals and assists must be non-negative integers'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({
+                    'error': 'Goals and assists must be valid integers'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Skip if both goals and assists are 0
+            if goals == 0 and assists == 0:
+                continue
+            
+            # Validate player exists
+            try:
+                player = CustomUser.objects.get(id=player_id, role='PLAYER')
+            except CustomUser.DoesNotExist:
+                return Response({
+                    'error': f'Player with ID {player_id} not found or is not a player'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if player belongs to one of the teams
+            is_home_player = TeamMembership.objects.filter(
+                team=home_team,
+                player=player,
+                is_active=True
+            ).exists()
+            
+            is_away_player = TeamMembership.objects.filter(
+                team=away_team,
+                player=player,
+                is_active=True
+            ).exists()
+            
+            if not is_home_player and not is_away_player:
+                return Response({
+                    'error': f'Player {player.full_name} is not a member of either team in this match. Players must belong to one of the competing teams.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Ensure player is not on both teams (should not happen, but validate)
+            if is_home_player and is_away_player:
+                return Response({
+                    'error': f'Player {player.full_name} cannot be a member of both teams'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add goals to appropriate team total
+            if is_home_player:
+                home_goals_sum += goals
+            elif is_away_player:
+                away_goals_sum += goals
+            
+            validated_stats.append({
+                'player': player,
+                'goals': goals,
+                'assists': assists
+            })
+        
+        # Validate sum of player goals equals team scores
+        if home_goals_sum != home_score:
+            return Response({
+                'error': f'Sum of home team player goals ({home_goals_sum}) must equal home team score ({home_score})'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if away_goals_sum != away_score:
+            return Response({
+                'error': f'Sum of away team player goals ({away_goals_sum}) must equal away team score ({away_score})'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update match with scores
+        match.player1_score = home_score  # For team tournaments, team scores are stored in player score fields
+        match.player2_score = away_score
+        match.status = 'COMPLETED'
+        
+        # Determine winner
+        if home_score > away_score:
+            match.winning_team = home_team
+        elif away_score > home_score:
+            match.winning_team = away_team
+        # else: draw, no winner
+        
+        match.save()
+        
+        # Delete existing player stats for this match (if updating)
+        PlayerMatchStats.objects.filter(match=match).delete()
+        
+        # Create player statistics records
+        player_stats_objects = []
+        for stat in validated_stats:
+            player_stats_objects.append(
+                PlayerMatchStats(
+                    player=stat['player'],
+                    match=match,
+                    goals=stat['goals'],
+                    assists=stat['assists']
+                )
+            )
+        
+        if player_stats_objects:
+            PlayerMatchStats.objects.bulk_create(player_stats_objects)
+        
+        # Trigger standings recalculation (happens automatically on next request)
+        # The standings calculator reads from completed matches
+        
+        return Response({
+            'message': 'Match result submitted successfully',
+            'match_id': str(match.id),
+            'home_score': home_score,
+            'away_score': away_score,
+            'player_stats_count': len(player_stats_objects),
+            'status': 'COMPLETED'
+        }, status=status.HTTP_200_OK)
+
+
+class PlayerStatsViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for player statistics in league tournaments.
+    Provides endpoints for viewing aggregated player statistics.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    # No default queryset since we use custom actions
+    queryset = CustomUser.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def my_stats(self, request):
+        """
+        Get authenticated player's statistics across all league tournaments.
+        
+        Query params:
+        - tournament_id (optional): Filter stats by specific tournament
+        """
+        player = request.user
+        
+        if player.role != 'PLAYER':
+            return Response({
+                'error': 'Only players can view their statistics'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        tournament_id = request.query_params.get('tournament_id')
+        
+        try:
+            from tournaments.services.player_stats_aggregator import PlayerStatsAggregator
+            
+            aggregator = PlayerStatsAggregator()
+            stats = aggregator.get_player_stats(
+                player_id=str(player.id),
+                tournament_id=tournament_id
+            )
+            
+            # Format rank display
+            rank_suffix = self._get_ordinal_suffix(stats.rank)
+            rank_display = f"{stats.rank}{rank_suffix} out of {stats.total_players} players"
+            
+            return Response({
+                'player_id': stats.player_id,
+                'player_name': stats.player_name,
+                'team_name': stats.team_name,
+                'goals': stats.goals,
+                'assists': stats.assists,
+                'rank': stats.rank,
+                'rank_display': rank_display,
+                'total_players': stats.total_players
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to get player statistics: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'])
+    def tournament_stats(self, request):
+        """
+        Get player stats for a specific tournament.
+        
+        Query params:
+        - tournament_id (required): Tournament to get stats for
+        - player_id (optional): Specific player ID (defaults to authenticated user)
+        """
+        tournament_id = request.query_params.get('tournament_id')
+        
+        if not tournament_id:
+            return Response({
+                'error': 'tournament_id query parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get player ID (default to authenticated user)
+        player_id = request.query_params.get('player_id', str(request.user.id))
+        
+        # If requesting another player's stats, allow it (public information)
+        
+        try:
+            from tournaments.services.player_stats_aggregator import PlayerStatsAggregator
+            
+            aggregator = PlayerStatsAggregator()
+            stats = aggregator.get_player_stats(
+                player_id=player_id,
+                tournament_id=tournament_id
+            )
+            
+            # Format rank display
+            rank_suffix = self._get_ordinal_suffix(stats.rank)
+            rank_display = f"{stats.rank}{rank_suffix} out of {stats.total_players} players"
+            
+            return Response({
+                'tournament_id': tournament_id,
+                'player_id': stats.player_id,
+                'player_name': stats.player_name,
+                'team_name': stats.team_name,
+                'goals': stats.goals,
+                'assists': stats.assists,
+                'rank': stats.rank,
+                'rank_display': rank_display,
+                'total_players': stats.total_players
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to get tournament statistics: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_ordinal_suffix(self, number: int) -> str:
+        """
+        Get ordinal suffix for a number (1st, 2nd, 3rd, 4th, etc.)
+        
+        Args:
+            number: The number to get suffix for
+            
+        Returns:
+            Ordinal suffix string ('st', 'nd', 'rd', or 'th')
+        """
+        if 10 <= number % 100 <= 20:
+            return 'th'
+        else:
+            suffix_map = {1: 'st', 2: 'nd', 3: 'rd'}
+            return suffix_map.get(number % 10, 'th')
+
+
 
 class RefereeBookingViewSet(viewsets.ModelViewSet):
     queryset = RefereeBooking.objects.all()
@@ -518,6 +1078,24 @@ def tournament_referees(request, tournament_id):
         })
     
     return Response(referees, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tournament_matches(request, tournament_id):
+    """Get all matches for a tournament"""
+    tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    # Get all matches for this tournament
+    matches = Match.objects.filter(tournament=tournament).select_related(
+        'team1', 'team2', 'winner', 'winning_team'
+    ).order_by('round_number', 'match_number')
+    
+    serializer = MatchSerializer(matches, many=True)
+    
+    return Response({
+        'matches': serializer.data,
+        'total_matches': matches.count()
+    }, status=status.HTTP_200_OK)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -1066,12 +1644,16 @@ def generate_tournament_bracket(request, tournament_id):
                 'error': 'Tournament bracket already exists. Delete existing matches first if you want to regenerate.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Generate bracket - only single elimination supported
-        if tournament.tournament_type == 'SINGLE_ELIMINATION':
+        # Generate bracket - supports knockout and single elimination
+        if tournament.tournament_type in ['SINGLE_ELIMINATION', 'knockout']:
             matches = generate_single_elimination_bracket(tournament, participants)
+        elif tournament.tournament_type == 'league':
+            return Response({
+                'error': 'League tournaments use round-robin scheduling. Use the generate schedule endpoint instead.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({
-                'error': f'Tournament type {tournament.tournament_type} is not supported. Only single elimination is available.'
+                'error': f'Tournament type {tournament.tournament_type} is not supported.'
             }, status=status.HTTP_501_NOT_IMPLEMENTED)
         
         # Update tournament status
@@ -1119,118 +1701,139 @@ def generate_single_elimination_bracket(tournament, participants):
     # Calculate how many rounds we need
     total_rounds = math.ceil(math.log2(next_power_of_2))
     
-    # Intelligent Bye Distribution:
-    # Instead of random shuffle including Nones (which risks None vs None),
-    # we explicitly pair teams with Nones (Byes) and remaining teams with each other.
+    # FIXED: Proper bracket generation
+    # For power of 2 participants (2, 4, 8, 16, etc.), no BYEs needed
+    # For non-power of 2, calculate how many teams must play in round 1
     
-    # Teams that get a bye (advance automatically)
-    # We take the first 'byes_needed' teams
-    teams_with_bye = participants_list[:byes_needed]
-    
-    # Teams that must play in Round 1
-    teams_playing = participants_list[byes_needed:]
-    
-    # Prepare pairs for Round 1
-    round_1_pairs = []
-    
-    # 1. Pair teams that play each other
-    for i in range(0, len(teams_playing), 2):
-        round_1_pairs.append((teams_playing[i], teams_playing[i+1]))
-        
-    # 2. Pair bye teams with None
-    for team in teams_with_bye:
-        round_1_pairs.append((team, None))
-        
-    # Shuffle the placement of matches in the bracket
-    random.shuffle(round_1_pairs)
-    
-    # Flatten to get the participant list for the loop
-    current_round_participants = []
-    for p1, p2 in round_1_pairs:
-        current_round_participants.extend([p1, p2])
-        
-    # Round 1 generation logic continues below...
     round_number = 1
-    # current_round_participants is already set above
     
-    # Only create matches for the first round with actual participants
-    # Future rounds will be created as empty matches that get filled when winners advance
-    
-    # First round: Create matches between actual participants
-    first_round_participants = []
-    first_round_matches = []
-    
-    matches_in_round = len(current_round_participants) // 2
-    print(f"Round {round_number}: {len(current_round_participants)} participants, {matches_in_round} matches")
-    
-    for i in range(matches_in_round):
-        participant1 = current_round_participants[i * 2]
-        participant2 = current_round_participants[i * 2 + 1]
+    if byes_needed == 0:
+        # Perfect power of 2 - all teams play in round 1
+        first_round_matches = participant_count // 2
+        print(f"Perfect bracket: {participant_count} teams, {first_round_matches} matches in round 1")
         
-        # Calculate match time
-        match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
-        match_time = timezone.make_aware(
-            timezone.datetime.combine(tournament.date, tournament.start_time)
-        ) + match_time_offset
-        
-        # Handle BYE scenarios - CRITICAL FIX
-        # We must create a Match object even for a BYE, so the graph is connected
-        # and we can track the "winner" advancing from a specific match ID.
-        
-        is_bye = (participant1 is None or participant2 is None)
-        
-        # If double bye (both None), skip.
-        if participant1 is None and participant2 is None:
-            continue
+        for i in range(first_round_matches):
+            participant1 = participants_list[i * 2]
+            participant2 = participants_list[i * 2 + 1]
             
-        # Determine status and notes
-        current_status = 'COMPLETED' if is_bye else 'SCHEDULED'
-        notes = 'BYE' if is_bye else ''
-        
-        # Create the match object
-        if tournament.registration_type == 'INDIVIDUAL':
-            match = Match.objects.create(
-                tournament=tournament,
-                round_number=round_number,
-                match_number=match_number,
-                player1=participant1,
-                player2=participant2,
-                scheduled_time=match_time,
-                status=current_status,
-                notes=notes
-            )
+            # Calculate match time
+            match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
+            match_time = timezone.make_aware(
+                timezone.datetime.combine(tournament.date, tournament.start_time)
+            ) + match_time_offset
             
-            if is_bye:
-                winner = participant1 if participant1 else participant2
-                match.winner = winner
-                match.save()
-                
-        else:  # TEAM
-            match = Match.objects.create(
-                tournament=tournament,
-                round_number=round_number,
-                match_number=match_number,
-                team1=participant1,
-                team2=participant2,
-                scheduled_time=match_time,
-                status=current_status,
-                notes=notes
-            )
+            # Create the match
+            if tournament.registration_type == 'INDIVIDUAL':
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    player1=participant1,
+                    player2=participant2,
+                    scheduled_time=match_time,
+                    status='SCHEDULED'
+                )
+            else:  # TEAM
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    team1=participant1,
+                    team2=participant2,
+                    scheduled_time=match_time,
+                    status='SCHEDULED'
+                )
             
-            if is_bye:
-                winner = participant1 if participant1 else participant2
-                match.winning_team = winner
-                match.save()
+            matches.append(match)
+            match_number += 1
+    else:
+        # Non-power of 2 - need BYEs
+        # Calculate: how many teams must play to reduce to next_power_of_2/2?
+        # Example: 6 teams -> next power = 8, need 4 teams in round 2
+        # So 2 teams get BYE, 4 teams play (2 matches)
+        teams_in_round_2 = next_power_of_2 // 2
+        teams_that_must_play = (participant_count - teams_in_round_2) * 2
         
-        matches.append(match)
-        match_number += 1
+        teams_playing = participants_list[:teams_that_must_play]
+        teams_with_bye = participants_list[teams_that_must_play:]
         
-    print(f"Created {len(matches)} matches in round 1 (including BYEs)")
+        print(f"BYE bracket: {len(teams_playing)} teams play in R1, {len(teams_with_bye)} teams get BYE")
+        print(f"After R1: {len(teams_playing)//2} winners + {len(teams_with_bye)} BYE teams = {teams_in_round_2} teams in R2")
+        
+        # Create matches for teams that play
+        for i in range(0, len(teams_playing), 2):
+            participant1 = teams_playing[i]
+            participant2 = teams_playing[i + 1]
+            
+            # Calculate match time
+            match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
+            match_time = timezone.make_aware(
+                timezone.datetime.combine(tournament.date, tournament.start_time)
+            ) + match_time_offset
+            
+            # Create the match
+            if tournament.registration_type == 'INDIVIDUAL':
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    player1=participant1,
+                    player2=participant2,
+                    scheduled_time=match_time,
+                    status='SCHEDULED'
+                )
+            else:  # TEAM
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    team1=participant1,
+                    team2=participant2,
+                    scheduled_time=match_time,
+                    status='SCHEDULED'
+                )
+            
+            matches.append(match)
+            match_number += 1
+        
+        # Create BYE matches for teams that advance automatically
+        for team in teams_with_bye:
+            match_time_offset = timedelta(hours=(match_number - 1) * 1.5)
+            match_time = timezone.make_aware(
+                timezone.datetime.combine(tournament.date, tournament.start_time)
+            ) + match_time_offset
+            
+            if tournament.registration_type == 'INDIVIDUAL':
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    player1=team,
+                    player2=None,
+                    scheduled_time=match_time,
+                    status='COMPLETED',
+                    notes='BYE',
+                    winner=team
+                )
+            else:  # TEAM
+                match = Match.objects.create(
+                    tournament=tournament,
+                    round_number=round_number,
+                    match_number=match_number,
+                    team1=team,
+                    team2=None,
+                    scheduled_time=match_time,
+                    status='COMPLETED',
+                    notes='BYE',
+                    winning_team=team
+                )
+            
+            matches.append(match)
+            match_number += 1
+    
+    print(f"Created {len(matches)} matches in round 1")
     
     # Generate subsequent rounds (empty placeholders)
-    # Since we now create matches for BYEs, the number of matches in Round 1
-    # is exactly next_power_of_2 / 2.
-    
     current_round_matches_count = len(matches)
     
     while current_round_matches_count > 1:
@@ -1246,7 +1849,7 @@ def generate_single_elimination_bracket(tournament, participants):
             ) + match_time_offset
             
             if tournament.registration_type == 'INDIVIDUAL':
-                 match = Match.objects.create(
+                match = Match.objects.create(
                     tournament=tournament,
                     round_number=round_number,
                     match_number=match_number,
@@ -1255,7 +1858,7 @@ def generate_single_elimination_bracket(tournament, participants):
                     notes='Winners from previous round will be assigned'
                 )
             else:
-                 match = Match.objects.create(
+                match = Match.objects.create(
                     tournament=tournament,
                     round_number=round_number,
                     match_number=match_number,
@@ -1268,17 +1871,18 @@ def generate_single_elimination_bracket(tournament, participants):
             match_number += 1
             
         current_round_matches_count = matches_in_this_round
-        
-    # Auto-advance winners from BYE matches
-    # We must do this AFTER creating all rounds so the target matches exist
-    from teams.services.match_scorer import MatchScorer
-    print("Auto-advancing BYE winners...")
-    for m in matches:
-        if m.round_number == 1 and m.notes == 'BYE':
-            try:
-                MatchScorer._advance_winner_to_next_round(m)
-            except Exception as e:
-                print(f"Failed to advance Bye match {m.id}: {e}")
+    
+    # Auto-advance winners from BYE matches to next round
+    if byes_needed > 0:
+        from teams.services.match_scorer import MatchScorer
+        print("Auto-advancing BYE winners...")
+        for m in matches:
+            if m.round_number == 1 and m.notes == 'BYE':
+                try:
+                    MatchScorer._advance_winner_to_next_round(m)
+                    print(f"Advanced BYE winner from match {m.match_number}")
+                except Exception as e:
+                    print(f"Failed to advance BYE match {m.match_number}: {e}")
     
     print(f"Created {len(matches)} matches across {round_number} rounds")
     print(f"Round structure: {[len([m for m in matches if m.round_number == r]) for r in range(1, round_number + 1)]}")

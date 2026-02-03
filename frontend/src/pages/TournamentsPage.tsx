@@ -85,9 +85,10 @@ export default function TournamentsPage() {
     { value: 'COMPLETED', label: 'Completed' }
   ];
 
-  // Tournament type is now fixed to single elimination only
+  // Tournament type options for filtering
   const tournamentTypeOptions = [
-    { value: 'SINGLE_ELIMINATION', label: 'Single Elimination' }
+    { value: 'knockout', label: 'Knockout' },
+    { value: 'league', label: 'League' }
   ];
 
   const registrationTypeOptions = [
@@ -473,6 +474,17 @@ export default function TournamentsPage() {
                 </select>
 
                 <select
+                  value={selectedTournamentType}
+                  onChange={(e) => setSelectedTournamentType(e.target.value)}
+                  className="px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                >
+                  <option value="">All Formats</option>
+                  {tournamentTypeOptions.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+
+                <select
                   value={selectedRegistrationType}
                   onChange={(e) => setSelectedRegistrationType(e.target.value)}
                   className="px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
@@ -624,7 +636,21 @@ export default function TournamentsPage() {
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">{tournament.title}</h3>
-                            <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)}</p>
+                              {tournament.tournament_type && (
+                                <>
+                                  <span className="text-gray-300">•</span>
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                    tournament.tournament_type === 'league' 
+                                      ? 'bg-indigo-100 text-indigo-700' 
+                                      : 'bg-purple-100 text-purple-700'
+                                  }`}>
+                                    {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tournament.status)}`}>
                             {tournament.status}
@@ -720,7 +746,21 @@ export default function TournamentsPage() {
                           <div className="flex items-start justify-between mb-2">
                             <div>
                               <h3 className="text-xl font-semibold text-gray-900 mb-1">{tournament.title}</h3>
-                              <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)} • {tournament.tournament_type.replace('_', ' ')}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-gray-500">{formatSportName(tournament.sport_type)}</p>
+                                {tournament.tournament_type && (
+                                  <>
+                                    <span className="text-gray-300">•</span>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                      tournament.tournament_type === 'league' 
+                                        ? 'bg-indigo-100 text-indigo-700' 
+                                        : 'bg-purple-100 text-purple-700'
+                                    }`}>
+                                      {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(tournament.status)}`}>
                               {tournament.status}

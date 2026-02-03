@@ -15,6 +15,20 @@ export { default as FutsalScoreForm } from './FutsalScoreForm';
 export { default as ModernFutsalScorer } from './ModernFutsalScorer';
 export { default as BadmintonScoreForm } from './BadmintonScoreForm';
 export { default as MatchScoringInterface } from './MatchScoringInterface';
+export { default as LeagueMatchScorer } from './LeagueMatchScorer';
+export { default as PlayerStatsInput } from './PlayerStatsInput';
+
+// Tournament Components
+export { default as TournamentTypeSelector } from './TournamentTypeSelector';
+export { default as LeagueOptionsForm } from './LeagueOptionsForm';
+export { default as LeagueScheduleTable } from './LeagueScheduleTable';
+export { LeagueStandingsTable } from './LeagueStandingsTable';
+export type { StandingsRow } from './LeagueStandingsTable';
+export { TopScorersTable } from './TopScorersTable';
+export { TopAssistsTable } from './TopAssistsTable';
+export type { PlayerStats } from './TopScorersTable';
+export { default as FutsalStatsCard } from './FutsalStatsCard';
+export { default as PlayerStatsDashboard } from './PlayerStatsDashboard';
 
 // Player Experience Components
 export * from './player';

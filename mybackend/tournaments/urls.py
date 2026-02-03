@@ -8,6 +8,7 @@ router.register(r'tournaments', views.TournamentViewSet)
 router.register(r'registrations', views.TournamentRegistrationViewSet)
 router.register(r'matches', views.MatchViewSet)
 router.register(r'referee-bookings', views.RefereeBookingViewSet)
+router.register(r'player-stats', views.PlayerStatsViewSet, basename='player-stats')
 
 # URL patterns for tournaments app
 urlpatterns = [
@@ -22,6 +23,7 @@ urlpatterns = [
     path('<uuid:tournament_id>/participants/', views.tournament_participants, name='tournament_participants'),
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/accept/', views.accept_tournament_participant, name='accept_participant'),
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/reject/', views.reject_tournament_participant, name='reject_participant'),
+    path('<uuid:tournament_id>/matches/', views.tournament_matches, name='tournament_matches'),
     path('<uuid:tournament_id>/matches/<uuid:match_id>/result/', views.update_match_result, name='update_match_result'),
     path('<uuid:tournament_id>/team-participants/<uuid:registration_id>/accept/', views.accept_team_participant, name='accept_team_participant'),
     path('<uuid:tournament_id>/team-participants/<uuid:registration_id>/reject/', views.reject_team_participant, name='reject_team_participant'),

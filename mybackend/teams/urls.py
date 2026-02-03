@@ -27,6 +27,13 @@ urlpatterns = [
     path('invitations/<uuid:invitation_id>/respond/', views.respond_to_invitation, name='respond_to_invitation'),  # POST
     path('invitations/<uuid:invitation_id>/cancel/', views.cancel_invitation, name='cancel_invitation'),  # DELETE
     
+    # Team join request endpoints
+    path('<uuid:team_id>/join-requests/send/', views.request_to_join_team, name='request_to_join_team'),  # POST
+    path('<uuid:team_id>/join-requests/', views.list_team_join_requests, name='list_team_join_requests'),  # GET
+    path('join-requests/', views.list_my_join_requests, name='list_my_join_requests'),  # GET
+    path('join-requests/<uuid:request_id>/respond/', views.respond_to_join_request, name='respond_to_join_request'),  # POST
+    path('join-requests/<uuid:request_id>/cancel/', views.cancel_join_request, name='cancel_join_request'),  # DELETE
+    
     # Activity History endpoints
     path('<uuid:team_id>/activity/', views.get_team_activity_history, name='team_activity_history'),
     path('<uuid:team_id>/activity/summary/', views.get_team_activity_summary, name='team_activity_summary'),

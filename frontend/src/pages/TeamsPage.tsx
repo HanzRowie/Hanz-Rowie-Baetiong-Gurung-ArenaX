@@ -100,17 +100,19 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
 
   const handleRequestToJoin = async (teamId: string) => {
     try {
-      // For now, we'll show an alert. In a full implementation, this would send a join request
-      alert('Join request functionality will be implemented soon. Please contact the team owner directly.');
+      const response = await TeamService.requestToJoinTeam(teamId);
       
-      // TODO: Implement actual join request functionality
-      // await TeamService.requestToJoin(teamId);
-      // queryClient.invalidateQueries({ queryKey: ['teams'] });
-      
-      console.log('Join request for team:', teamId); // Use teamId to avoid warning
-    } catch (error) {
+      if (response.success) {
+        toastService.success('Join request sent successfully!');
+        // Refresh the discoverable teams list
+        queryClient.invalidateQueries({ queryKey: ['teams', 'discover'] });
+      } else {
+        toastService.error(response.error || 'Failed to send join request');
+      }
+    } catch (error: any) {
       console.error('Error requesting to join team:', error);
-      alert('Failed to send join request. Please try again.');
+      const errorMessage = error.response?.data?.error || 'Failed to send join request. Please try again.';
+      toastService.error(errorMessage);
     }
   };
 
@@ -189,7 +191,15 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
           >
             View Details
           </button>
-          {membership?.role === 'OWNER' || membership?.role === 'LEADER' ? (
+          {membership?.role === 'OWNER' && (
+            <button 
+              onClick={() => navigate(`/teams/${team.id}/edit`)}
+              className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            >
+              Edit Team
+            </button>
+          )}
+          {(membership?.role === 'OWNER' || membership?.role === 'LEADER') && (
             <button 
               onClick={() => handleRegisterForTournament(team)}
               className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
@@ -197,7 +207,7 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
               <Trophy className="w-4 h-4 inline mr-1" />
               Register
             </button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

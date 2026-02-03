@@ -54,6 +54,7 @@ export const API_ENDPOINTS = {
     REGISTER: (id: string) => `/api/tournaments/${id}/register/`,
     WITHDRAW: (id: string) => `/api/tournaments/${id}/withdraw/`,
     GENERATE_BRACKET: (id: string) => `/api/tournaments/${id}/generate-bracket/`,
+    GENERATE_SCHEDULE: (id: string) => `/api/tournaments/tournaments/${id}/generate_schedule/`,
     BRACKET: (id: string) => `/api/tournaments/${id}/bracket/`,
     MATCH_RESULT: (tournamentId: string, matchId: string) => `/api/tournaments/${tournamentId}/matches/${matchId}/result/`,
     PARTICIPANTS: (id: string) => `/api/tournaments/${id}/participants/`,
@@ -61,6 +62,9 @@ export const API_ENDPOINTS = {
     REJECT_PARTICIPANT: (tournamentId: string, participantId: string) => `/api/tournaments/${tournamentId}/participants/${participantId}/reject/`,
     BULK_ACCEPT_PARTICIPANTS: (id: string) => `/api/tournaments/${id}/participants/bulk-accept/`,
     BULK_REJECT_PARTICIPANTS: (id: string) => `/api/tournaments/${id}/participants/bulk-reject/`,
+    STANDINGS: (id: string) => `/api/tournaments/tournaments/${id}/standings/`,
+    TOP_SCORERS: (id: string) => `/api/tournaments/tournaments/${id}/top_scorers/`,
+    TOP_ASSISTS: (id: string) => `/api/tournaments/tournaments/${id}/top_assists/`,
   },
   DASHBOARD: {
     STATS: '/api/accounts/dashboard/stats/',

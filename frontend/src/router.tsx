@@ -21,8 +21,7 @@ import {
   EditVenuePage,
   VenueDetailsPage,
   NotificationsPage,
-  GlobalSearchPage,
-  TournamentManagementPage
+  GlobalSearchPage
 } from './pages';
 import TournamentsPage from './pages/TournamentsPage';
 import TournamentDetailPage from './pages/TournamentDetailPage';
@@ -42,6 +41,7 @@ import VenueSearchPage from './pages/VenueSearchPage';
 import BookingsPage from './pages/BookingsPage';
 import TeamsPage from './pages/TeamsPage';
 import TeamDetailsPage from './pages/TeamDetailsPage';
+import EditTeamPage from './pages/EditTeamPage';
 import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
 import MyStatsPage from './pages/MyStatsPage';
 import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
@@ -112,10 +112,6 @@ export const router = createBrowserRouter([
         element: <EditTournamentPage />,
       },
       {
-        path: 'tournaments/:tournamentId/manage',
-        element: <TournamentManagementPage />,
-      },
-      {
         path: 'my-tournaments',
         element: <MyTournamentsPage />,
       },
@@ -144,6 +140,10 @@ export const router = createBrowserRouter([
       {
         path: 'teams/:teamId',
         element: <TeamDetailsPage />,
+      },
+      {
+        path: 'teams/:teamId/edit',
+        element: <EditTeamPage />,
       },
       {
         path: 'teams/analytics',

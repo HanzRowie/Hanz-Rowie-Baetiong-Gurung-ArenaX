@@ -484,8 +484,8 @@ class MatchScorer:
         Args:
             match: The completed match with a determined winner
         """
-        # Only advance winners in single elimination tournaments
-        if match.tournament.tournament_type != 'SINGLE_ELIMINATION':
+        # Only advance winners in single elimination/knockout tournaments
+        if match.tournament.tournament_type not in ['SINGLE_ELIMINATION', 'knockout']:
             print(f"Not advancing winner - tournament type is {match.tournament.tournament_type}")
             return
         

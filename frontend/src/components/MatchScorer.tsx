@@ -4,6 +4,7 @@ import { Button } from '@/design-system/components/Button';
 import { Modal } from '@/design-system/components/Modal';
 import { tournamentService } from '@/services/tournamentService';
 import { ModernFutsalScorer } from './ModernFutsalScorer';
+import { LeagueMatchScorer } from './LeagueMatchScorer';
 import { BadmintonScoreForm } from './BadmintonScoreForm';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-hot-toast';
@@ -15,6 +16,7 @@ interface Match {
     title: string;
     sport_type: 'FUTSAL' | 'BADMINTON';
     registration_type?: 'TEAM' | 'INDIVIDUAL';
+    tournament_type?: string;
   };
   round_number: number;
   match_number: number;
@@ -114,7 +116,17 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
     try {
       let response;
 
-      if (match.tournament.sport_type === 'FUTSAL') {
+      // Check if this is a league tournament
+      const isLeagueTournament = match.tournament.tournament_type === 'league';
+
+      if (isLeagueTournament) {
+        // Use league match result submission endpoint
+        response = await tournamentService.submitMatchResult(
+          match.tournament.id,
+          match.id,
+          scoreData
+        );
+      } else if (match.tournament.sport_type === 'FUTSAL') {
         response = await tournamentService.recordFutsalMatchScore(
           match.tournament.id,
           match.id,
@@ -158,7 +170,17 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
     try {
       let response;
 
-      if (match.tournament.sport_type === 'FUTSAL') {
+      // Check if this is a league tournament
+      const isLeagueTournament = match.tournament.tournament_type === 'league';
+
+      if (isLeagueTournament) {
+        // Use league match result submission endpoint
+        response = await tournamentService.submitMatchResult(
+          match.tournament.id,
+          match.id,
+          scoreData
+        );
+      } else if (match.tournament.sport_type === 'FUTSAL') {
         response = await tournamentService.recordFutsalMatchScore(
           match.tournament.id,
           match.id,
@@ -310,6 +332,14 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
               <span className="ml-3 text-gray-600">Loading match details...</span>
             </div>
+          ) : match.tournament?.tournament_type === 'league' ? (
+            <LeagueMatchScorer
+              match={matchDetails || match}
+              onSubmit={match.status === 'COMPLETED' ? handleUpdateScore : handleScoreSubmit}
+              onCancel={() => setIsOpen(false)}
+              isLoading={isLoading}
+              isReadOnly={!canScoreMatch}
+            />
           ) : match.tournament?.sport_type === 'FUTSAL' ? (
             <ModernFutsalScorer
               match={matchDetails || match}

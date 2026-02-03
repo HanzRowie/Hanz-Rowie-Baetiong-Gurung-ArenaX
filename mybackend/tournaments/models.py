@@ -14,6 +14,8 @@ class Tournament(models.Model):
 
     TOURNAMENT_TYPES = (
         ('SINGLE_ELIMINATION', 'Single Elimination'),
+        ('knockout', 'Knockout'),
+        ('league', 'League'),
     )
 
     REGISTRATION_TYPES = (
@@ -31,7 +33,7 @@ class Tournament(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     sport_type = models.CharField(max_length=50, choices=SPORT_TYPES)
-    tournament_type = models.CharField(max_length=20, choices=TOURNAMENT_TYPES, default='SINGLE_ELIMINATION')
+    tournament_type = models.CharField(max_length=20, choices=TOURNAMENT_TYPES, default='knockout', db_index=True)
     registration_type = models.CharField(max_length=15, choices=REGISTRATION_TYPES, default='INDIVIDUAL')
     
     # Team-specific requirements
@@ -136,6 +138,50 @@ class Tournament(models.Model):
         max_players = min_players + (requirements['max_substitutes'] if requirements['allow_substitutes'] else 0)
         
         return min_players <= selected_players_count <= max_players
+    
+    def clean(self):
+        """Validate model fields before saving"""
+        from django.core.exceptions import ValidationError
+        
+        # Validate that Futsal tournaments are always team-based
+        if self.sport_type == 'FUTSAL' and self.registration_type == 'INDIVIDUAL':
+            raise ValidationError({
+                'registration_type': 'Futsal tournaments must be team-based. Please select TEAM registration type.'
+            })
+        
+        # Validate tournament_type is one of the allowed values
+        valid_types = ['knockout', 'league', 'SINGLE_ELIMINATION']
+        if self.tournament_type and self.tournament_type not in valid_types:
+            raise ValidationError({
+                'tournament_type': f'Invalid tournament type. Must be one of: {", ".join(valid_types)}'
+            })
+        
+        # Prevent tournament type change if matches exist
+        if self.pk:  # Only check for existing tournaments
+            try:
+                old_instance = Tournament.objects.get(pk=self.pk)
+                if old_instance.tournament_type != self.tournament_type:
+                    # Check if matches exist
+                    if Match.objects.filter(tournament=self).exists():
+                        raise ValidationError({
+                            'tournament_type': 'Cannot change tournament type after matches have been created.'
+                        })
+            except Tournament.DoesNotExist:
+                pass
+        
+        # Validate min_participants is at least 2
+        if self.min_participants < 2:
+            raise ValidationError({
+                'min_participants': 'Minimum participants must be at least 2.'
+            })
+        
+        # Validate max_participants >= min_participants
+        if self.max_participants < self.min_participants:
+            raise ValidationError({
+                'max_participants': 'Maximum participants must be greater than or equal to minimum participants.'
+            })
+        
+        super().clean()
 
 # Tournament Registration
 class TournamentRegistration(models.Model):
@@ -196,6 +242,9 @@ class Match(models.Model):
     class Meta:
         unique_together = ('tournament', 'round_number', 'match_number')
         ordering = ['round_number', 'match_number']
+        indexes = [
+            models.Index(fields=['tournament', 'round_number']),
+        ]
 
     def __str__(self):
         if self.tournament.registration_type == 'TEAM':
@@ -229,3 +278,82 @@ class RefereeBooking(models.Model):
 
     def __str__(self):
         return f"Referee {self.referee.full_name} for Match {self.match.id} ({self.status})"
+
+
+# Player Match Statistics for League Tournaments
+class PlayerMatchStats(models.Model):
+    """
+    Tracks individual player statistics (goals and assists) for league tournament matches.
+    Used for calculating player leaderboards and individual performance metrics.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    player = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.CASCADE,
+        related_name='match_statistics',
+        limit_choices_to={'role': 'PLAYER'}
+    )
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='player_statistics'
+    )
+    goals = models.IntegerField(default=0)
+    assists = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('player', 'match')
+        indexes = [
+            models.Index(fields=['player', 'match']),
+            models.Index(fields=['match']),
+            models.Index(fields=['goals']),
+            models.Index(fields=['assists']),
+        ]
+        verbose_name = 'Player Match Statistics'
+        verbose_name_plural = 'Player Match Statistics'
+
+    def __str__(self):
+        return f"{self.player.full_name} - Match {self.match.id}: {self.goals}G {self.assists}A"
+    
+    def clean(self):
+        """Validate model fields before saving"""
+        from django.core.exceptions import ValidationError
+        from teams.models import TeamMembership
+        
+        # Validate goals and assists are non-negative
+        if self.goals < 0:
+            raise ValidationError({
+                'goals': 'Goals cannot be negative.'
+            })
+        
+        if self.assists < 0:
+            raise ValidationError({
+                'assists': 'Assists cannot be negative.'
+            })
+        
+        # Validate player belongs to one of the match teams
+        if self.match and self.player:
+            home_team = self.match.team1
+            away_team = self.match.team2
+            
+            if home_team and away_team:
+                is_home_player = TeamMembership.objects.filter(
+                    team=home_team,
+                    player=self.player,
+                    is_active=True
+                ).exists()
+                
+                is_away_player = TeamMembership.objects.filter(
+                    team=away_team,
+                    player=self.player,
+                    is_active=True
+                ).exists()
+                
+                if not is_home_player and not is_away_player:
+                    raise ValidationError({
+                        'player': f'Player {self.player.full_name} is not a member of either team in this match.'
+                    })
+        
+        super().clean()

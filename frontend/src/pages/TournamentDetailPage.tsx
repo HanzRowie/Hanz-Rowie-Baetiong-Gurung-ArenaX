@@ -2,16 +2,23 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Calendar, MapPin, Users, Trophy, DollarSign,
-  UserPlus, ArrowLeft, Settings, Play, Award, Info,
+  UserPlus, ArrowLeft, Play, Award, Info,
   CheckCircle, XCircle, AlertCircle, Download, Share2,
-  Edit, UserCheck, UserX, MessageCircle
+  Edit, UserCheck, UserX, MessageCircle, Trash2, Check
 } from 'lucide-react';
 import { tournamentService } from '@/services/tournamentService';
 import type { Tournament } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
 import BracketVisualization from '@/components/BracketVisualization';
+import { LeagueStandingsTable } from '@/components/LeagueStandingsTable';
+import LeagueScheduleTable from '@/components/LeagueScheduleTable';
+import type { StandingsRow } from '@/components/LeagueStandingsTable';
+import { TopScorersTable } from '@/components/TopScorersTable';
+import { TopAssistsTable } from '@/components/TopAssistsTable';
+import type { PlayerStats } from '@/components/TopScorersTable';
 import toastService from '@/services/toastService';
+import { api } from '@/services/api';
 
 export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -20,13 +27,21 @@ export default function TournamentDetailPage() {
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  const [standings, setStandings] = useState<StandingsRow[]>([]);
+  const [topScorers, setTopScorers] = useState<PlayerStats[]>([]);
+  const [topAssists, setTopAssists] = useState<PlayerStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'bracket' | 'rules'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'bracket' | 'schedule' | 'standings' | 'rules' | 'referees'>('overview');
   const [showShareModal, setShowShareModal] = useState(false);
   const [participantSearch, setParticipantSearch] = useState('');
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [referees, setReferees] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [refereesLoading, setRefereesLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const getTournamentsPath = () => {
     return user?.role === 'ORGANIZER' ? '/my-tournaments' : '/tournaments';
@@ -35,8 +50,68 @@ export default function TournamentDetailPage() {
   useEffect(() => {
     if (tournamentId) {
       loadTournament();
+      loadReferees();
+      loadMatches();
     }
   }, [tournamentId]);
+
+  const loadStandings = async () => {
+    if (!tournamentId) return;
+    
+    try {
+      const standingsData = await tournamentService.getStandings(tournamentId);
+      setStandings(standingsData);
+    } catch (err: any) {
+      console.error('Error fetching standings:', err);
+      setStandings([]);
+    }
+  };
+
+  const loadLeaderboards = async () => {
+    if (!tournamentId) return;
+    
+    try {
+      const [scorersData, assistsData] = await Promise.all([
+        tournamentService.getTopScorers(tournamentId),
+        tournamentService.getTopAssists(tournamentId)
+      ]);
+      
+      console.log('Top Scorers Data:', scorersData);
+      console.log('Top Assists Data:', assistsData);
+      
+      setTopScorers(scorersData);
+      setTopAssists(assistsData);
+    } catch (err: any) {
+      console.error('Error fetching leaderboards:', err);
+      setTopScorers([]);
+      setTopAssists([]);
+    }
+  };
+
+  const loadReferees = async () => {
+    if (!tournamentId) return;
+    
+    try {
+      const response = await api.get(`/api/tournaments/${tournamentId}/referees/`);
+      setReferees(Array.isArray(response.data) ? response.data : []);
+    } catch (err: any) {
+      console.error('Error fetching referees:', err);
+      setReferees([]);
+    }
+  };
+
+  const loadMatches = async () => {
+    if (!tournamentId) return;
+    
+    try {
+      const response = await api.get(`/api/tournaments/${tournamentId}/matches/`);
+      const matchesData = response.data.matches || response.data || [];
+      setMatches(matchesData);
+    } catch (err: any) {
+      console.error('Error fetching matches:', err);
+      setMatches([]);
+    }
+  };
 
   const loadTournament = async () => {
     try {
@@ -45,6 +120,12 @@ export default function TournamentDetailPage() {
       // Load tournament details
       const response = await tournamentService.getTournamentDetail(tournamentId!);
       setTournament(response.tournament);
+
+      // Load standings if this is a league tournament
+      if (response.tournament.tournament_type === 'league') {
+        await loadStandings();
+        await loadLeaderboards();
+      }
 
       // Load detailed participants for organizers, or basic participant info for others
       if (user?.role === 'ORGANIZER') {
@@ -125,13 +206,21 @@ export default function TournamentDetailPage() {
   };
 
   const handleGenerateBracket = async () => {
-    if (confirm('Generate tournament bracket? This cannot be undone.')) {
+    const isLeague = tournament?.tournament_type === 'league';
+    const actionText = isLeague ? 'Generate schedule' : 'Generate tournament bracket';
+    
+    if (confirm(`${actionText}? This cannot be undone.`)) {
       try {
-        await tournamentService.generateBracket(tournamentId!);
+        if (isLeague) {
+          await tournamentService.generateSchedule(tournamentId!);
+          toastService.success('Tournament schedule generated successfully!');
+        } else {
+          await tournamentService.generateBracket(tournamentId!);
+          toastService.success('Tournament bracket generated successfully!');
+        }
         await loadTournament();
-        toastService.success('Tournament bracket generated successfully!');
       } catch (err: any) {
-        toastService.error(err.message || 'Failed to generate bracket');
+        toastService.error(err.message || `Failed to generate ${isLeague ? 'schedule' : 'bracket'}`);
       }
     }
   };
@@ -149,6 +238,85 @@ export default function TournamentDetailPage() {
       toastService.success('Tournament link copied to clipboard!');
     }
     setShowShareModal(false);
+  };
+
+  const handleAddReferee = () => {
+    navigate(`/tournaments/${tournamentId}/select-referee`);
+  };
+
+  const handleRemoveReferee = async (refereeId: string) => {
+    if (!confirm('Are you sure you want to remove this referee assignment?')) return;
+    
+    try {
+      setRefereesLoading(true);
+      await api.delete(`/api/tournaments/${tournamentId}/referees/${refereeId}/`);
+      await loadReferees();
+      toastService.success('Referee removed successfully!');
+    } catch (err: any) {
+      toastService.error(err.response?.data?.error || 'Failed to remove referee');
+    } finally {
+      setRefereesLoading(false);
+    }
+  };
+
+  const handleGenerateSchedule = async () => {
+    if (!tournamentId) return;
+    
+    if (!confirm('Generate league schedule? This will create matches for all teams.')) return;
+    
+    try {
+      setScheduleLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+      
+      const result = await tournamentService.generateSchedule(tournamentId);
+      
+      setSuccessMessage(result.message || `Successfully generated ${result.matches_created} matches!`);
+      
+      // Refresh matches and standings
+      await loadMatches();
+      await loadStandings();
+      
+      // Auto-dismiss success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to generate schedule';
+      setError(errorMsg);
+      toastService.error(errorMsg);
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleEditMatch = async (matchId: string, updates: any) => {
+    if (!tournamentId) return;
+    
+    try {
+      // Use the correct endpoint for updating match results
+      await tournamentService.updateMatchResult(tournamentId, matchId, updates);
+      
+      // Refresh matches and standings
+      await loadMatches();
+      await loadStandings();
+      
+      setSuccessMessage('Match updated successfully!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Failed to update match';
+      toastService.error(errorMsg);
+    }
+  };
+
+  const handleDeleteTournament = async () => {
+    if (!confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) return;
+    
+    try {
+      await api.delete(`/api/tournaments/tournaments/${tournamentId}/`);
+      toastService.success('Tournament deleted successfully!');
+      navigate('/my-tournaments');
+    } catch (err: any) {
+      toastService.error(err.response?.data?.error || 'Failed to delete tournament');
+    }
   };
 
   const handleExportParticipants = () => {
@@ -352,13 +520,13 @@ export default function TournamentDetailPage() {
                   Share
                 </button>
 
-                {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && (
+                {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && matches.length === 0 && (
                   <button
                     onClick={handleGenerateBracket}
                     className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                   >
                     <Play className="h-4 w-4" />
-                    Generate Bracket
+                    {tournament.tournament_type === 'league' ? 'Generate Schedule' : 'Generate Bracket'}
                   </button>
                 )}
 
@@ -371,11 +539,11 @@ export default function TournamentDetailPage() {
                 </button>
 
                 <button
-                  onClick={() => navigate(`/tournaments/${tournament.id}/manage`)}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+                  onClick={handleDeleteTournament}
+                  className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
                 >
-                  <Settings className="h-4 w-4" />
-                  Manage
+                  <Trash2 className="h-4 w-4" />
+                  Delete
                 </button>
               </div>
             )}
@@ -455,8 +623,17 @@ export default function TournamentDetailPage() {
                   {[
                     { id: 'overview', label: 'Overview', icon: Info },
                     { id: 'participants', label: 'Participants', icon: Users },
-                    { id: 'bracket', label: 'Bracket', icon: Trophy },
+                    // Show schedule and standings tabs for league tournaments
+                    ...(tournament.tournament_type === 'league' 
+                      ? [
+                          { id: 'schedule', label: 'Schedule', icon: Calendar },
+                          { id: 'standings', label: 'Standings', icon: Trophy }
+                        ]
+                      // Show bracket tab only for knockout tournaments
+                      : [{ id: 'bracket', label: 'Bracket', icon: Trophy }]
+                    ),
                     { id: 'rules', label: 'Rules', icon: AlertCircle },
+                    { id: 'referees', label: 'Referees', icon: UserPlus },
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -782,12 +959,106 @@ export default function TournamentDetailPage() {
                 )}
 
                 {/* Bracket Tab */}
-                {activeTab === 'bracket' && (
+                {activeTab === 'bracket' && tournament.tournament_type !== 'league' && (
                   <BracketVisualization
                     tournament={tournament}
                     onMatchUpdate={loadTournament}
                     isOrganizer={isOrganizer()}
                   />
+                )}
+
+                {/* Schedule Tab - for league tournaments */}
+                {activeTab === 'schedule' && tournament.tournament_type === 'league' && (
+                  <div className="space-y-6">
+                    {/* Success Message */}
+                    {successMessage && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                        <Check className="w-5 h-5 text-green-600" />
+                        <p className="text-green-800 font-medium">{successMessage}</p>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {error && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-600" />
+                        <p className="text-red-800 font-medium">{error}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">League Schedule</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {matches.length > 0 
+                            ? `${matches.length} matches scheduled`
+                            : 'No schedule generated yet'
+                          }
+                        </p>
+                      </div>
+                      {isOrganizer() && matches.length === 0 && (
+                        <button
+                          onClick={handleGenerateSchedule}
+                          disabled={scheduleLoading || tournament.registered_count < 2}
+                          className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {scheduleLoading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Calendar className="w-4 h-4" />
+                              Generate Schedule
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {scheduleLoading ? (
+                      <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+                      </div>
+                    ) : matches.length > 0 ? (
+                      <LeagueScheduleTable
+                        matches={matches.map((match: any) => ({
+                          id: match.id,
+                          round_number: match.round_number || 1,
+                          home_team: match.home_team || match.team1,
+                          away_team: match.away_team || match.team2,
+                          home_score: match.home_score || match.team1_score,
+                          away_score: match.away_score || match.team2_score,
+                          scheduled_time: match.scheduled_time,
+                          venue: match.venue || tournament.venue || 'TBD',
+                          status: match.status || 'SCHEDULED'
+                        }))}
+                        editable={isOrganizer()}
+                        onEditMatch={isOrganizer() ? handleEditMatch : undefined}
+                        onEnterScore={isOrganizer() ? (matchId) => navigate(`/match-scoring?tournamentId=${tournamentId}&matchId=${matchId}`) : undefined}
+                      />
+                    ) : (
+                      <div className="text-center py-12 bg-gray-50 rounded-lg">
+                        <Calendar className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Schedule Generated</h3>
+                        <p className="text-gray-600">
+                          {isOrganizer() 
+                            ? 'Generate a schedule to see matches here' 
+                            : 'The organizer hasn\'t generated the schedule yet'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Standings Tab */}
+                {activeTab === 'standings' && tournament.tournament_type === 'league' && (
+                  <div className="space-y-6">
+                    <LeagueStandingsTable standings={standings} />
+                    <TopScorersTable scorers={topScorers} />
+                    <TopAssistsTable assists={topAssists} />
+                  </div>
                 )}
 
                 {/* Rules Tab */}
@@ -808,6 +1079,102 @@ export default function TournamentDetailPage() {
                     )}
                   </div>
                 )}
+
+                {/* Referees Tab */}
+                {activeTab === 'referees' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900">Referee Assignments</h3>
+                      {isOrganizer() && (
+                        <button
+                          onClick={handleAddReferee}
+                          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Add Referee
+                        </button>
+                      )}
+                    </div>
+                    
+                    {refereesLoading ? (
+                      <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+                      </div>
+                    ) : referees && referees.length === 0 ? (
+                      <div className="text-center py-16 bg-gray-50 rounded-lg">
+                        <UserPlus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">No referees assigned</h4>
+                        <p className="text-gray-600 mb-6">
+                          {isOrganizer() 
+                            ? 'Add referees to manage your tournament matches professionally' 
+                            : 'No referees have been assigned to this tournament yet'}
+                        </p>
+                        {isOrganizer() && (
+                          <button
+                            onClick={handleAddReferee}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            <UserPlus className="w-5 h-5" />
+                            Add First Referee
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {Array.isArray(referees) && referees.map((referee) => {
+                          if (!referee || !referee.id) return null;
+                          
+                          return (
+                            <div key={referee.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                              <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                                  <UserCheck className="h-6 w-6 text-purple-600" />
+                                </div>
+                                <div>
+                                  <h4 className="font-medium text-gray-900">
+                                    {referee.referee?.full_name || 'Unknown Referee'}
+                                  </h4>
+                                  <p className="text-sm text-gray-600">
+                                    {referee.referee?.email || 'No email'}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    Match Date: {referee.match_date 
+                                      ? new Date(referee.match_date).toLocaleDateString() 
+                                      : 'TBD'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <p className="text-sm font-medium text-gray-900">NPR {referee.fee || 0}</p>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    referee.status === 'accepted' 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : referee.status === 'requested'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {referee.status || 'pending'}
+                                  </span>
+                                </div>
+                                {isOrganizer() && (
+                                  <button
+                                    onClick={() => handleRemoveReferee(referee.id)}
+                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    disabled={refereesLoading}
+                                    title="Remove referee"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -820,7 +1187,13 @@ export default function TournamentDetailPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Format</span>
-                  <span className="font-medium">{tournament.tournament_type.replace('_', ' ')}</span>
+                  <span className={`font-medium px-2 py-1 rounded-full text-xs ${
+                    tournament.tournament_type === 'league' 
+                      ? 'bg-indigo-100 text-indigo-700' 
+                      : 'bg-purple-100 text-purple-700'
+                  }`}>
+                    {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Participants</span>

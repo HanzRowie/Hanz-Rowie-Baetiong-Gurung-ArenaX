@@ -148,6 +148,19 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
           </span>
         </div>
 
+        {/* Tournament Type Badge */}
+        {tournament.tournament_type && (
+          <div className="absolute top-4 left-4 mt-10">
+            <span className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${
+              tournament.tournament_type === 'league' 
+                ? 'bg-indigo-100 text-indigo-800 border-indigo-200' 
+                : 'bg-purple-100 text-purple-800 border-purple-200'
+            }`}>
+              {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
+            </span>
+          </div>
+        )}
+
         {/* Sport Type Badge */}
         <div className="absolute bottom-4 left-4">
           <span className="px-3 py-1.5 bg-white/95 backdrop-blur-sm text-xs font-semibold text-gray-800 rounded-full shadow-sm">
