@@ -43,14 +43,14 @@ print(f'Completed tournaments: {Tournament.objects.filter(status="COMPLETED").co
 
 print('\nSample tournaments:')
 for tournament in Tournament.objects.all()[:6]:
-    print(f'- {tournament.title} ({tournament.registration_type}) - {tournament.sport_type} - ${tournament.entry_fee} - {tournament.registered_count}/{tournament.max_participants} registered')
+    print(f'- {tournament.title} ({tournament.registration_type}) - {tournament.sport_type} - NPR {tournament.entry_fee} - {tournament.registered_count}/{tournament.max_participants} registered')
 
 print('\n=== VENUES CREATED ===')
 print(f'Total venues: {Venue.objects.count()}')
 print(f'Total venue bookings: {VenueBooking.objects.count()}')
 for venue in Venue.objects.all():
     bookings_count = venue.bookings.count()
-    print(f'- {venue.name} ({venue.sport_type}) - ${venue.price_per_hour}/hour - {bookings_count} bookings - Owner: {venue.owner.full_name}')
+    print(f'- {venue.name} ({venue.sport_type}) - NPR {venue.price_per_hour}/hour - {bookings_count} bookings - Owner: {venue.owner.full_name}')
 
 print('\n=== REFEREES CREATED ===')
 print(f'Total referee profiles: {RefereeProfile.objects.count()}')

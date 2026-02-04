@@ -168,8 +168,8 @@ Tournament: {tournament.title}
 Date: {tournament.date}
 Time: {tournament.start_time} - {tournament.end_time}
 Venue: {tournament.venue}
-Entry Fee: ${tournament.entry_fee}
-Prize Pool: ${tournament.prize_pool}
+Entry Fee: NPR {tournament.entry_fee}
+Prize Pool: NPR {tournament.prize_pool}
 Total Registered Teams: {total_registrations}
 Status: {tournament.status}
 

@@ -338,7 +338,7 @@ const RefereeManagementPage: React.FC = () => {
                     <p><strong>Round:</strong> {selectedBooking.match.round_number}</p>
                     <p><strong>Match:</strong> {selectedBooking.match.match_number}</p>
                     <p><strong>Date & Time:</strong> {new Date(selectedBooking.match_date).toLocaleString()}</p>
-                    <p><strong>Fee:</strong> ${Number(selectedBooking.fee || 0).toFixed(2)}</p>
+                    <p><strong>Fee:</strong> NPR {Number(selectedBooking.fee || 0).toFixed(2)}</p>
                   </div>
                 </div>
                 

@@ -132,7 +132,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ item, type, onResul
             <p className="text-sm text-gray-600 mb-2">{venue.location}</p>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
               <span>Capacity: {venue.capacity}</span>
-              <span>${venue.price_per_hour}/hour</span>
+              <span>NPR {venue.price_per_hour}/hour</span>
               <span>{venue.amenities.length} amenities</span>
             </div>
           </div>
@@ -623,7 +623,7 @@ const GlobalSearchPage: React.FC = () => {
                   type="number"
                   value={filters.price_min || ''}
                   onChange={(e) => handleFilterChange('price_min', e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="$0"
+                  placeholder="NPR 0"
                   className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>

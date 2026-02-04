@@ -70,7 +70,7 @@ export const TournamentSelectionModal: React.FC<TournamentSelectionModalProps> =
                   </div>
                   <div className="flex items-center gap-1">
                     <DollarSign className="w-4 h-4" />
-                    <span>${tournament.entry_fee}</span>
+                    <span>NPR {tournament.entry_fee}</span>
                   </div>
                 </div>
 

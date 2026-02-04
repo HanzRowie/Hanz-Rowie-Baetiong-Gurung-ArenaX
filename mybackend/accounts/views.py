@@ -1978,10 +1978,18 @@ def dashboard_stats(request):
                     Q(player1=user) | Q(player2=user),
                     status='COMPLETED'
                 ).count()
+
+                # Get all teams the player is a member of
+                player_teams = TeamMembership.objects.filter(
+                    player=user,
+                    is_active=True
+                ).values_list('team_id', flat=True)
                 
-                # Get team-based matches played (through FutsalScore)
-                team_matches = FutsalScore.objects.filter(
-                    player_stats__player=user
+                # Get team-based matches played
+                # Check for matches where any of the user's teams participated
+                team_matches = Match.objects.filter(
+                    Q(team1_id__in=player_teams) | Q(team2_id__in=player_teams),
+                    status='COMPLETED'
                 ).distinct().count()
                 
                 matches_played = individual_matches + team_matches
@@ -1994,24 +2002,15 @@ def dashboard_stats(request):
                 ).count()
                 
                 # Calculate team-based wins
-                # Get all teams the player is a member of
-                player_teams = TeamMembership.objects.filter(
-                    player=user,
-                    is_active=True
-                ).values_list('team_id', flat=True)
-                
                 # Count matches where player's team won
                 team_wins = Match.objects.filter(
                     winning_team_id__in=player_teams,
                     status='COMPLETED'
-                ).filter(
-                    # Only count if player actually played in the match
-                    Q(team1_id__in=player_teams) | Q(team2_id__in=player_teams)
                 ).distinct().count()
                 
                 matches_won = individual_wins + team_wins
                 stats['matchesWon'] = matches_won
-                stats['winRate'] = (matches_won / matches_played * 100) if matches_played > 0 else 0.0
+                stats['winRate'] = round((matches_won / matches_played * 100), 1) if matches_played > 0 else 0.0
                 
             except Exception as e:
                 print(f"Error calculating player stats: {e}")

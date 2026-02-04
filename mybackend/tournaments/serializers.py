@@ -6,7 +6,7 @@ from .models import Tournament, TournamentRegistration, Match, RefereeBooking
 class TournamentSerializer(serializers.ModelSerializer):
     organizer = serializers.SerializerMethodField()
     registered_count = serializers.SerializerMethodField()
-    tournament_image = serializers.SerializerMethodField()
+
     is_registration_open = serializers.SerializerMethodField()
     user_registration_status = serializers.SerializerMethodField()
     registered_players = serializers.SerializerMethodField()
@@ -34,15 +34,6 @@ class TournamentSerializer(serializers.ModelSerializer):
             return obj.team_registrations.filter(status='CONFIRMED').count()
         else:
             return obj.registrations.filter(status='ACCEPTED').count()
-
-    def get_tournament_image(self, obj):
-        if obj.tournament_image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.tournament_image.url)
-            return obj.tournament_image.url
-        return None
-
     def get_organizer(self, obj):
         return {
             'id': str(obj.organizer.id),

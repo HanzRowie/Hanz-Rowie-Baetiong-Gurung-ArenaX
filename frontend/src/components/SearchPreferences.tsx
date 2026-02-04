@@ -123,10 +123,10 @@ const SavePreferenceModal: React.FC<SavePreferenceModalProps> = ({
                 <div>To: <span className="font-medium">{filters.date_to}</span></div>
               )}
               {filters.price_min !== undefined && (
-                <div>Min Price: <span className="font-medium">${filters.price_min}</span></div>
+                <div>Min Price: <span className="font-medium">NPR {filters.price_min}</span></div>
               )}
               {filters.price_max !== undefined && (
-                <div>Max Price: <span className="font-medium">${filters.price_max}</span></div>
+                <div>Max Price: <span className="font-medium">NPR {filters.price_max}</span></div>
               )}
               {filters.skill_level && (
                 <div>Skill Level: <span className="font-medium">{filters.skill_level}</span></div>

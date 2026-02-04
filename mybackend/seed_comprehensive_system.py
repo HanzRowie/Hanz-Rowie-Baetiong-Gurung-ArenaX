@@ -351,7 +351,7 @@ venues_data = [
 for venue_data in venues_data:
     venue = Venue.objects.create(**venue_data)
     venues[venue.name] = venue
-    print(f"✅ Venue: {venue.name} ({venue.sport_type}) - ${venue.price_per_hour}/hr")
+    print(f"✅ Venue: {venue.name} ({venue.sport_type}) - NPR {venue.price_per_hour}/hr")
     
     # Create availability for next 60 days
     today = timezone.now().date()

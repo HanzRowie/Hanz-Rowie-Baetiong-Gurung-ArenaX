@@ -48,7 +48,7 @@ for venue in venues:
     print(f"  Owner: {venue.owner.full_name} ({venue.owner.email})")
     print(f"  Sport: {venue.sport_type}")
     print(f"  Location: {venue.location}")
-    print(f"  Price: ${venue.price_per_hour}/hour")
+    print(f"  Price: NPR {venue.price_per_hour}/hour")
     print(f"  ID: {venue.id}")
 
 # Tournaments
@@ -65,7 +65,7 @@ for tournament in tournaments:
     print(f"  Date: {tournament.date} at {tournament.start_time}")
     print(f"  Status: {tournament.status}")
     print(f"  Participants: {tournament.registrations.count()}/{tournament.max_participants}")
-    print(f"  Entry Fee: ${tournament.entry_fee}")
+    print(f"  Entry Fee: NPR {tournament.entry_fee}")
     print(f"  ID: {tournament.id}")
 
 print("\n" + "=" * 80)

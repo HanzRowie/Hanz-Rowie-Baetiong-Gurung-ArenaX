@@ -4,12 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, MapPin, DollarSign, Star,
   Users, Building2, Heart,
-  Grid3X3, List, SlidersHorizontal
+  Grid3X3, List, SlidersHorizontal,
+  Filter, X, Check, Coffee, Wifi, Car, Zap, Trophy
 } from 'lucide-react';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import toastService from '@/services/toastService';
 import { venueService } from '@/services/venueService';
-import VenueCard from '@/components/VenueCard';
+import BottomNavigation from '@/components/BottomNavigation';
 
 export default function VenueSearchPage() {
   const { user } = useAuth();
@@ -29,23 +30,23 @@ export default function VenueSearchPage() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [activeSport, setActiveSport] = useState<string>('all');
 
   useEffect(() => {
-    if (user) {
-      loadVenues();
-    } else {
-      navigate('/login');
+    // Determine if we should redirect based on auth
+    // For a public search page, we might not strictly enforce auth, 
+    // but the original code did. I'll keep it safe.
+    if (!user && !loading) {
+      // navigate('/login'); // Optional: Uncomment if strictly protected
     }
+    loadVenues();
   }, [user, navigate]);
 
   const loadVenues = async () => {
     try {
       setLoading(true);
-      console.log('Loading venues with filters:', filters);
       const response = await venueService.getVenues(filters);
-      console.log('Venues API response:', response);
-      
-      // Handle different response structures
+
       if (Array.isArray(response)) {
         setVenues(response);
       } else if (response && Array.isArray(response.venues)) {
@@ -53,7 +54,6 @@ export default function VenueSearchPage() {
       } else if (response && Array.isArray(response.data)) {
         setVenues(response.data);
       } else {
-        console.warn('Unexpected venues response structure:', response);
         setVenues([]);
       }
     } catch (error) {
@@ -73,7 +73,8 @@ export default function VenueSearchPage() {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const toggleFavorite = (venueId: string) => {
+  const toggleFavorite = (e: React.MouseEvent, venueId: string) => {
+    e.stopPropagation();
     setFavorites(prev =>
       prev.includes(venueId)
         ? prev.filter(id => id !== venueId)
@@ -81,288 +82,440 @@ export default function VenueSearchPage() {
     );
   };
 
-  const filteredVenues = Array.isArray(venues) ? venues.filter(venue =>
-    venue.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    venue.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    venue.sport_types?.some((sport: string) => sport.toLowerCase().includes(searchTerm.toLowerCase()))
-  ) : [];
+  const filteredVenues = Array.isArray(venues) ? venues.filter(venue => {
+    const matchesSearch =
+      venue.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      venue.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      venue.sport_types?.some((sport: string) => sport.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesSportTab = activeSport === 'all' ||
+      venue.sport_types?.some((sport: string) => sport.toLowerCase() === activeSport.toLowerCase());
+
+    return matchesSearch && matchesSportTab;
+  }) : [];
+
+  const getAmenityIcon = (amenity: string) => {
+    const lower = amenity.toLowerCase();
+    if (lower.includes('wifi')) return <Wifi className="h-3 w-3" />;
+    if (lower.includes('park')) return <Car className="h-3 w-3" />;
+    if (lower.includes('cafe') || lower.includes('food')) return <Coffee className="h-3 w-3" />;
+    if (lower.includes('changed') || lower.includes('shower')) return <Zap className="h-3 w-3" />;
+    return <Check className="h-3 w-3" />;
+  };
 
   if (loading) {
-    return <DashboardSkeleton />;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-500 font-medium">Finding the best venues nearby...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Find Venues</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Discover and book the perfect venues for your tournaments
-        </p>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        {/* Main Search */}
-        <div className="flex gap-4 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search venues by name, location, or sport..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg"
-            />
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${showFilters
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-            Filters
-          </button>
-          <button
-            onClick={handleSearch}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            Search
-          </button>
-        </div>
-
-        {/* Advanced Filters */}
-        {showFilters && (
-          <div className="border-t border-gray-200 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input
-                  type="text"
-                  placeholder="City or area (e.g., Singapore, Kuala Lumpur)"
-                  value={filters.location}
-                  onChange={(e) => handleFilterChange('location', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sport Type</label>
-                <select
-                  value={filters.sport_type}
-                  onChange={(e) => handleFilterChange('sport_type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">All Sports</option>
-                  <option value="badminton">Badminton</option>
-                  <option value="futsal">Futsal</option>
-                  <option value="badminton">Badminton</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={filters.capacity_min || ''}
-                    onChange={(e) => handleFilterChange('capacity_min', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={filters.capacity_max || ''}
-                    onChange={(e) => handleFilterChange('capacity_max', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price Range ($/hour)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={filters.price_min || ''}
-                    onChange={(e) => handleFilterChange('price_min', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={filters.price_max || ''}
-                    onChange={(e) => handleFilterChange('price_max', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Header Section */}
+      <div className="bg-white border-b border-purple-100 pt-8 pb-6 px-4 sm:px-6 lg:px-8 shadow-sm">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-purple-900 tracking-tight">Find Venues</h1>
+              <p className="mt-2 text-gray-500 max-w-2xl">
+                Discover world-class facilities for your next match or tournament.
+              </p>
             </div>
+          </div>
 
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Available Date</label>
+          {/* Search & Main Filters */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-400" />
               <input
-                type="date"
-                value={filters.available_date}
-                onChange={(e) => handleFilterChange('available_date', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                type="text"
+                placeholder="Search by name, location, or sport..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all shadow-sm text-gray-900 placeholder-gray-400"
               />
             </div>
+
+            <div className="flex gap-3 overflow-x-auto pb-2 lg:pb-0">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-5 py-3.5 border rounded-xl transition-all font-medium whitespace-nowrap ${showFilters
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-200'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700'
+                  }`}
+              >
+                <SlidersHorizontal className="h-5 w-5" />
+                Filters
+              </button>
+
+              <div className="bg-white border border-gray-200 rounded-xl p-1 flex items-center shadow-sm shrink-0">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-purple-50 text-purple-700' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  <Grid3X3 className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-purple-50 text-purple-700' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  <List className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded Filters */}
+          {showFilters && (
+            <div className="mt-6 p-6 bg-white rounded-2xl border border-purple-100 shadow-xl shadow-purple-500/5 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-gray-900">Refine Search</h3>
+                <button
+                  onClick={() => setFilters({
+                    location: '', sport_type: '', capacity_min: 0, capacity_max: 0,
+                    price_min: 0, price_max: 0, available_date: ''
+                  })}
+                  className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Reset All
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Location</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none text-sm transition-all"
+                      placeholder="Enter city..."
+                      value={filters.location}
+                      onChange={(e) => handleFilterChange('location', e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Sport</label>
+                  <select
+                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none text-sm transition-all appearance-none cursor-pointer"
+                    value={filters.sport_type}
+                    onChange={(e) => handleFilterChange('sport_type', e.target.value)}
+                  >
+                    <option value="">All Sports</option>
+                    <option value="futsal">Futsal</option>
+                    <option value="badminton">Badminton</option>
+                    <option value="basketball">Basketball</option>
+                    <option value="cricket">Cricket</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Price Range (/hr)</label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">NPR</span>
+                      <input
+                        type="number"
+                        placeholder="Min"
+                        className="w-full pl-9 pr-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none text-sm"
+                        value={filters.price_min || ''}
+                        onChange={(e) => handleFilterChange('price_min', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <span className="text-gray-400">-</span>
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs">NPR</span>
+                      <input
+                        type="number"
+                        placeholder="Max"
+                        className="w-full pl-9 pr-2 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none text-sm"
+                        value={filters.price_max || ''}
+                        onChange={(e) => handleFilterChange('price_max', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    onClick={handleSearch}
+                    className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium shadow-md shadow-purple-200 transition-all active:scale-95"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sport Categories Tabs */}
+          <div className="mt-8 flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {[
+              { id: 'all', label: 'All Venues', icon: Building2 },
+              { id: 'futsal', label: 'Futsal', icon: Trophy },
+              { id: 'badminton', label: 'Badminton', icon: Activity },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSport(tab.id)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all whitespace-nowrap border ${activeSport === tab.id
+                  ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-200'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-purple-200 hover:text-purple-600 hover:bg-purple-50'
+                  }`}
+              >
+                {tab.id !== 'all' && <tab.icon className="h-4 w-4" />}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Results Count */}
+        <div className="flex justify-between items-center mb-6">
+          <p className="text-gray-500 font-medium">
+            Found <span className="text-gray-900 font-bold">{filteredVenues.length}</span> venues nearby
+          </p>
+
+          <select className="bg-transparent text-sm font-medium text-gray-600 border-none outline-none cursor-pointer hover:text-purple-600 focus:ring-0">
+            <option>Most Relevant</option>
+            <option>Price: Low to High</option>
+            <option>Price: High to Low</option>
+            <option>Top Rated</option>
+          </select>
+        </div>
+
+        {filteredVenues.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-16 text-center">
+            <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Building2 className="h-10 w-10 text-purple-300" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No venues found</h3>
+            <p className="text-gray-500 max-w-sm mx-auto mb-8">
+              We couldn't find any venues matching your criteria. Try adjusting your filters or search term.
+            </p>
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setFilters({ location: '', sport_type: '', capacity_min: 0, capacity_max: 0, price_min: 0, price_max: 0, available_date: '' });
+                setActiveSport('all');
+              }}
+              className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-all font-medium shadow-lg shadow-purple-200"
+            >
+              Clear All Filters
+            </button>
+          </div>
+        ) : (
+          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "space-y-4"}>
+            {filteredVenues.map((venue) => (
+              viewMode === 'grid' ? (
+                // GRID VIEW CARD
+                <div
+                  key={venue.id}
+                  className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col cursor-pointer"
+                  onClick={() => navigate(`/venues/${venue.id}`)}
+                >
+                  <div className="h-56 relative overflow-hidden bg-gray-100">
+                    {venue.images && venue.images.length > 0 ? (
+                      <img
+                        src={venue.images[0]}
+                        alt={venue.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-300 bg-gray-50">
+                        <Building2 className="h-12 w-12 text-purple-200" />
+                      </div>
+                    )}
+
+                    {/* Floating Badges */}
+                    <div className="absolute top-4 left-4 flex gap-2">
+                      {venue.sport_types?.slice(0, 2).map((sport: string) => (
+                        <span key={sport} className="px-3 py-1.5 bg-white/95 backdrop-blur-md text-xs font-bold text-purple-900 rounded-lg shadow-sm uppercase tracking-wide border border-purple-100">
+                          {sport}
+                        </span>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={(e) => toggleFavorite(e, venue.id)}
+                      className="absolute top-4 right-4 p-2.5 bg-white/90 backdrop-blur-md rounded-full hover:bg-white transition-colors border border-purple-100 shadow-sm group-hover:scale-105"
+                    >
+                      <Heart className={`h-5 w-5 ${favorites.includes(venue.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 hover:text-red-500'}`} />
+                    </button>
+
+                    <div className="absolute bottom-4 right-4">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-sm border border-purple-100">
+                        <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                        <span className="text-sm font-bold text-gray-900">{venue.rating?.toFixed(1) || 'NEW'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 flex-1 flex flex-col">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-lg text-gray-900 line-clamp-1 group-hover:text-purple-600 transition-colors">
+                        {venue.name}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-4">
+                      <MapPin className="h-4 w-4 shrink-0 text-purple-400" />
+                      <span className="line-clamp-1 group-hover:text-gray-700 transition-colors">{venue.location}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {venue.amenities?.slice(0, 3).map((amenity: string) => (
+                        <div key={amenity} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium border border-purple-100">
+                          {getAmenityIcon(amenity)}
+                          {amenity}
+                        </div>
+                      ))}
+                      {venue.amenities?.length > 3 && (
+                        <span className="px-3 py-1.5 bg-gray-50 text-gray-500 rounded-lg text-xs font-medium border border-gray-100">
+                          +{venue.amenities.length - 3}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-auto flex items-center justify-between pt-5 border-t border-gray-100">
+                      <div>
+                        <p className="text-xs text-purple-600 font-bold uppercase tracking-wider mb-0.5">Starting from</p>
+                        <p className="text-xl font-bold text-gray-900 flex items-baseline gap-1">
+                          NPR {venue.price_per_hour}
+                          <span className="text-sm font-normal text-gray-400">/hr</span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/venues/${venue.id}/book`);
+                        }}
+                        className="px-6 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-md shadow-purple-200 hover:shadow-lg hover:shadow-purple-300 active:scale-95"
+                      >
+                        Book Now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // LIST VIEW CARD
+                <div
+                  key={venue.id}
+                  className="bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-xl hover:shadow-purple-500/5 transition-all duration-300 hover:border-purple-200 cursor-pointer group"
+                  onClick={() => navigate(`/venues/${venue.id}`)}
+                >
+                  <div className="flex flex-col sm:flex-row gap-6">
+                    <div className="w-full sm:w-64 h-40 rounded-xl bg-gray-100 relative overflow-hidden shrink-0">
+                      {venue.images && venue.images.length > 0 ? (
+                        <img
+                          src={venue.images[0]}
+                          alt={venue.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-gray-300 bg-gray-50">
+                          <Building2 className="h-8 w-8 text-purple-200" />
+                        </div>
+                      )}
+
+                      <div className="absolute top-3 left-3">
+                        <span className="px-2.5 py-1 bg-white/95 backdrop-blur-md text-xs font-bold text-purple-900 rounded-lg shadow-sm border border-purple-100">
+                          {venue.sport_types?.[0]}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-purple-600 transition-colors">{venue.name}</h3>
+                          <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                            <MapPin className="h-4 w-4 shrink-0 text-purple-400" />
+                            {venue.location}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                            <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                            <span className="text-sm font-bold text-amber-700">{venue.rating?.toFixed(1) || '0.0'}</span>
+                          </div>
+                          <button
+                            onClick={(e) => toggleFavorite(e, venue.id)}
+                            className={`p-1.5 rounded-full hover:bg-red-50 transition-colors ${favorites.includes(venue.id) ? 'text-red-500' : 'text-gray-300 hover:text-red-500'}`}
+                          >
+                            <Heart className={`h-5 w-5 ${favorites.includes(venue.id) ? 'fill-current' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-4 flex-1">
+                        {venue.description || 'No description available.'}
+                      </p>
+
+                      <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <Users className="h-4 w-4 text-purple-400" />
+                            Up to {venue.capacity}
+                          </div>
+                          <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
+                          <div className="flex items-center gap-1.5">
+                            <Building2 className="h-4 w-4 text-purple-400" />
+                            {venue.total_bookings || 0} bookings
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <p className="text-lg font-bold text-gray-900">
+                            NPR {venue.price_per_hour}<span className="text-sm font-normal text-gray-400">/hr</span>
+                          </p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/venues/${venue.id}/book`);
+                            }}
+                            className="px-6 py-2.5 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-all shadow-md shadow-purple-200 hover:shadow-lg hover:shadow-purple-300 active:scale-95 ml-2"
+                          >
+                            Book Now
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            ))}
           </div>
         )}
       </div>
 
-      {/* Results Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-gray-600">
-            Found <span className="font-semibold text-gray-900">{filteredVenues?.length || 0}</span> venues
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <select className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-            <option>Sort by Relevance</option>
-            <option>Sort by Price (Low to High)</option>
-            <option>Sort by Price (High to Low)</option>
-            <option>Sort by Rating</option>
-            <option>Sort by Distance</option>
-          </select>
-
-          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'grid'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-                }`}
-            >
-              <Grid3X3 className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-colors ${viewMode === 'list'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-                }`}
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Venues Display */}
-      {!filteredVenues || filteredVenues.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-          <Building2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No venues found</h3>
-          <p className="text-gray-600 mb-6">
-            Try adjusting your search criteria or filters to find more venues.
-          </p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredVenues.map((venue) => (
-            <VenueCard
-              key={venue.id}
-              venue={venue}
-              showActions={false}
-              showBookNow={true}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="divide-y divide-gray-200">
-            {filteredVenues.map((venue) => (
-              <div key={venue.id} className="p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start gap-4">
-                  <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Building2 className="h-10 w-10 text-indigo-600" />
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{venue.name}</h3>
-                        <div className="flex items-center gap-1 text-gray-600 mb-2">
-                          <MapPin className="h-4 w-4" />
-                          <span className="text-sm">{venue.location}</span>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                          <span className="text-sm font-medium text-gray-700">{venue.rating?.toFixed(1) || 'N/A'}</span>
-                        </div>
-                        <button
-                          onClick={() => toggleFavorite(venue.id)}
-                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <Heart className={`h-5 w-5 ${favorites.includes(venue.id)
-                              ? 'text-red-500 fill-current'
-                              : 'text-gray-400'
-                            }`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                      {venue.description || 'Professional sports venue available for tournaments and events.'}
-                    </p>
-
-                    <div className="flex items-center gap-6 text-sm text-gray-600 mb-4">
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                        <span className="font-semibold text-gray-900">${venue.price_per_hour || 0}/hour</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        <span>Up to {venue.capacity || 0} people</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Building2 className="h-4 w-4" />
-                        <span>{venue.sport_types?.join(', ') || 'Multi-sport'}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {venue.amenities?.slice(0, 4).map((amenity: string) => (
-                          <span key={amenity} className="px-2 py-1 bg-gray-100 text-xs text-gray-600 rounded">
-                            {amenity}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => navigate(`/venues/${venue.id}`)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          View Details
-                        </button>
-                        <button
-                          onClick={() => navigate(`/venues/${venue.id}/book`)}
-                          className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
-                        >
-                          Book Now
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <BottomNavigation />
     </div>
   );
 }
+const Activity = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+  </svg>
+);

@@ -95,7 +95,7 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
             <div class="text-xs text-gray-500 mb-2">
               ${venue.sport_types?.join(', ') || 'Multi-sport'}
             </div>
-            ${venue.price_per_hour ? `<div class="text-sm font-medium text-green-600">$${venue.price_per_hour}/hour</div>` : ''}
+            ${venue.price_per_hour ? `<div class="text-sm font-medium text-green-600">NPR ${venue.price_per_hour}/hour</div>` : ''}
             <button 
               onclick="window.venueMapClick && window.venueMapClick('${venue.id}')"
               class="mt-2 bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700 transition-colors"

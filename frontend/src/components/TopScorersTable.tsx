@@ -147,63 +147,109 @@ export const TopScorersTable: React.FC<TopScorersTableProps> = ({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {displayedScorers.map((player, index) => (
-              <tr
-                key={`${player.player_id}-${index}`}
-                className="hover:bg-gray-50 transition-colors"
-              >
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {getRankDisplay(player.rank, index, displayedScorers)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {player.player_name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {player.team_name}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-bold text-gray-900">
-                  {player.goals || 0}
-                </td>
-              </tr>
-            ))}
+            {displayedScorers.map((player, index) => {
+              const isTopRank = player.rank === 1;
+              const rankDisplay = getRankDisplay(player.rank, index, displayedScorers);
+              
+              return (
+                <tr
+                  key={`${player.player_id}-${index}`}
+                  className={`transition-colors ${
+                    isTopRank 
+                      ? 'bg-gradient-to-r from-yellow-50 to-amber-50 hover:from-yellow-100 hover:to-amber-100' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {rankDisplay && (
+                      <div className={`flex items-center gap-2 ${
+                        isTopRank ? 'text-amber-600' : 'text-gray-900'
+                      }`}>
+                        {isTopRank && <span className="text-2xl">🏆</span>}
+                        <span className={`text-sm font-bold ${isTopRank ? 'text-lg' : ''}`}>
+                          {rankDisplay}
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                    isTopRank ? 'font-bold text-gray-900' : 'font-medium text-gray-900'
+                  }`}>
+                    {player.player_name}
+                  </td>
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${
+                    isTopRank ? 'font-semibold text-gray-800' : 'text-gray-700'
+                  }`}>
+                    {player.team_name}
+                  </td>
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-center ${
+                    isTopRank ? 'font-extrabold text-amber-600 text-lg' : 'font-bold text-gray-900'
+                  }`}>
+                    {player.goals || 0}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* Mobile view */}
       <div className="md:hidden divide-y divide-gray-200">
-        {displayedScorers.map((player, index) => (
-          <div
-            key={`${player.player_id}-${index}`}
-            className="p-4"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center space-x-3">
-                {getRankDisplay(player.rank, index, displayedScorers) && (
-                  <span className="text-lg font-bold text-gray-900">
-                    {player.rank}
-                  </span>
-                )}
-                <div>
-                  <div className="text-base font-semibold text-gray-900">
-                    {player.player_name}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {player.team_name}
+        {displayedScorers.map((player, index) => {
+          const isTopRank = player.rank === 1;
+          const rankDisplay = getRankDisplay(player.rank, index, displayedScorers);
+          
+          return (
+            <div
+              key={`${player.player_id}-${index}`}
+              className={`p-4 ${
+                isTopRank 
+                  ? 'bg-gradient-to-r from-yellow-50 to-amber-50' 
+                  : ''
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3">
+                  {rankDisplay && (
+                    <div className={`flex items-center gap-1 ${
+                      isTopRank ? 'text-amber-600' : 'text-gray-900'
+                    }`}>
+                      {isTopRank && <span className="text-xl">🏆</span>}
+                      <span className={`font-bold ${isTopRank ? 'text-xl' : 'text-lg'}`}>
+                        {player.rank}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <div className={`text-base ${
+                      isTopRank ? 'font-bold text-gray-900' : 'font-semibold text-gray-900'
+                    }`}>
+                      {player.player_name}
+                    </div>
+                    <div className={`text-sm ${
+                      isTopRank ? 'font-medium text-gray-700' : 'text-gray-600'
+                    }`}>
+                      {player.team_name}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">
-                  {player.goals || 0}
-                </div>
-                <div className="text-xs text-gray-600">
-                  goals
+                <div className="text-right">
+                  <div className={`text-2xl font-bold ${
+                    isTopRank ? 'text-amber-600 text-3xl' : 'text-gray-900'
+                  }`}>
+                    {player.goals || 0}
+                  </div>
+                  <div className={`text-xs ${
+                    isTopRank ? 'font-medium text-gray-700' : 'text-gray-600'
+                  }`}>
+                    goals
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

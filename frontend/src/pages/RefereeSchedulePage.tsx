@@ -151,7 +151,7 @@ export default function RefereeSchedulePage() {
     const upcoming = events.filter(e => e.status === 'ACCEPTED' && new Date(e.date) > new Date()).length;
     const completionRate = total > 0 ? (completed / total) * 100 : 0;
     const onTimePercentage = 95; // Mock data - would be calculated from actual performance
-    const monthlyEarnings = completed * 75; // Mock calculation - $75 per match
+    const monthlyEarnings = completed * 75; // Mock calculation - NPR 75 per match
 
     setPerformanceStats({
       totalMatches: total,

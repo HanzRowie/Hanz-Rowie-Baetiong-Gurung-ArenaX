@@ -287,7 +287,7 @@ const VenueCard: React.FC<VenueCardProps> = ({ venue, onViewDetails, onBook, cur
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-lg font-semibold text-gray-900 truncate">{venue.name}</h3>
-          <span className="text-lg font-bold text-blue-600">${venue.price_per_hour}/hr</span>
+          <span className="text-lg font-bold text-blue-600">NPR {venue.price_per_hour}/hr</span>
         </div>
 
         <p className="text-gray-600 text-sm mb-2">{venue.location}</p>
@@ -393,7 +393,7 @@ const VenueDetailModal: React.FC<VenueDetailModalProps> = ({ venue, onClose, onB
                 <p><span className="font-medium">Location:</span> {venue.location}</p>
                 <p><span className="font-medium">Address:</span> {venue.address}</p>
                 <p><span className="font-medium">Capacity:</span> {venue.capacity} people</p>
-                <p><span className="font-medium">Price:</span> ${venue.price_per_hour}/hour</p>
+                <p><span className="font-medium">Price:</span> NPR {venue.price_per_hour}/hour</p>
                 {venue.rating && (
                   <p><span className="font-medium">Rating:</span> ⭐ {venue.rating.toFixed(1)}</p>
                 )}

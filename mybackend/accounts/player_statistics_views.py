@@ -295,7 +295,7 @@ def get_badminton_global_statistics(players):
             'player_name': stat['player'].full_name,
             'profile_picture': stat['player'].profile_picture.url if stat['player'].profile_picture else None,
             'matches_won': stat['matches_won'],
-            'matches_played': stat['matches_played'],
+            'total_matches': stat['matches_played'],  # Changed from matches_played to total_matches
             'win_rate': stat['win_rate'],
         })
     
@@ -311,7 +311,7 @@ def get_badminton_global_statistics(players):
             'profile_picture': stat['player'].profile_picture.url if stat['player'].profile_picture else None,
             'win_rate': stat['win_rate'],
             'matches_won': stat['matches_won'],
-            'matches_played': stat['matches_played'],
+            'total_matches': stat['matches_played'],  # Changed from matches_played to total_matches
         })
     
     # Most matches played
@@ -323,7 +323,7 @@ def get_badminton_global_statistics(players):
             'player_id': stat['player_id'],
             'player_name': stat['player'].full_name,
             'profile_picture': stat['player'].profile_picture.url if stat['player'].profile_picture else None,
-            'matches_played': stat['matches_played'],
+            'total_matches': stat['matches_played'],  # Changed from matches_played to total_matches
             'matches_won': stat['matches_won'],
             'win_rate': stat['win_rate'],
         })
@@ -339,7 +339,7 @@ def get_badminton_global_statistics(players):
             'profile_picture': stat['player'].profile_picture.url if stat['player'].profile_picture else None,
             'total_points_scored': stat['total_points_scored'],
             'avg_points_per_match': stat['avg_points_per_match'],
-            'matches_played': stat['matches_played'],
+            'total_matches': stat['matches_played'],  # Changed from matches_played to total_matches
         })
     
     return {

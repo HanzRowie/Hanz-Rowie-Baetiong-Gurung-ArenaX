@@ -147,7 +147,7 @@ export default function VenueOwnerDashboard() {
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Revenue</span>
             <DollarSign className="h-4 w-4 text-purple-500" />
           </div>
-          <p className="text-2xl font-bold text-gray-900">${stats.monthlyRevenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-gray-900">NPR {stats.monthlyRevenue.toLocaleString()}</p>
           <span className="text-xs text-gray-500 mt-1">This month</span>
         </div>
 
@@ -264,7 +264,7 @@ export default function VenueOwnerDashboard() {
 
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-gray-900">
-                        ${request.total_cost || 0}
+                        NPR {request.total_cost || 0}
                       </p>
                       <div className="flex gap-2">
                         <button
@@ -322,7 +322,7 @@ export default function VenueOwnerDashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900">${booking.total_cost || 0}</p>
+                      <p className="text-sm font-semibold text-gray-900">NPR {booking.total_cost || 0}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${booking.status === 'COMPLETED'
                         ? 'bg-green-100 text-green-800'
                         : 'bg-blue-100 text-blue-800'
