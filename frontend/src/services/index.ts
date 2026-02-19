@@ -10,3 +10,4 @@ export { notificationService } from './notificationService';
 export { searchService } from './searchService';
 export { TeamService } from './teamService';
 export { toastService } from './toastService';
+export { default as paymentService } from './paymentService';

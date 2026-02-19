@@ -45,6 +45,7 @@ import EditTeamPage from './pages/EditTeamPage';
 import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
 import MyStatsPage from './pages/MyStatsPage';
 import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
+import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -244,6 +245,15 @@ export const router = createBrowserRouter([
       {
         path: 'notifications',
         element: <NotificationsPage />,
+      },
+      // Payment routes
+      {
+        path: 'payments',
+        element: <PaymentHistoryPage />,
+      },
+      {
+        path: 'payment-history',
+        element: <PaymentHistoryPage />,
       },
       // Search routes
       {

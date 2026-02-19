@@ -1,0 +1,192 @@
+/**
+ * Payment Modal Component
+ * Handles Khalti payment integration
+ */
+
+import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+import paymentService from '../services/paymentService';
+import type { KhaltiConfig } from '../types/payment.types';
+
+interface PaymentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  amount: number;
+  productName: string;
+  paymentId: string;
+  onSuccess: (payload: any) => void;
+  onError: (error: any) => void;
+}
+
+const PaymentModal: React.FC<PaymentModalProps> = ({
+  isOpen,
+  onClose,
+  amount,
+  productName,
+  paymentId,
+  onSuccess,
+  onError,
+}) => {
+  const [khaltiConfig, setKhaltiConfig] = useState<KhaltiConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadKhaltiConfig();
+    }
+  }, [isOpen]);
+
+  const loadKhaltiConfig = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const config = await paymentService.getKhaltiConfig();
+      setKhaltiConfig(config);
+    } catch (err: any) {
+      console.error('Failed to load Khalti config:', err);
+      setError('Failed to load payment configuration. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initiatePayment = () => {
+    if (!khaltiConfig) {
+      setError('Payment configuration not loaded');
+      return;
+    }
+
+    // Load Khalti Checkout dynamically
+    const script = document.createElement('script');
+    script.src = 'https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js';
+    script.onload = () => {
+      // @ts-ignore - Khalti is loaded from external script
+      const checkout = new window.KhaltiCheckout({
+        publicKey: khaltiConfig.public_key,
+        productIdentity: paymentId,
+        productName: productName,
+        productUrl: khaltiConfig.website_url,
+        eventHandler: {
+          onSuccess: async (payload: any) => {
+            console.log('Payment successful:', payload);
+            
+            try {
+              // Verify payment with backend
+              await paymentService.verifyPayment(paymentId);
+              onSuccess(payload);
+            } catch (error) {
+              console.error('Payment verification failed:', error);
+              onError(error);
+            }
+          },
+          onError: (error: any) => {
+            console.error('Payment failed:', error);
+            onError(error);
+          },
+          onClose: () => {
+            console.log('Payment widget closed');
+          },
+        },
+        paymentPreference: ['KHALTI', 'EBANKING', 'MOBILE_BANKING', 'CONNECT_IPS', 'SCT'],
+      });
+
+      checkout.show({ amount: amount * 100 }); // Amount in paisa
+    };
+    script.onerror = () => {
+      setError('Failed to load Khalti payment widget');
+    };
+    document.body.appendChild(script);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white">Complete Payment</h2>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Loading payment configuration...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-red-600">{error}</p>
+              </div>
+              <button
+                onClick={loadKhaltiConfig}
+                className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Payment Details */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-600">Product</span>
+                  <span className="font-medium text-gray-900">{productName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Amount</span>
+                  <span className="text-3xl font-bold text-purple-600">
+                    NPR {amount.toLocaleString('en-NP')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Payment Info */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p className="text-sm text-blue-800">
+                  <strong>Secure Payment:</strong> Your payment is processed securely through Khalti.
+                  You can pay using Khalti wallet, e-Banking, mobile banking, or connect IPS.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={initiatePayment}
+                  className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-semibold hover:bg-purple-700 transition-colors shadow-lg hover:shadow-xl"
+                >
+                  Pay with Khalti
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {/* Khalti Logo */}
+              <div className="mt-6 text-center">
+                <p className="text-xs text-gray-500 mb-2">Powered by</p>
+                <div className="flex items-center justify-center">
+                  <span className="text-purple-600 font-bold text-xl">Khalti</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PaymentModal;
