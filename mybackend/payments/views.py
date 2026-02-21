@@ -118,6 +118,37 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     payment_processor='khalti',
                     processor_response=verification_result
                 )
+            
+            # Update related tournament registration if exists
+            if payment.payment_type == 'TOURNAMENT_FEE' and payment.tournament:
+                from tournaments.models import TournamentRegistration
+                from teams.models import TeamTournamentRegistration
+                
+                # Check for individual registration
+                try:
+                    registration = TournamentRegistration.objects.get(
+                        payment=payment,
+                        tournament=payment.tournament
+                    )
+                    if registration.status == 'PENDING_PAYMENT':
+                        registration.status = 'PENDING'
+                        registration.payment_verified_at = timezone.now()
+                        registration.save()
+                except TournamentRegistration.DoesNotExist:
+                    pass
+                
+                # Check for team registration
+                try:
+                    team_registration = TeamTournamentRegistration.objects.get(
+                        payment=payment,
+                        tournament=payment.tournament
+                    )
+                    if team_registration.status == 'PENDING_PAYMENT':
+                        team_registration.status = 'PENDING'
+                        team_registration.payment_verified_at = timezone.now()
+                        team_registration.save()
+                except TeamTournamentRegistration.DoesNotExist:
+                    pass
 
         return Response({
             'payment': PaymentSerializer(payment).data,
@@ -336,5 +367,94 @@ class KhaltiConfigView(APIView):
             'public_key': config['LIVE_PUBLIC_KEY'] if config['IS_LIVE'] else config['TEST_PUBLIC_KEY'],
             'is_live': config['IS_LIVE'],
             'website_url': config['WEBSITE_URL'],
-            'return_url': config['RETURN_URL']
+            'return_url': config['RETURN_URL'],
+            'mock_mode': getattr(settings, 'PAYMENT_MOCK_MODE', False)
         })
+
+
+class MockPaymentCompleteView(APIView):
+    """Complete a mock payment (for development only)"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """Auto-complete a mock payment"""
+        from django.conf import settings
+        
+        # Only allow in mock mode
+        if not getattr(settings, 'PAYMENT_MOCK_MODE', False):
+            return Response(
+                {'error': 'Mock payments are disabled'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        pidx = request.data.get('pidx')
+        if not pidx or not pidx.startswith('MOCK_'):
+            return Response(
+                {'error': 'Invalid mock payment ID'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Extract payment ID from mock PIDX
+        payment_id = pidx.replace('MOCK_', '')
+        
+        try:
+            payment = Payment.objects.get(id=payment_id, user=request.user)
+        except Payment.DoesNotExist:
+            return Response(
+                {'error': 'Payment not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Complete the payment
+        payment.status = 'COMPLETED'
+        payment.processed_at = timezone.now()
+        payment.save()
+        
+        # Update transaction
+        txn = Transaction.objects.filter(
+            payment=payment,
+            external_transaction_id=pidx
+        ).first()
+        
+        if txn:
+            txn.status = 'SUCCESS'
+            txn.processed_at = timezone.now()
+            txn.save()
+        
+        # Update related tournament registration if exists
+        if payment.payment_type == 'TOURNAMENT_FEE' and payment.tournament:
+            from tournaments.models import TournamentRegistration
+            from teams.models import TeamTournamentRegistration
+            
+            # Check for individual registration
+            try:
+                registration = TournamentRegistration.objects.get(
+                    payment=payment,
+                    tournament=payment.tournament
+                )
+                if registration.status == 'PENDING_PAYMENT':
+                    registration.status = 'PENDING'
+                    registration.payment_verified_at = timezone.now()
+                    registration.save()
+            except TournamentRegistration.DoesNotExist:
+                pass
+            
+            # Check for team registration
+            try:
+                team_registration = TeamTournamentRegistration.objects.get(
+                    payment=payment,
+                    tournament=payment.tournament
+                )
+                if team_registration.status == 'PENDING_PAYMENT':
+                    team_registration.status = 'PENDING'
+                    team_registration.payment_verified_at = timezone.now()
+                    team_registration.save()
+            except TeamTournamentRegistration.DoesNotExist:
+                pass
+        
+        return Response({
+            'status': 'success',
+            'message': 'Mock payment completed',
+            'payment': PaymentSerializer(payment).data
+        })
+

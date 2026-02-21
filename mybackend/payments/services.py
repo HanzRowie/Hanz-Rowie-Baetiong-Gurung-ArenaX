@@ -36,6 +36,46 @@ class PaymentService:
     
     def initiate_khalti_payment(self, payment, customer_info):
         """Initiate payment with Khalti gateway"""
+        from django.conf import settings
+        
+        # Check if mock mode is enabled
+        if getattr(settings, 'PAYMENT_MOCK_MODE', False):
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info("🎭 MOCK MODE: Simulating Khalti payment initiation")
+            
+            # Return mock response
+            mock_pidx = f"MOCK_{payment.id}"
+            mock_response = {
+                'pidx': mock_pidx,
+                'payment_url': f'{settings.KHALTI_CONFIG["WEBSITE_URL"]}/payment/mock?pidx={mock_pidx}',
+                'expires_at': (timezone.now() + timezone.timedelta(minutes=30)).isoformat(),
+                'expires_in': 1800,
+                'mock_mode': True
+            }
+            
+            payment.transaction_id = mock_pidx
+            payment.payment_processor = 'KHALTI_MOCK'
+            payment.status = 'PROCESSING'
+            payment.metadata.update(mock_response)
+            payment.save()
+            
+            # Create transaction record
+            Transaction.objects.create(
+                payment=payment,
+                transaction_type='CHARGE',
+                amount=payment.amount,
+                currency=payment.currency,
+                status='PENDING',
+                external_transaction_id=mock_pidx,
+                payment_processor='KHALTI_MOCK',
+                processor_response=mock_response
+            )
+            
+            logger.info(f"🎭 MOCK MODE: Payment {payment.id} initiated with mock PIDX: {mock_pidx}")
+            return mock_response
+        
+        # Real Khalti integration
         payment_data = {
             'amount': int(payment.amount * 100),  # Convert to paisa
             'purchase_order_id': str(payment.id),

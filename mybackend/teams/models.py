@@ -272,6 +272,7 @@ class TeamTournamentRegistration(models.Model):
     Maintains backward compatibility with individual registrations.
     """
     STATUS_CHOICES = (
+        ('PENDING_PAYMENT', 'Pending Payment'),
         ('PENDING', 'Pending'),
         ('CONFIRMED', 'Confirmed'),
         ('CANCELLED', 'Cancelled'),
@@ -296,7 +297,17 @@ class TeamTournamentRegistration(models.Model):
         limit_choices_to={'role': 'PLAYER'}
     )
     registered_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    
+    # Payment integration
+    payment = models.ForeignKey(
+        'payments.Payment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='team_tournament_registrations'
+    )
+    payment_verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('tournament', 'team')

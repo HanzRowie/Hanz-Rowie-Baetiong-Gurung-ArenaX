@@ -195,12 +195,21 @@ export default function TournamentDiscoveryPage() {
     });
   };
 
-  const handleRegister = async (tournamentId: string) => {
+  const handleRegister = async (tournamentId: string, tournament?: Tournament) => {
     try {
-      await tournamentService.registerForTournament(tournamentId);
-      // Reload tournaments to update registration status
-      loadTournaments(true);
-      toastService.success('Successfully registered for tournament!');
+      // Get tournament details if not provided
+      const tournamentData = tournament || tournaments.find(t => t.id === tournamentId);
+      
+      if (tournamentData && tournamentData.entry_fee > 0) {
+        // Paid tournament - navigate to detail page with auto-register flag
+        navigate(`/tournaments/${tournamentId}?autoRegister=true`);
+        toastService.info('Please complete the payment to confirm your registration');
+      } else {
+        // Free tournament - direct registration
+        await tournamentService.registerForTournament(tournamentId);
+        loadTournaments(true);
+        toastService.success('Successfully registered for tournament!');
+      }
     } catch (err: any) {
       toastService.error(err.message || 'Failed to register for tournament');
       throw err;

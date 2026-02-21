@@ -46,6 +46,7 @@ import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
 import MyStatsPage from './pages/MyStatsPage';
 import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import PaymentCallbackPage from './pages/PaymentCallbackPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 
@@ -74,6 +75,10 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: '/payment/success',
+    element: <PaymentCallbackPage />,
   },
   {
     path: '/',

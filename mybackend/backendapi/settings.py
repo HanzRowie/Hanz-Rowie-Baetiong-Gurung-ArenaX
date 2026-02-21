@@ -181,6 +181,21 @@ KHALTI_CONFIG = {
     'WEBHOOK_URL': config('KHALTI_WEBHOOK_URL', default='http://localhost:8000/api/webhook/khalti/'),
 }
 
+# Payment Mock Mode (for development without Khalti test wallet balance)
+PAYMENT_MOCK_MODE = config('PAYMENT_MOCK_MODE', default=False, cast=bool)
+
+# Log Khalti configuration on startup
+import logging
+logger = logging.getLogger(__name__)
+logger.info("=" * 60)
+logger.info("KHALTI CONFIGURATION LOADED:")
+logger.info(f"  IS_LIVE: {KHALTI_CONFIG['IS_LIVE']}")
+logger.info(f"  MOCK_MODE: {PAYMENT_MOCK_MODE}")
+logger.info(f"  TEST_PUBLIC_KEY: {KHALTI_CONFIG['TEST_PUBLIC_KEY'][:15]}...")
+logger.info(f"  LIVE_PUBLIC_KEY: {KHALTI_CONFIG['LIVE_PUBLIC_KEY'][:15]}...")
+logger.info(f"  WEBSITE_URL: {KHALTI_CONFIG['WEBSITE_URL']}")
+logger.info("=" * 60)
+
 # Logging Configuration for Team Operations
 LOGGING = {
     'version': 1,

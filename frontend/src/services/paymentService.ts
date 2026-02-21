@@ -14,7 +14,7 @@ import type {
 } from '../types/payment.types';
 
 class PaymentService {
-  private readonly BASE_PATH = '/payments';
+  private readonly BASE_PATH = '/api/payments';
 
   /**
    * Payment Methods

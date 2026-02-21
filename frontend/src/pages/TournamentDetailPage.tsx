@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar, MapPin, Users, Trophy, DollarSign,
   UserPlus, ArrowLeft, Play, Award, Info,
@@ -19,11 +19,13 @@ import { TopAssistsTable } from '@/components/TopAssistsTable';
 import type { PlayerStats } from '@/components/TopScorersTable';
 import toastService from '@/services/toastService';
 import { api } from '@/services/api';
+import PaymentModal from '@/components/PaymentModal';
 
 export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -42,6 +44,21 @@ export default function TournamentDetailPage() {
   const [refereesLoading, setRefereesLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+
+  // Debug payment modal state changes
+  useEffect(() => {
+    console.log('💳 Payment Modal State Changed:', {
+      showPaymentModal,
+      paymentId,
+      paymentUrl,
+      tournament: tournament?.title
+    });
+  }, [showPaymentModal, paymentId, paymentUrl]);
 
   const getTournamentsPath = () => {
     return user?.role === 'ORGANIZER' ? '/my-tournaments' : '/tournaments';
@@ -54,6 +71,19 @@ export default function TournamentDetailPage() {
       loadMatches();
     }
   }, [tournamentId]);
+
+  // Handle auto-registration from URL parameter
+  useEffect(() => {
+    const autoRegister = searchParams.get('autoRegister');
+    if (autoRegister === 'true' && tournament && canUserRegister()) {
+      console.log('🔄 Auto-registering from URL parameter');
+      // Remove the parameter from URL
+      searchParams.delete('autoRegister');
+      setSearchParams(searchParams, { replace: true });
+      // Trigger registration
+      handleRegister();
+    }
+  }, [tournament, searchParams]);
 
   const loadStandings = async () => {
     if (!tournamentId) return;
@@ -176,6 +206,12 @@ export default function TournamentDetailPage() {
 
   const handleRegister = async () => {
     try {
+      console.log('=== REGISTRATION ATTEMPT ===');
+      console.log('Tournament:', tournament?.title);
+      console.log('Entry Fee:', tournament?.entry_fee);
+      console.log('Entry Fee Type:', typeof tournament?.entry_fee);
+      console.log('Participation Type:', tournament?.participation_type);
+      
       // Check if tournament requires team registration
       if (tournament?.participation_type === 'TEAM') {
         toastService.error('This tournament requires team registration. Please register as a team from the Teams page.');
@@ -183,14 +219,88 @@ export default function TournamentDetailPage() {
       }
 
       setRegistering(true);
-      await tournamentService.registerForTournament(tournamentId!);
-      await loadTournament(); // Reload to update registration status
-      toastService.success('Successfully registered for tournament!');
+      
+      // Check if tournament has entry fee (handle both string and number types)
+      const entryFee = typeof tournament?.entry_fee === 'string' 
+        ? parseFloat(tournament.entry_fee) 
+        : tournament?.entry_fee || 0;
+      
+      console.log('Parsed Entry Fee:', entryFee);
+      
+      if (tournament && entryFee > 0) {
+        console.log('Paid tournament - initiating payment flow');
+        // Paid tournament - initiate payment flow
+        const response = await tournamentService.registerWithPayment(tournamentId!);
+        console.log('Registration response:', response);
+        console.log('Response payment_required:', response.payment_required);
+        console.log('Response payment:', response.payment);
+        console.log('Response khalti_response:', response.khalti_response);
+        
+        if (response.payment_required && response.payment && response.khalti_response) {
+          console.log('✅ Payment required - setting state to show modal');
+          console.log('Payment ID:', response.payment.id);
+          console.log('Khalti Response:', response.khalti_response);
+          console.log('Payment URL:', response.khalti_response.payment_url);
+          
+          // Store payment ID, URL and show payment modal
+          setPaymentId(response.payment.id);
+          console.log('State updated: paymentId =', response.payment.id);
+          
+          setPaymentUrl(response.khalti_response.payment_url);
+          console.log('State updated: paymentUrl =', response.khalti_response.payment_url);
+          
+          setShowPaymentModal(true);
+          console.log('State updated: showPaymentModal = true');
+          
+          toastService.info('Please complete the payment to confirm your registration');
+        } else {
+          console.log('❌ No payment required or payment failed');
+          console.log('Missing fields:', {
+            payment_required: response.payment_required,
+            payment: !!response.payment,
+            khalti_response: !!response.khalti_response
+          });
+          // Free tournament or payment not required
+          await loadTournament();
+          toastService.success('Successfully registered for tournament!');
+        }
+      } else {
+        console.log('Free tournament - direct registration');
+        // Free tournament - direct registration
+        await tournamentService.registerForTournament(tournamentId!);
+        await loadTournament();
+        toastService.success('Successfully registered for tournament!');
+      }
     } catch (err: any) {
+      console.error('=== REGISTRATION ERROR ===');
+      console.error('Error:', err);
+      console.error('Error message:', err.message);
+      console.error('Error details:', err.details);
+      console.error('Error response:', err.response);
       toastService.error(err.message || 'Failed to register for tournament');
     } finally {
       setRegistering(false);
+      console.log('=== REGISTRATION ATTEMPT END ===');
+      console.log('Final state: showPaymentModal =', showPaymentModal, ', paymentId =', paymentId);
     }
+  };
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+    setPaymentId(null);
+    setPaymentUrl(null);
+    await loadTournament(); // Reload to update registration status
+    toastService.success('Payment successful! Your registration is being processed.');
+  };
+
+  const handlePaymentError = (error: string) => {
+    toastService.error(`Payment failed: ${error}`);
+  };
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false);
+    setPaymentId(null);
+    setPaymentUrl(null);
   };
 
   const handleWithdraw = async () => {
@@ -1282,6 +1392,20 @@ export default function TournamentDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && paymentId && tournament && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          paymentId={paymentId}
+          paymentUrl={paymentUrl || undefined}
+          amount={typeof tournament.entry_fee === 'string' ? parseFloat(tournament.entry_fee) : tournament.entry_fee}
+          productName={tournament.title || 'Tournament Registration'}
+          onSuccess={handlePaymentSuccess}
+          onError={handlePaymentError}
+          onClose={handlePaymentClose}
+        />
       )}
 
       <BottomNavigation />

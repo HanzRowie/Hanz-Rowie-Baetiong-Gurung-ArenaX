@@ -10,9 +10,19 @@ class KhaltiPaymentGateway:
 
     def __init__(self):
         self.config = settings.KHALTI_CONFIG
-        self.base_url = "https://a.khalti.com/api/v2" if self.config['IS_LIVE'] else "https://test-pay.khalti.com/api/v2"
+        # Correct base URLs for Khalti API
+        self.base_url = "https://khalti.com/api/v2" if self.config['IS_LIVE'] else "https://dev.khalti.com/api/v2"
         self.secret_key = self.config['LIVE_SECRET_KEY'] if self.config['IS_LIVE'] else self.config['TEST_SECRET_KEY']
         self.public_key = self.config['LIVE_PUBLIC_KEY'] if self.config['IS_LIVE'] else self.config['TEST_PUBLIC_KEY']
+        
+        # Log configuration for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Khalti Gateway Initialized:")
+        logger.info(f"  IS_LIVE: {self.config['IS_LIVE']}")
+        logger.info(f"  Base URL: {self.base_url}")
+        logger.info(f"  Public Key: {self.public_key[:10]}..." if self.public_key else "  Public Key: None")
+        logger.info(f"  Secret Key: {self.secret_key[:10]}..." if self.secret_key else "  Secret Key: None")
 
     def get_headers(self):
         """Get headers for Khalti API requests"""
@@ -35,7 +45,15 @@ class KhaltiPaymentGateway:
                 'product_details': list (optional)
             }
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         url = f"{self.base_url}/epayment/initiate/"
+        
+        logger.info(f"Initiating Khalti payment:")
+        logger.info(f"  URL: {url}")
+        logger.info(f"  Amount: {payment_data.get('amount')} paisa")
+        logger.info(f"  Order ID: {payment_data.get('purchase_order_id')}")
 
         payload = {
             'return_url': self.config['RETURN_URL'],
@@ -51,12 +69,22 @@ class KhaltiPaymentGateway:
             payload['amount_breakdown'] = payment_data['amount_breakdown']
         if 'product_details' in payment_data:
             payload['product_details'] = payment_data['product_details']
+        
+        logger.info(f"  Payload: {payload}")
+        logger.info(f"  Headers: Authorization: Key {self.secret_key[:10]}...")
 
         try:
             response = requests.post(url, headers=self.headers, json=payload, timeout=30)
+            logger.info(f"  Response Status: {response.status_code}")
+            logger.info(f"  Response Body: {response.text[:200]}")
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            logger.error(f"  Khalti API Error: {str(e)}")
+            logger.error(f"  Error Type: {type(e).__name__}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"  Response Status: {e.response.status_code}")
+                logger.error(f"  Response Body: {e.response.text}")
             return {'error': str(e), 'status': 'failed'}
 
     def verify_payment(self, pidx):
@@ -130,6 +158,7 @@ def process_khalti_webhook(webhook_data):
         webhook_data (dict): Webhook payload from Khalti
     """
     from .models import Payment, Transaction
+    from django.utils import timezone
 
     pidx = webhook_data.get('pidx')
     status = webhook_data.get('status')
@@ -163,14 +192,89 @@ def process_khalti_webhook(webhook_data):
             payment_processor='khalti',
             processor_response=webhook_data
         )
+        
+        # Update related tournament registration if exists
+        if payment.payment_type == 'TOURNAMENT_FEE' and payment.tournament:
+            from tournaments.models import TournamentRegistration
+            from teams.models import TeamTournamentRegistration
+            
+            # Check for individual registration
+            try:
+                registration = TournamentRegistration.objects.get(
+                    payment=payment,
+                    tournament=payment.tournament
+                )
+                if registration.status == 'PENDING_PAYMENT':
+                    registration.status = 'PENDING'
+                    registration.payment_verified_at = timezone.now()
+                    registration.save()
+            except TournamentRegistration.DoesNotExist:
+                pass
+            
+            # Check for team registration
+            try:
+                team_registration = TeamTournamentRegistration.objects.get(
+                    payment=payment,
+                    tournament=payment.tournament
+                )
+                if team_registration.status == 'PENDING_PAYMENT':
+                    team_registration.status = 'PENDING'
+                    team_registration.payment_verified_at = timezone.now()
+                    team_registration.save()
+            except TeamTournamentRegistration.DoesNotExist:
+                pass
 
     elif status == 'Expired':
         payment.status = 'CANCELLED'
         payment.save()
+        
+        # Update tournament registration if exists
+        if payment.payment_type == 'TOURNAMENT_FEE':
+            from tournaments.models import TournamentRegistration
+            from teams.models import TeamTournamentRegistration
+            
+            # Check individual registration
+            try:
+                registration = TournamentRegistration.objects.get(payment=payment)
+                registration.status = 'WITHDRAWN'
+                registration.notes = 'Payment expired'
+                registration.save()
+            except TournamentRegistration.DoesNotExist:
+                pass
+            
+            # Check team registration
+            try:
+                team_registration = TeamTournamentRegistration.objects.get(payment=payment)
+                team_registration.status = 'CANCELLED'
+                team_registration.save()
+            except TeamTournamentRegistration.DoesNotExist:
+                pass
 
     elif status == 'User canceled':
         payment.status = 'CANCELLED'
         payment.save()
+        
+        # Update tournament registration if exists
+        if payment.payment_type == 'TOURNAMENT_FEE':
+            from tournaments.models import TournamentRegistration
+            from teams.models import TeamTournamentRegistration
+            
+            # Check individual registration
+            try:
+                registration = TournamentRegistration.objects.get(payment=payment)
+                registration.status = 'WITHDRAWN'
+                registration.notes = 'Payment cancelled by user'
+                registration.save()
+            except TournamentRegistration.DoesNotExist:
+                pass
+            
+            # Check team registration
+            try:
+                team_registration = TeamTournamentRegistration.objects.get(payment=payment)
+                team_registration.status = 'CANCELLED'
+                team_registration.save()
+            except TeamTournamentRegistration.DoesNotExist:
+                pass
 
     return {'status': 'processed', 'payment_id': payment.id}
 

@@ -24,7 +24,7 @@ class TournamentViewSet(viewsets.ModelViewSet):
         
         # Role-based filtering
         if user.role == 'ORGANIZER':
-            # Organizers only see their own tournaments
+            # Organizers only see their own tournamentss
             queryset = Tournament.objects.filter(organizer=user)
         else:
             # Players, referees, and venue owners see all tournaments
@@ -314,10 +314,151 @@ def register_for_tournament(request, tournament_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@jwt_required
+@permission_classes([IsAuthenticated])
+def register_with_payment(request, tournament_id):
+    """
+    Register for tournament with payment integration
+    
+    Flow:
+    1. Validate tournament and user eligibility
+    2. Check if entry fee requires payment
+    3. Create Payment record (PENDING)
+    4. Initiate Khalti payment
+    5. Create TournamentRegistration (PENDING_PAYMENT or PENDING)
+    6. Return payment details and Khalti response
+    """
+    try:
+        from payments.services import TournamentPaymentService
+        from payments.models import Payment
+        from payments.serializers import PaymentSerializer
+        from django.utils import timezone
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        user = request.user
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+        
+        logger.info(f"Registration attempt - User: {user.email}, Tournament: {tournament.title}, Entry Fee: {tournament.entry_fee}")
+        
+        # Validate registration type compatibility
+        if tournament.registration_type == 'TEAM':
+            return Response({
+                'error': 'This tournament requires team registration. Please register as a team.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user is already registered
+        if TournamentRegistration.objects.filter(tournament=tournament, player=user).exists():
+            return Response({
+                'error': 'Already registered for this tournament'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if registration is open
+        if not tournament.is_registration_open:
+            logger.warning(f"Registration closed - Status: {tournament.status}, Deadline: {tournament.registration_deadline}, Registered: {tournament.registered_count}/{tournament.max_participants}")
+            return Response({
+                'error': 'Registration is closed for this tournament',
+                'details': {
+                    'status': tournament.status,
+                    'deadline': tournament.registration_deadline.isoformat(),
+                    'registered_count': tournament.registered_count,
+                    'max_participants': tournament.max_participants
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if tournament has reached max participants
+        if tournament.registered_count >= tournament.max_participants:
+            return Response({
+                'error': 'Tournament has reached maximum participants'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if entry fee requires payment
+        if tournament.entry_fee > 0:
+            # Create payment record
+            payment_service = TournamentPaymentService()
+            
+            # Create registration first (with PENDING_PAYMENT status)
+            registration = TournamentRegistration.objects.create(
+                tournament=tournament,
+                player=user,
+                status='PENDING_PAYMENT'
+            )
+            
+            # Create payment
+            payment = Payment.objects.create(
+                user=user,
+                payment_type='TOURNAMENT_FEE',
+                amount=tournament.entry_fee,
+                currency='NPR',
+                status='PENDING',
+                description=f'Tournament registration fee for {tournament.title}',
+                tournament=tournament
+            )
+            
+            # Link payment to registration
+            registration.payment = payment
+            registration.save()
+            
+            # Initiate Khalti payment
+            customer_info = {
+                'name': user.full_name,
+                'email': user.email,
+                'phone': getattr(user, 'phone_number', '')
+            }
+            
+            khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
+            
+            if 'error' in khalti_response:
+                # Payment initiation failed - clean up
+                registration.delete()
+                payment.status = 'FAILED'
+                payment.save()
+                
+                return Response({
+                    'error': 'Failed to initiate payment',
+                    'details': khalti_response.get('error')
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Return success with payment details
+            return Response({
+                'message': 'Payment initiated successfully',
+                'registration_id': str(registration.id),
+                'payment_required': True,
+                'payment': PaymentSerializer(payment).data,
+                'khalti_response': khalti_response,
+                'tournament': {
+                    'id': str(tournament.id),
+                    'title': tournament.title,
+                    'entry_fee': float(tournament.entry_fee)
+                }
+            }, status=status.HTTP_201_CREATED)
+        
+        else:
+            # Free tournament - no payment required
+            registration = TournamentRegistration.objects.create(
+                tournament=tournament,
+                player=user,
+                status='PENDING'  # Awaiting organizer approval
+            )
+            
+            return Response({
+                'message': 'Registration submitted successfully. Awaiting organizer approval.',
+                'registration_id': str(registration.id),
+                'payment_required': False,
+                'tournament': tournament.title,
+                'status': 'PENDING'
+            }, status=status.HTTP_201_CREATED)
+    
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def withdraw_from_tournament(request, tournament_id):
     """Withdraw from a tournament"""
-    user = CustomUser.objects.get(id=request.user_id)
+    user = request.user
     tournament = get_object_or_404(Tournament, id=tournament_id)
 
     try:
@@ -328,7 +469,13 @@ def withdraw_from_tournament(request, tournament_id):
 
         # Check if tournament has started
         from django.utils import timezone
-        if timezone.now() >= tournament.date:
+        from datetime import datetime, time
+        
+        # Convert tournament date to datetime for comparison
+        tournament_datetime = datetime.combine(tournament.date, time.min)
+        tournament_datetime = timezone.make_aware(tournament_datetime)
+        
+        if timezone.now() >= tournament_datetime:
             return Response({'error': 'Cannot withdraw from an ongoing tournament'}, status=status.HTTP_400_BAD_REQUEST)
 
         registration.delete()
@@ -971,6 +1118,18 @@ def tournament_participants(request, tournament_id):
             elif registration.status == 'CANCELLED':
                 participant_status = 'REJECTED'
             
+            # Get payment status
+            payment_status = 'pending'
+            if registration.payment:
+                if registration.payment.status == 'COMPLETED':
+                    payment_status = 'paid'
+                elif registration.payment.status == 'FAILED':
+                    payment_status = 'failed'
+                elif registration.payment.status in ['PENDING', 'PROCESSING']:
+                    payment_status = 'pending'
+            elif tournament.entry_fee == 0:
+                payment_status = 'free'
+            
             # Get selected players for this team
             selected_players = []
             for player in registration.selected_players.all():
@@ -1001,7 +1160,8 @@ def tournament_participants(request, tournament_id):
                 'status': participant_status,
                 'registration_date': registration.registered_at,
                 'notes': f'Team registration by {registration.registered_by.full_name}',
-                'payment_status': 'paid'  # Simplified for now
+                'payment_status': payment_status,
+                'payment_id': str(registration.payment.id) if registration.payment else None
             })
         
         # Calculate status counts for teams
@@ -1020,6 +1180,18 @@ def tournament_participants(request, tournament_id):
             registrations = registrations.filter(status=status_filter.upper())
         
         for registration in registrations:
+            # Get payment status
+            payment_status = 'pending'
+            if registration.payment:
+                if registration.payment.status == 'COMPLETED':
+                    payment_status = 'paid'
+                elif registration.payment.status == 'FAILED':
+                    payment_status = 'failed'
+                elif registration.payment.status in ['PENDING', 'PROCESSING']:
+                    payment_status = 'pending'
+            elif tournament.entry_fee == 0:
+                payment_status = 'free'
+            
             participants.append({
                 'id': str(registration.id),
                 'type': 'individual',
@@ -1033,7 +1205,8 @@ def tournament_participants(request, tournament_id):
                 'status': registration.status,
                 'registration_date': registration.registered_at,
                 'notes': registration.notes,
-                'payment_status': 'paid'  # Simplified for now
+                'payment_status': payment_status,
+                'payment_id': str(registration.payment.id) if registration.payment else None
             })
         
         # Calculate status counts for individuals
@@ -1470,6 +1643,224 @@ def register_team_for_tournament(request, tournament_id):
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
+        return Response({
+            'error': f'Registration failed: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def register_team_with_payment(request, tournament_id):
+    """Register a team for tournament with payment integration"""
+    try:
+        from teams.models import Team, TeamMembership, TeamTournamentRegistration, ActivityHistory
+        from teams.services.tournament_validator import TournamentValidator
+        from accounts.models import CustomUser
+        from payments.services import TournamentPaymentService
+        from payments.models import Payment
+        from payments.serializers import PaymentSerializer
+        from django.utils import timezone
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+        
+        logger.info(f"Team registration attempt - User: {request.user.email}, Tournament: {tournament.title}, Entry Fee: {tournament.entry_fee}")
+        
+        # Validate tournament supports team registration
+        if tournament.registration_type != 'TEAM':
+            return Response({
+                'error': 'This tournament only accepts individual registrations'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get team ID and selected players from request
+        team_id = request.data.get('team_id')
+        selected_player_ids = request.data.get('selected_players', [])
+        
+        if not team_id:
+            return Response({'error': 'Team ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not selected_player_ids:
+            return Response({'error': 'Selected players are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get team and validate user can register it
+        try:
+            team = Team.objects.get(id=team_id, is_active=True)
+        except Team.DoesNotExist:
+            return Response({'error': 'Team not found or inactive'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user can register this team
+        try:
+            membership = TeamMembership.objects.get(team=team, player=request.user, is_active=True)
+            if not membership.can_register_for_tournaments():
+                return Response({
+                    'error': 'Only team owners and leaders can register teams for tournaments'
+                }, status=status.HTTP_403_FORBIDDEN)
+        except TeamMembership.DoesNotExist:
+            return Response({'error': 'You are not a member of this team'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check if team is already registered
+        if TeamTournamentRegistration.objects.filter(tournament=tournament, team=team).exists():
+            return Response({'error': 'Team is already registered for this tournament'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate tournament is open for registration
+        if not tournament.is_registration_open:
+            logger.warning(f"Registration closed - Status: {tournament.status}, Deadline: {tournament.registration_deadline}")
+            return Response({
+                'error': 'Tournament registration is closed',
+                'details': {
+                    'status': tournament.status,
+                    'deadline': tournament.registration_deadline.isoformat()
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate team composition
+        validator = TournamentValidator()
+        validation_result = validator.validate_team_composition(team, tournament)
+        
+        if not validation_result.is_valid:
+            return Response({'error': '; '.join(validation_result.errors)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate selected players
+        try:
+            selected_players = CustomUser.objects.filter(id__in=selected_player_ids, role='PLAYER')
+        except ValueError as e:
+            return Response({'error': f'Invalid player ID format: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if selected_players.count() != len(selected_player_ids):
+            return Response({'error': 'Some selected players were not found'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate all selected players are team members
+        team_member_ids = set(TeamMembership.objects.filter(team=team, is_active=True).values_list('player_id', flat=True))
+        
+        try:
+            selected_player_uuids = set()
+            for pid in selected_player_ids:
+                if isinstance(pid, str):
+                    selected_player_uuids.add(uuid.UUID(pid))
+                else:
+                    selected_player_uuids.add(pid)
+        except ValueError as e:
+            return Response({'error': f'Invalid UUID format in selected players: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not selected_player_uuids.issubset(team_member_ids):
+            return Response({'error': 'All selected players must be active team members'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if entry fee requires payment
+        if tournament.entry_fee > 0:
+            # Create registration first (with PENDING_PAYMENT status)
+            registration = TeamTournamentRegistration.objects.create(
+                tournament=tournament,
+                team=team,
+                registered_by=request.user,
+                status='PENDING_PAYMENT'
+            )
+            registration.selected_players.set(selected_players)
+            
+            # Create payment
+            payment = Payment.objects.create(
+                user=request.user,
+                payment_type='TOURNAMENT_FEE',
+                amount=tournament.entry_fee,
+                currency='NPR',
+                status='PENDING',
+                description=f'Tournament registration fee for {team.name} - {tournament.title}',
+                tournament=tournament
+            )
+            
+            # Link payment to registration
+            registration.payment = payment
+            registration.save()
+            
+            # Initiate Khalti payment
+            payment_service = TournamentPaymentService()
+            customer_info = {
+                'name': request.user.full_name,
+                'email': request.user.email,
+                'phone': getattr(request.user, 'phone_number', '')
+            }
+            
+            khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
+            
+            if 'error' in khalti_response:
+                # Payment initiation failed - clean up
+                registration.delete()
+                payment.status = 'FAILED'
+                payment.save()
+                
+                return Response({
+                    'error': 'Failed to initiate payment',
+                    'details': khalti_response.get('error')
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Record activity
+            ActivityHistory.objects.create(
+                team=team,
+                event_type='TOURNAMENT_REGISTERED',
+                description=f'Team registered for tournament: {tournament.title} (Payment pending)',
+                performed_by=request.user,
+                metadata={
+                    'tournament_id': str(tournament.id),
+                    'tournament_title': tournament.title,
+                    'selected_players': len(selected_player_ids),
+                    'payment_id': str(payment.id)
+                }
+            )
+            
+            # Return success with payment details
+            return Response({
+                'message': 'Payment initiated successfully',
+                'registration_id': str(registration.id),
+                'payment_required': True,
+                'payment': PaymentSerializer(payment).data,
+                'khalti_response': khalti_response,
+                'tournament': {
+                    'id': str(tournament.id),
+                    'title': tournament.title,
+                    'entry_fee': float(tournament.entry_fee)
+                },
+                'team': {
+                    'id': str(team.id),
+                    'name': team.name
+                }
+            }, status=status.HTTP_201_CREATED)
+        
+        else:
+            # Free tournament - no payment required
+            registration = TeamTournamentRegistration.objects.create(
+                tournament=tournament,
+                team=team,
+                registered_by=request.user,
+                status='PENDING'
+            )
+            registration.selected_players.set(selected_players)
+            
+            # Record activity
+            ActivityHistory.objects.create(
+                team=team,
+                event_type='TOURNAMENT_REGISTERED',
+                description=f'Team registered for tournament: {tournament.title}',
+                performed_by=request.user,
+                metadata={
+                    'tournament_id': str(tournament.id),
+                    'tournament_title': tournament.title,
+                    'selected_players': len(selected_player_ids)
+                }
+            )
+            
+            return Response({
+                'message': 'Team registered successfully. Awaiting organizer approval.',
+                'registration_id': str(registration.id),
+                'payment_required': False,
+                'tournament': tournament.title,
+                'team': team.name,
+                'selected_players': len(selected_player_ids),
+                'status': 'PENDING'
+            }, status=status.HTTP_201_CREATED)
+    
+    except Exception as e:
+        logger.error(f"Team registration error: {str(e)}")
         return Response({
             'error': f'Registration failed: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

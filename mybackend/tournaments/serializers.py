@@ -89,7 +89,7 @@ class TournamentSerializer(serializers.ModelSerializer):
             from teams.models import TeamTournamentRegistration
             team_registrations = TeamTournamentRegistration.objects.filter(
                 tournament=obj, 
-                status='CONFIRMED'
+                status__in=['PENDING', 'CONFIRMED']  # Include both pending and confirmed
             ).select_related('team')[:10]  # Limit to 10 for performance
             
             return [{
@@ -101,8 +101,10 @@ class TournamentSerializer(serializers.ModelSerializer):
                 'registered_at': reg.registered_at.isoformat()
             } for reg in team_registrations]
         else:
-            # Return basic info about registered players (existing logic)
-            registrations = obj.registrations.filter(status='ACCEPTED').select_related('player')[:10]  # Limit to 10 for performance
+            # Return basic info about registered players - include PENDING and ACCEPTED
+            registrations = obj.registrations.filter(
+                status__in=['PENDING', 'ACCEPTED']
+            ).select_related('player')[:10]  # Limit to 10 for performance
             return [{
                 'id': str(reg.player.id),
                 'name': reg.player.full_name,
@@ -118,9 +120,30 @@ class TournamentSerializer(serializers.ModelSerializer):
 
 # Tournament Registration Serializer
 class TournamentRegistrationSerializer(serializers.ModelSerializer):
+    player_name = serializers.CharField(source='player.full_name', read_only=True)
+    player_email = serializers.CharField(source='player.email', read_only=True)
+    tournament_title = serializers.CharField(source='tournament.title', read_only=True)
+    payment_status = serializers.SerializerMethodField()
+    payment_amount = serializers.SerializerMethodField()
+    
     class Meta:
         model = TournamentRegistration
-        fields = '__all__'
+        fields = [
+            'id', 'tournament', 'tournament_title', 'player', 'player_name', 
+            'player_email', 'status', 'registered_at', 'notes', 'payment', 
+            'payment_verified_at', 'payment_status', 'payment_amount'
+        ]
+        read_only_fields = ['payment', 'payment_verified_at']
+    
+    def get_payment_status(self, obj):
+        if obj.payment:
+            return obj.payment.status
+        return None
+    
+    def get_payment_amount(self, obj):
+        if obj.payment:
+            return float(obj.payment.amount)
+        return None
 
 # Match Serializer
 class MatchSerializer(serializers.ModelSerializer):

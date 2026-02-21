@@ -186,6 +186,7 @@ class Tournament(models.Model):
 # Tournament Registration
 class TournamentRegistration(models.Model):
     STATUS_CHOICES = (
+        ('PENDING_PAYMENT', 'Pending Payment'),
         ('PENDING', 'Pending'),
         ('ACCEPTED', 'Accepted'),
         ('REJECTED', 'Rejected'),
@@ -195,9 +196,19 @@ class TournamentRegistration(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='registrations')
     player = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, limit_choices_to={'role': 'PLAYER'})
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     registered_at = models.DateTimeField(auto_now_add=True)
     notes = models.TextField(blank=True)
+    
+    # Payment integration
+    payment = models.ForeignKey(
+        'payments.Payment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tournament_registrations'
+    )
+    payment_verified_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('tournament', 'player')

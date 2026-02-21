@@ -13,4 +13,5 @@ urlpatterns = [
     path('process-payment/', views.ProcessPaymentView.as_view(), name='process-payment'),
     path('khalti-config/', views.KhaltiConfigView.as_view(), name='khalti-config'),
     path('webhook/<str:processor>/', views.PaymentWebhookView.as_view(), name='payment-webhook'),
+    path('mock-complete/', views.MockPaymentCompleteView.as_view(), name='mock-payment-complete'),
 ]

@@ -89,6 +89,8 @@ export interface KhaltiConfig {
   public_key: string;
   return_url: string;
   website_url: string;
+  is_live?: boolean;
+  mock_mode?: boolean;
 }
 
 export interface KhaltiPaymentPayload {

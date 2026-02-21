@@ -14,6 +14,7 @@ interface PaymentModalProps {
   amount: number;
   productName: string;
   paymentId: string;
+  paymentUrl?: string; // Optional payment URL from backend
   onSuccess: (payload: any) => void;
   onError: (error: any) => void;
 }
@@ -24,6 +25,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   amount,
   productName,
   paymentId,
+  paymentUrl,
   onSuccess,
   onError,
 }) => {
@@ -31,20 +33,76 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Debug modal props
+  useEffect(() => {
+    console.log('💳 PaymentModal Props:', {
+      isOpen,
+      amount,
+      productName,
+      paymentId,
+      khaltiConfig: !!khaltiConfig,
+      loading,
+      error
+    });
+  }, [isOpen, amount, productName, paymentId, khaltiConfig, loading, error]);
+
   useEffect(() => {
     if (isOpen) {
+      console.log('💳 PaymentModal opened - loading Khalti config');
       loadKhaltiConfig();
+      
+      // Listen for messages from payment popup
+      const handleMessage = (event: MessageEvent) => {
+        // Verify origin for security
+        if (event.origin !== window.location.origin) {
+          return;
+        }
+
+        console.log('💳 Received message from popup:', event.data);
+
+        if (event.data.type === 'PAYMENT_SUCCESS') {
+          console.log('💳 Payment successful, verifying...');
+          // Verify payment with backend
+          paymentService.verifyPayment(paymentId)
+            .then(result => {
+              console.log('💳 Payment verified:', result);
+              onSuccess(result);
+            })
+            .catch(error => {
+              console.error('💳 Payment verification failed:', error);
+              // Still call success since Khalti confirmed it
+              onSuccess(event.data.data);
+            });
+        } else if (event.data.type === 'PAYMENT_CANCELLED') {
+          console.log('💳 Payment cancelled by user');
+          setError('Payment was cancelled');
+        } else if (event.data.type === 'PAYMENT_FAILED') {
+          console.log('💳 Payment failed');
+          setError('Payment failed. Please try again.');
+        } else if (event.data.type === 'PAYMENT_ERROR') {
+          console.error('💳 Payment error:', event.data.data);
+          setError('An error occurred during payment');
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      return () => {
+        window.removeEventListener('message', handleMessage);
+      };
     }
-  }, [isOpen]);
+  }, [isOpen, paymentId]);
 
   const loadKhaltiConfig = async () => {
     try {
+      console.log('💳 Loading Khalti config from API...');
       setLoading(true);
       setError(null);
       const config = await paymentService.getKhaltiConfig();
+      console.log('💳 Khalti config loaded:', config);
       setKhaltiConfig(config);
     } catch (err: any) {
-      console.error('Failed to load Khalti config:', err);
+      console.error('💳 Failed to load Khalti config:', err);
       setError('Failed to load payment configuration. Please try again.');
     } finally {
       setLoading(false);
@@ -57,10 +115,81 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       return;
     }
 
+    console.log('💳 Initiating payment');
+    console.log('💳 Payment URL from backend:', paymentUrl);
+    console.log('💳 Mock mode:', khaltiConfig.mock_mode);
+    
+    // If we have a payment URL from the backend (new ePay API), use it
+    if (paymentUrl) {
+      // Check if it's a mock payment
+      if (khaltiConfig.mock_mode && paymentUrl.includes('/payment/mock')) {
+        console.log('💳 Mock mode enabled - auto-completing payment');
+        // Extract pidx from URL
+        const urlParams = new URLSearchParams(paymentUrl.split('?')[1]);
+        const pidx = urlParams.get('pidx');
+        
+        if (pidx) {
+          // Auto-complete mock payment
+          fetch('/api/payments/mock-complete/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            },
+            body: JSON.stringify({ pidx })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('💳 Mock payment completed:', data);
+            onSuccess(data);
+          })
+          .catch(err => {
+            console.error('💳 Mock payment failed:', err);
+            onError(err);
+          });
+        }
+        return;
+      }
+      
+      console.log('💳 Opening Khalti payment page in new window');
+      // Open payment URL in new window
+      const paymentWindow = window.open(paymentUrl, '_blank', 'width=800,height=600');
+      
+      if (!paymentWindow) {
+        setError('Please allow popups to complete payment');
+        return;
+      }
+      
+      // Poll for payment completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const result = await paymentService.verifyPayment(paymentId);
+          if (result.status === 'COMPLETED') {
+            clearInterval(pollInterval);
+            paymentWindow.close();
+            onSuccess(result);
+          }
+        } catch (error) {
+          // Payment not yet completed, continue polling
+        }
+      }, 3000);
+      
+      // Stop polling after 10 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 600000);
+      
+      return;
+    }
+    
+    // Fallback to old Khalti Checkout widget
+    console.log('💳 Using Khalti Checkout widget (fallback)');
+    
     // Load Khalti Checkout dynamically
     const script = document.createElement('script');
     script.src = 'https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js';
     script.onload = () => {
+      console.log('💳 Khalti script loaded');
       // @ts-ignore - Khalti is loaded from external script
       const checkout = new window.KhaltiCheckout({
         publicKey: khaltiConfig.public_key,
@@ -69,37 +198,44 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         productUrl: khaltiConfig.website_url,
         eventHandler: {
           onSuccess: async (payload: any) => {
-            console.log('Payment successful:', payload);
+            console.log('💳 Payment successful:', payload);
             
             try {
               // Verify payment with backend
               await paymentService.verifyPayment(paymentId);
               onSuccess(payload);
             } catch (error) {
-              console.error('Payment verification failed:', error);
+              console.error('💳 Payment verification failed:', error);
               onError(error);
             }
           },
           onError: (error: any) => {
-            console.error('Payment failed:', error);
+            console.error('💳 Payment failed:', error);
             onError(error);
           },
           onClose: () => {
-            console.log('Payment widget closed');
+            console.log('💳 Payment widget closed');
           },
         },
         paymentPreference: ['KHALTI', 'EBANKING', 'MOBILE_BANKING', 'CONNECT_IPS', 'SCT'],
       });
 
+      console.log('💳 Showing checkout with amount:', amount * 100);
       checkout.show({ amount: amount * 100 }); // Amount in paisa
     };
     script.onerror = () => {
+      console.error('💳 Failed to load Khalti script');
       setError('Failed to load Khalti payment widget');
     };
     document.body.appendChild(script);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    console.log('💳 PaymentModal not rendering - isOpen is false');
+    return null;
+  }
+
+  console.log('💳 PaymentModal rendering with isOpen =', isOpen);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

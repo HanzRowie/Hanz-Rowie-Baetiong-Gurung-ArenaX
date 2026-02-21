@@ -119,8 +119,20 @@ class TournamentService {
     return response.data;
   }
 
+  async registerWithPayment(tournamentId: string): Promise<{
+    message: string;
+    registration_id: string;
+    payment_required: boolean;
+    payment?: any;
+    khalti_response?: any;
+    tournament?: any;
+  }> {
+    const response = await api.post(`/api/tournaments/${tournamentId}/register-with-payment/`);
+    return response.data;
+  }
+
   async withdrawFromTournament(tournamentId: string): Promise<{ message: string }> {
-    const response = await api.delete(API_ENDPOINTS.TOURNAMENTS.WITHDRAW(tournamentId));
+    const response = await api.post(API_ENDPOINTS.TOURNAMENTS.WITHDRAW(tournamentId));
     return response.data;
   }
 
