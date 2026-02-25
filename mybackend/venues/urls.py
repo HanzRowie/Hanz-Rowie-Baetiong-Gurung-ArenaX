@@ -12,6 +12,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('venues/<int:venue_id>/book/', views.book_venue, name='book_venue'),
     path('bookings/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
+    path('bookings/<int:booking_id>/verify-payment/', views.verify_booking_payment, name='verify_booking_payment'),
     path('bookings/<int:booking_id>/approve/', views.approve_booking, name='approve_booking'),
     path('bookings/<int:booking_id>/reject/', views.reject_booking, name='reject_booking'),
     path('venues/<int:venue_id>/availability/', views.venue_availability, name='venue_availability'),
@@ -20,5 +21,6 @@ urlpatterns = [
     path('my-venues/', views.get_my_venues, name='get_my_venues'),
     path('venues/<int:venue_id>/stats/', views.venue_stats, name='venue_stats'),
     path('venues/<int:venue_id>/reviews/', views.venue_reviews, name='venue_reviews'),
+    path('venues/<int:venue_id>/calculate-cost/', views.calculate_booking_cost, name='calculate_booking_cost'),
     path('earnings/', views.venue_earnings, name='venue_earnings'),
 ]

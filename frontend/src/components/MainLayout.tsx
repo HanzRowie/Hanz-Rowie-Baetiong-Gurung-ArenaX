@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  MessageCircle, Search, Bell, Settings, User, Menu
+  MessageCircle, Search, Settings, User, Menu
 } from 'lucide-react';
 import { UserRole } from '@/types/auth.types';
 import Sidebar from './Sidebar';
 import BottomNavigation from './BottomNavigation';
+import { NotificationBell } from './NotificationBell';
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   // Handle sidebar toggle with body scroll prevention
   const toggleSidebar = (open: boolean) => {
@@ -173,14 +173,7 @@ export default function MainLayout() {
                 
                 {/* Notifications - Only for players and organizers */}
                 {(user?.role === UserRole.PLAYER || user?.role === UserRole.ORGANIZER) && (
-                  <button 
-                    onClick={() => setNotificationsOpen(!notificationsOpen)}
-                    className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors relative"
-                    title="Notifications"
-                  >
-                    <Bell className="h-5 w-5" />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></div>
-                  </button>
+                  <NotificationBell />
                 )}
                 
                 {/* Profile */}

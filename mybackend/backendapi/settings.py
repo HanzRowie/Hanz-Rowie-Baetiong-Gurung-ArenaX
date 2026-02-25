@@ -11,6 +11,7 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv(
 
 # Applications
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -26,6 +27,7 @@ INSTALLED_APPS = [
     "referees",
     "tournaments",
     "chat",
+    "notifications",
     "venues",
     "payments",
     "teams",
@@ -148,26 +150,30 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='hanzrowiegurung@gmail
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
 # Channels Configuration
-ASGI_APPLICATION = 'backendapi.asgi.application'
-
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
-
-# Channels
 ASGI_APPLICATION = "backendapi.asgi.application"
 
-# Channel Layers
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+# Channel Layers Configuration
+# Use Redis for production and development (with fallback to InMemory if Redis unavailable)
+REDIS_URL = config('REDIS_URL', default=None)
+
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+                "capacity": 1500,  # Maximum number of messages to store
+                "expiry": 10,  # Message expiry in seconds
+            },
         },
-    },
-}
+    }
+else:
+    # Fallback to InMemory for development without Redis
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 # Khalti Payment Gateway Configuration
 KHALTI_CONFIG = {

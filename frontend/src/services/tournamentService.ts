@@ -43,7 +43,7 @@ export interface TournamentFilters {
 }
 
 class TournamentService {
-  async createTournament(data: CreateTournamentData): Promise<{ tournament: Tournament; message: string }> {
+  async createTournament(data: CreateTournamentData): Promise<any> {
     const formData = new FormData();
 
     // Add all fields to FormData
@@ -405,6 +405,11 @@ class TournamentService {
       params.append('player_id', playerId);
     }
     const response = await api.get(`/api/player-stats/tournament_stats/?${params.toString()}`);
+    return response.data;
+  }
+
+  async verifyTournamentVenuePayment(tournamentId: string, data: { pidx: string }): Promise<{ message: string; booking: any }> {
+    const response = await api.post(`/api/tournaments/${tournamentId}/verify-venue-payment/`, data);
     return response.data;
   }
 }

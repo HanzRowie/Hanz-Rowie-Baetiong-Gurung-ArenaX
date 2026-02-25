@@ -22,6 +22,7 @@ urlpatterns = [
     path('<uuid:tournament_id>/register-team/', views.register_team_for_tournament, name='register_team_tournament'),
     path('<uuid:tournament_id>/register-team-with-payment/', views.register_team_with_payment, name='register_team_with_payment'),
     path('<uuid:tournament_id>/withdraw/', views.withdraw_from_tournament, name='withdraw_tournament'),
+    path('<uuid:tournament_id>/verify-venue-payment/', views.verify_tournament_venue_payment, name='verify_tournament_venue_payment'),
     path('<uuid:tournament_id>/participants/', views.tournament_participants, name='tournament_participants'),
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/accept/', views.accept_tournament_participant, name='accept_participant'),
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/reject/', views.reject_tournament_participant, name='reject_participant'),

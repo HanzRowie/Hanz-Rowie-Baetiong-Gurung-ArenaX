@@ -42,3 +42,4 @@ export { default as VenueSearchPage } from './VenueSearchPage';
 export { default as VenueOperatingHoursPage } from './VenueOperatingHoursPage';
 export { default as BookingsPage } from './BookingsPage';
 export { default as GlobalSearchPage } from './GlobalSearchPage';
+export { default as WalletPage } from './WalletPage';

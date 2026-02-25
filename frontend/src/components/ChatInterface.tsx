@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Send, 
-  Paperclip, 
-  Smile, 
-  MoreVertical, 
-  Phone, 
-  Video, 
+import {
+  Send,
+  Paperclip,
+  Smile,
+  MoreVertical,
+  Phone,
+  Video,
   Info,
   Search,
   ArrowLeft,
@@ -77,7 +77,37 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setMessages(prev => [...prev, message]);
       scrollToBottom();
     });
+    chatService.onStatusUpdate((messageId, status) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: status as any, read: status === 'READ' } : m));
+    });
   };
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            if (messageId) {
+              const message = messages.find(m => m.id === messageId);
+              if (message && !message.is_from_me && !message.read) {
+                chatService.markMessageRead(messageId);
+                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read: true } : m));
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const messageElements = document.querySelectorAll('.chatinterface-message-bubble');
+    messageElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [messages]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -133,8 +163,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     } else if (date.toDateString() === yesterday.toDateString()) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
         day: 'numeric',
         year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
       });
@@ -156,7 +186,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
           )}
-          
+
           <div className="relative">
             {otherUser.profile_picture ? (
               <img
@@ -220,11 +250,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-gray-50 to-white">
         {messages.map((message, index) => {
-          const showDate = index === 0 || 
+          const showDate = index === 0 ||
             formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
           const isFromMe = message.is_from_me;
           const showAvatar = !isFromMe && (
-            index === messages.length - 1 || 
+            index === messages.length - 1 ||
             messages[index + 1]?.is_from_me !== message.is_from_me
           );
 
@@ -238,7 +268,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </div>
               )}
 
-              <div className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+              <div
+                className={`flex ${isFromMe ? 'justify-end' : 'justify-start'} items-end gap-2 chatinterface-message-bubble`}
+                data-message-id={message.id}
+              >
                 {!isFromMe && (
                   <div className="flex-shrink-0">
                     {showAvatar ? (
@@ -263,21 +296,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
                 <div className={`group max-w-xs lg:max-w-md ${isFromMe ? 'order-1' : ''}`}>
                   <div
-                    className={`px-4 py-3 rounded-2xl shadow-sm ${
-                      isFromMe
-                        ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-br-md'
-                        : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md'
-                    }`}
+                    className={`px-4 py-3 rounded-2xl shadow-sm ${isFromMe
+                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-br-md'
+                      : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md'
+                      }`}
                   >
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   </div>
-                  
+
                   <div className={`flex items-center gap-1 mt-1 px-1 ${isFromMe ? 'justify-end' : 'justify-start'}`}>
                     <span className="text-xs text-gray-500">{formatTime(message.timestamp)}</span>
                     {isFromMe && (
                       <div className="flex items-center">
-                        {message.read ? (
+                        {(message.status === 'READ' || message.read) ? (
                           <CheckCheck className="h-3 w-3 text-blue-500" />
+                        ) : message.status === 'DELIVERED' ? (
+                          <CheckCheck className="h-3 w-3 text-gray-400" />
                         ) : (
                           <Check className="h-3 w-3 text-gray-400" />
                         )}

@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import {
-  Calendar, Clock, DollarSign, MapPin, Building2,
+  Clock, DollarSign, MapPin, Building2,
   Users, Star, ArrowLeft, Send, AlertCircle
 } from 'lucide-react';
 import { venueService } from '@/services/venueService';
-import { api } from '@/services/api';
 import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
+import { BookingSummaryModal } from '@/components/BookingSummaryModal';
+import PaymentModal from '@/components/PaymentModal';
 
 export default function VenueBookingPage() {
   const { venueId } = useParams<{ venueId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [venue, setVenue] = useState<any>(null);
@@ -28,6 +27,11 @@ export default function VenueBookingPage() {
   const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [existingBookings, setExistingBookings] = useState<any[]>([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  
+  // Payment flow states
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   useEffect(() => {
     if (venueId) {
@@ -157,41 +161,48 @@ export default function VenueBookingPage() {
       return;
     }
 
+    // Show booking summary modal for review
+    setShowSummaryModal(true);
+  };
+
+  const handleConfirmBooking = async () => {
     try {
       setSubmitting(true);
+      setShowSummaryModal(false);
 
-      console.log('Form data before sending:', bookingData);
-      console.log('Venue ID:', venueId);
-      console.log('Current user:', user);
+      console.log('Creating booking with payment...');
 
-      // Create booking request
-      const requestData = {
-        venue_id: venueId!,
-        booking_date: bookingData.date,
+      const response = await venueService.bookVenueWithPayment(venueId!, {
+        date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
         purpose: bookingData.purpose,
         notes: bookingData.notes
-      };
+      });
 
-      console.log('Request data being sent:', requestData);
+      console.log('Booking response:', response);
 
-      await venueService.createBookingRequest(requestData);
+      if (response.payment && response.payment_url) {
+        // Store payment data and show payment modal
+        setPaymentData({
+          bookingId: response.booking.id,
+          paymentId: response.payment.id,
+          paymentUrl: response.payment_url,
+          pidx: response.pidx,
+          amount: parseFloat(response.payment.amount)
+        });
+        setShowPaymentModal(true);
 
-      toastService.success('Booking request sent successfully!');
-      navigate('/venues');
+        toastService.info('Please complete payment to confirm your booking');
+      } else {
+        toastService.error('Failed to initiate payment');
+      }
     } catch (error: any) {
-      console.error('Full error object:', error);
-      console.error('Error response:', error.response);
-      console.error('Error response data:', error.response?.data);
-
-      // Handle specific error messages from backend
-      let errorMessage = 'Failed to send booking request';
-
-      if (error.response && error.response.data && error.response.data.error) {
+      console.error('Booking error:', error);
+      
+      let errorMessage = 'Failed to create booking';
+      if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
-      } else if (error.details && error.details.error) {
-        errorMessage = error.details.error;
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -200,6 +211,24 @@ export default function VenueBookingPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+    toastService.success('Payment successful! Your booking is confirmed.');
+
+    // Navigate to bookings page
+    navigate('/venue-bookings');
+  };
+
+  const handlePaymentError = (error: any) => {
+    console.error('Payment error:', error);
+    toastService.error('Payment failed. Please try again.');
+  };
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false);
+    setPaymentData(null);
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -267,7 +296,7 @@ export default function VenueBookingPage() {
 
               <div className="flex items-center gap-2 text-gray-600">
                 <DollarSign className="h-4 w-4" />
-                <span className="font-semibold text-gray-900">${venue.price_per_hour}/hour</span>
+                <span className="font-semibold text-gray-900">NPR {venue.price_per_hour}/hour</span>
               </div>
 
               {venue.rating && (
@@ -467,7 +496,7 @@ export default function VenueBookingPage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">
                     Duration: {bookingData.start_time && bookingData.end_time ?
-                      `${((new Date(`2000-01-01T${bookingData.end_time}`) - new Date(`2000-01-01T${bookingData.start_time}`)) / (1000 * 60 * 60)).toFixed(1)} hours` :
+                      `${((new Date(`2000-01-01T${bookingData.end_time}`).getTime() - new Date(`2000-01-01T${bookingData.start_time}`).getTime()) / (1000 * 60 * 60)).toFixed(1)} hours` :
                       '0 hours'
                     }
                   </span>
@@ -498,12 +527,12 @@ export default function VenueBookingPage() {
                 {submitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Sending...
+                    Processing...
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    Send Booking Request
+                    Review & Pay
                   </>
                 )}
               </button>
@@ -511,6 +540,34 @@ export default function VenueBookingPage() {
           </form>
         </div>
       </div>
+
+      {/* Booking Summary Modal */}
+      {showSummaryModal && venue && (
+        <BookingSummaryModal
+          isOpen={showSummaryModal}
+          venue={venue}
+          date={bookingData.date}
+          startTime={bookingData.start_time}
+          endTime={bookingData.end_time}
+          purpose={bookingData.purpose}
+          onConfirm={handleConfirmBooking}
+          onCancel={() => setShowSummaryModal(false)}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && paymentData && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={handlePaymentClose}
+          amount={paymentData.amount}
+          productName={`Venue Booking - ${venue?.name}`}
+          paymentId={paymentData.paymentId}
+          paymentUrl={paymentData.paymentUrl}
+          onSuccess={handlePaymentSuccess}
+          onError={handlePaymentError}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.http import JsonResponse
 from django.conf import settings
+import decimal
 from .models import PaymentMethod, Payment, Transaction, Refund
 from .serializers import (
     PaymentMethodSerializer,
@@ -149,6 +150,31 @@ class PaymentViewSet(viewsets.ModelViewSet):
                         team_registration.save()
                 except TeamTournamentRegistration.DoesNotExist:
                     pass
+            
+            # Update related venue booking if exists
+            if payment.payment_type == 'VENUE_BOOKING' and payment.venue_booking:
+                from venues.models import VenueBooking
+                
+                try:
+                    booking = payment.venue_booking
+                    if booking.payment_status == 'PENDING':
+                        booking.status = 'CONFIRMED'
+                        booking.payment_status = 'COMPLETED'
+                        booking.save()
+                        
+                        # Send notification
+                        try:
+                            from notifications.models import Notification
+                            Notification.objects.create(
+                                user=booking.user,
+                                notification_type='BOOKING_CONFIRMED',
+                                title='Venue Booking Confirmed',
+                                message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
+                            )
+                        except Exception as e:
+                            print(f"Failed to create notification: {e}")
+                except Exception as e:
+                    print(f"Failed to update venue booking: {e}")
 
         return Response({
             'payment': PaymentSerializer(payment).data,
@@ -457,4 +483,111 @@ class MockPaymentCompleteView(APIView):
             'message': 'Mock payment completed',
             'payment': PaymentSerializer(payment).data
         })
+
+class WalletDashboardView(APIView):
+    """View to get the user's wallet balance and recent escrow transactions"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # Get recent transactions associated with this user's wallet
+        # We can find these by looking at TRANSACTIONS with payment_processor 'wallet_escrow'
+        # OR by looking at the payment the transaction belongs to.
+        # But for this demo, we'll query Transactions targeting the user's role.
+        
+        # If referee, find payments where referee_booking.referee == user
+        transactions_query = Transaction.objects.filter(
+            payment__referee_booking__referee=user,
+            transaction_type='TRANSFER',
+            status='SUCCESS'
+        ).order_by('-created_at')[:10]
+        
+        # We also need to get WITHDRAWAL transactions
+        withdrawals = Transaction.objects.filter(
+            payment__user=user,
+            transaction_type='TRANSFER',
+            payment_processor='wallet_withdrawal'
+        ).order_by('-created_at')[:10]
+
+        # Combine, sort, and serialize
+        # A simple serialization for the frontend
+        history = []
+        for tx in transactions_query:
+            history.append({
+                'id': str(tx.id),
+                'type': 'EARNING',
+                'amount': float(tx.amount),
+                'date': tx.created_at.isoformat(),
+                'note': tx.processor_response.get('note', 'Escrow Release') if isinstance(tx.processor_response, dict) else 'Escrow Release'
+            })
+            
+        for tx in withdrawals:
+            history.append({
+                'id': str(tx.id),
+                'type': 'WITHDRAWAL',
+                'amount': float(tx.amount),
+                'date': tx.created_at.isoformat(),
+                'note': 'Funds Withdrawn to Bank'
+            })
+            
+        history = sorted(history, key=lambda x: x['date'], reverse=True)
+
+        return Response({
+            'wallet_balance': float(user.wallet_balance),
+            'recent_transactions': history
+        })
+
+class WalletWithdrawalView(APIView):
+    """View to mock withdraw funds from the wallet"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        
+        # Get requested amount (default to full balance)
+        amount_to_withdraw = request.data.get('amount', float(user.wallet_balance))
+        try:
+            amount_to_withdraw = float(amount_to_withdraw)
+        except ValueError:
+            return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if amount_to_withdraw <= 0:
+            return Response({'error': 'Withdrawal amount must be greater than 0.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if user.wallet_balance < amount_to_withdraw:
+            return Response({'error': 'Insufficient funds in wallet.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Deduct wallet balance
+        user.wallet_balance -= decimal.Decimal(str(amount_to_withdraw))
+        user.save()
+        
+        # Create a mock 'payment' record for the withdrawal request, then a transaction
+        withdrawal_payment = Payment.objects.create(
+            user=user,
+            payment_type='OTHER',
+            amount=amount_to_withdraw,
+            currency='NPR',
+            description='Wallet Withdrawal',
+            status='COMPLETED',
+            processed_at=timezone.now()
+        )
+        
+        Transaction.objects.create(
+            payment=withdrawal_payment,
+            transaction_type='TRANSFER',
+            amount=amount_to_withdraw,
+            currency='NPR',
+            status='SUCCESS',
+            external_transaction_id=f"withdraw_{timezone.now().timestamp()}",
+            payment_processor='wallet_withdrawal',
+            processed_at=timezone.now(),
+            processor_response={"note": "Funds successfully transferred."}
+        )
+        
+        return Response({
+            'message': 'Withdrawal successful',
+            'new_balance': float(user.wallet_balance),
+            'withdrawn_amount': amount_to_withdraw
+        }, status=status.HTTP_200_OK)
 

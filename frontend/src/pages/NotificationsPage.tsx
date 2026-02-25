@@ -29,15 +29,23 @@ export default function NotificationsPage() {
   useEffect(() => {
     loadNotifications();
     
+    // Connect to WebSocket for real-time updates
+    notificationService.connectToNotifications();
+    
     // Set up real-time notification updates
-    notificationService.startRealTimeUpdates((notification) => {
+    notificationService.onNotification((notification) => {
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
       setTotalCount(prev => prev + 1);
     });
 
+    // Set up unread count updates
+    notificationService.onUnreadCount((count) => {
+      setUnreadCount(count);
+    });
+
     return () => {
-      notificationService.stopRealTimeUpdates();
+      notificationService.disconnect();
     };
   }, []);
 
@@ -55,11 +63,16 @@ export default function NotificationsPage() {
       };
       
       const response = await notificationService.getNotifications(currentFilters);
-      setNotifications(response.notifications);
-      setUnreadCount(response.unread_count);
-      setTotalCount(response.count);
+      setNotifications(response.notifications || []);
+      setUnreadCount(response.unread_count || 0);
+      setTotalCount(response.count || 0);
     } catch (error) {
+      console.error('Failed to load notifications:', error);
       toastService.error('Failed to load notifications');
+      // Set empty array on error to prevent undefined
+      setNotifications([]);
+      setUnreadCount(0);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -91,7 +104,7 @@ export default function NotificationsPage() {
 
   const markAsUnread = async (notificationId: string) => {
     try {
-      await notificationService.markAsUnread(notificationId);
+      await notificationService.markNotificationUnread(notificationId);
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, read: false } : n)
       );
@@ -490,7 +503,7 @@ export default function NotificationsPage() {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
             </div>
-          ) : notifications.length === 0 ? (
+          ) : !notifications || notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
               <Bell className="h-16 w-16 mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">
@@ -530,7 +543,7 @@ export default function NotificationsPage() {
 
                       {/* Notification Icon */}
                       <div className="flex-shrink-0 mt-1">
-                        {getNotificationIcon(notification.notification_type)}
+                        {getNotificationIcon(notification.notification_type || notification.type)}
                       </div>
 
                       {/* Notification Content */}

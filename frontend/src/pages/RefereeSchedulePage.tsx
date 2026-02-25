@@ -544,7 +544,7 @@ export default function RefereeSchedulePage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Monthly Earnings</p>
-                    <p className="text-2xl font-bold text-purple-600">${performanceStats.monthlyEarnings}</p>
+                    <p className="text-2xl font-bold text-purple-600">NPR {performanceStats.monthlyEarnings}</p>
                   </div>
                   <TrendingUp className="h-8 w-8 text-purple-600" />
                 </div>

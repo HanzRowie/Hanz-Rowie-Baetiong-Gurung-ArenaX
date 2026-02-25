@@ -32,6 +32,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [khaltiConfig, setKhaltiConfig] = useState<KhaltiConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPaymentLink, setShowPaymentLink] = useState(false);
+  const [currentPaymentUrl, setCurrentPaymentUrl] = useState<string | null>(null);
 
   // Debug modal props
   useEffect(() => {
@@ -152,19 +154,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       }
       
       console.log('💳 Opening Khalti payment page in new window');
-      // Open payment URL in new window
-      const paymentWindow = window.open(paymentUrl, '_blank', 'width=800,height=600');
+      console.log('💳 Payment URL:', paymentUrl);
       
-      if (!paymentWindow) {
-        setError('Please allow popups to complete payment');
+      // Store payment URL for fallback
+      setCurrentPaymentUrl(paymentUrl);
+      
+      // Open payment URL in new window
+      const paymentWindow = window.open(paymentUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      
+      if (!paymentWindow || paymentWindow.closed || typeof paymentWindow.closed === 'undefined') {
+        console.error('💳 Popup blocked or failed to open');
+        setError('Popup was blocked. Please allow popups or use the link below.');
+        setShowPaymentLink(true);
         return;
       }
+      
+      console.log('💳 Payment window opened successfully');
       
       // Poll for payment completion
       const pollInterval = setInterval(async () => {
         try {
           const result = await paymentService.verifyPayment(paymentId);
-          if (result.status === 'COMPLETED') {
+          if (result.payment.status === 'COMPLETED') {
             clearInterval(pollInterval);
             paymentWindow.close();
             onSuccess(result);
@@ -293,6 +304,23 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   You can pay using Khalti wallet, e-Banking, mobile banking, or connect IPS.
                 </p>
               </div>
+
+              {/* Popup Blocked Warning */}
+              {showPaymentLink && currentPaymentUrl && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                  <p className="text-sm text-yellow-800 mb-3">
+                    <strong>Popup Blocked:</strong> Your browser blocked the payment window.
+                  </p>
+                  <a
+                    href={currentPaymentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+                  >
+                    Open Payment Page Manually
+                  </a>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-3">

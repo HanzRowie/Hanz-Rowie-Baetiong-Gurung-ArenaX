@@ -14,4 +14,6 @@ urlpatterns = [
     path('khalti-config/', views.KhaltiConfigView.as_view(), name='khalti-config'),
     path('webhook/<str:processor>/', views.PaymentWebhookView.as_view(), name='payment-webhook'),
     path('mock-complete/', views.MockPaymentCompleteView.as_view(), name='mock-payment-complete'),
+    path('wallet/', views.WalletDashboardView.as_view(), name='wallet-dashboard'),
+    path('wallet/withdraw/', views.WalletWithdrawalView.as_view(), name='wallet-withdraw'),
 ]

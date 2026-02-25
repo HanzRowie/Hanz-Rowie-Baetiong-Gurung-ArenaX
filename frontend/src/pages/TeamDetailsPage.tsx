@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Users, 
-  Trophy, 
-  Calendar, 
-  Crown, 
-  Shield, 
+import {
+  Users,
+  Trophy,
+  Calendar,
+  Crown,
+  Shield,
   Star,
   UserPlus,
   ArrowLeft,
@@ -17,8 +17,8 @@ import {
   MoreVertical,
   UserMinus,
   LogOut,
-  Trash2,
-  Edit
+  Edit,
+  MessageSquare
 } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import { tournamentService, toastService } from '@/services';
@@ -28,10 +28,11 @@ import { PlayerSelectionModal } from '@/components/team/PlayerSelectionModal';
 import { TournamentSelectionModal } from '@/components/team/TournamentSelectionModal';
 import { InvitationSender } from '@/components/team/InvitationSender';
 import { RoleAssignmentModal } from '@/components/team/RoleAssignmentModal';
+import GroupChatInterface from '@/components/chat/GroupChatInterface';
 import type { Team, TeamMembership } from '@/types/team.types';
 import type { Tournament } from '@/types/tournament.types';
 
-interface TeamDetailsPageProps {}
+interface TeamDetailsPageProps { }
 
 export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
   const { teamId } = useParams<{ teamId: string }>();
@@ -40,8 +41,8 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'tournaments' | 'stats'>('overview');
-  
+  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'tournaments' | 'stats' | 'chat'>('overview');
+
   // Modal states
   const [showTournamentSelection, setShowTournamentSelection] = useState(false);
   const [showPlayerSelection, setShowPlayerSelection] = useState(false);
@@ -62,7 +63,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
   const loadTeamDetails = async () => {
     if (!teamId) return;
-    
+
     setLoading(true);
     try {
       const response = await TeamService.getTeam(teamId);
@@ -87,11 +88,11 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
   const handleRegisterForTournament = async () => {
     if (!team) return;
-    
+
     try {
       // Fetch available tournaments for this team
       const response = await tournamentService.getAvailableTournamentsForTeam(team.id);
-      
+
       if (response && response.length > 0) {
         setAvailableTournaments(response);
         if (response.length === 1) {
@@ -148,7 +149,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
   const handleLeaveTeam = async () => {
     if (!team || !user) return;
-    
+
     try {
       const response = await TeamService.removeMember(team.id, user.id);
       if (response.success) {
@@ -167,7 +168,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
   const handleKickMember = async (membership: TeamMembership) => {
     if (!team) return;
-    
+
     try {
       const response = await TeamService.removeMember(team.id, membership.player.id);
       if (response.success) {
@@ -202,7 +203,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
       LEADER: 'bg-blue-100 text-blue-800 border-blue-200',
       MEMBER: 'bg-gray-100 text-gray-800 border-gray-200',
     };
-    
+
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${colors[role as keyof typeof colors] || colors.MEMBER}`}>
         {getRoleIcon(role)}
@@ -277,10 +278,10 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3">
               {userRole === 'OWNER' && (
-                <button 
+                <button
                   onClick={() => navigate(`/teams/${teamId}/edit`)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                 >
@@ -289,7 +290,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 </button>
               )}
               {canManage && (
-                <button 
+                <button
                   onClick={handleInvitePlayers}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
@@ -315,15 +316,15 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                     { key: 'members', label: 'Members', icon: Users },
                     { key: 'tournaments', label: 'Tournaments', icon: Trophy },
                     { key: 'stats', label: 'Statistics', icon: TrendingUp },
+                    ...(userRole ? [{ key: 'chat', label: 'Chat', icon: MessageSquare }] : []),
                   ].map(({ key, label, icon: Icon }) => (
                     <button
                       key={key}
                       onClick={() => setActiveTab(key as any)}
-                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                        activeTab === key
+                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === key
                           ? 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
@@ -349,7 +350,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                               </p>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-3">
                             <Calendar className="w-5 h-5 text-gray-400" />
                             <div>
@@ -359,7 +360,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                               </p>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-3">
                             <Crown className="w-5 h-5 text-gray-400" />
                             <div>
@@ -370,7 +371,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-4">
                           <div className="flex items-center gap-3">
                             <Trophy className="w-5 h-5 text-gray-400" />
@@ -379,7 +380,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                               <p className="font-medium text-gray-900">{team.tournament_count || 0}</p>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-3">
                             <Award className="w-5 h-5 text-gray-400" />
                             <div>
@@ -387,7 +388,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                               <p className="font-medium text-gray-900">{team.wins || 0}</p>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-3">
                             <Star className="w-5 h-5 text-gray-400" />
                             <div>
@@ -420,7 +421,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                         {team.member_count} / {team.max_size} members
                       </span>
                     </div>
-                    
+
                     <div className="space-y-3">
                       {team.memberships
                         .filter(m => m.is_active)
@@ -432,7 +433,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                           const isCurrentUser = user?.id === membership.player.id;
                           const canKick = canManage && membership.role !== 'OWNER' && !isCurrentUser;
                           const canLeave = isCurrentUser && membership.role !== 'OWNER';
-                          
+
                           return (
                             <div
                               key={membership.id}
@@ -463,21 +464,21 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                                   </p>
                                 </div>
                               </div>
-                              
+
                               {(canKick || canLeave || (canManage && membership.role !== 'OWNER')) && (
                                 <div className="relative ml-4">
-                                  <button 
+                                  <button
                                     onClick={() => setShowMemberMenu(showMemberMenu === membership.id ? null : membership.id)}
                                     className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                                     title="Options"
                                   >
                                     <MoreVertical className="w-5 h-5" />
                                   </button>
-                                  
+
                                   {showMemberMenu === membership.id && (
                                     <>
-                                      <div 
-                                        className="fixed inset-0 z-10" 
+                                      <div
+                                        className="fixed inset-0 z-10"
                                         onClick={() => setShowMemberMenu(null)}
                                       />
                                       <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
@@ -490,7 +491,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                                             Change Role
                                           </button>
                                         )}
-                                        
+
                                         {canKick && (
                                           <button
                                             onClick={() => {
@@ -503,7 +504,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                                             Remove Member
                                           </button>
                                         )}
-                                        
+
                                         {canLeave && (
                                           <button
                                             onClick={() => {
@@ -525,7 +526,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                           );
                         })}
                     </div>
-                    
+
                     {canManage && !team.is_full && (
                       <button
                         onClick={handleInvitePlayers}
@@ -554,13 +555,12 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                                 </p>
                               </div>
                               <div className="text-right">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  tournament.result === 'WON' 
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${tournament.result === 'WON'
                                     ? 'bg-green-100 text-green-800'
                                     : tournament.result === 'LOST'
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                      ? 'bg-red-100 text-red-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
                                   {tournament.result || 'Participated'}
                                 </span>
                                 {tournament.placement && (
@@ -593,7 +593,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 {activeTab === 'stats' && (
                   <div className="space-y-6">
                     <h3 className="text-lg font-semibold text-gray-900">Team Statistics</h3>
-                    
+
                     {team.tournament_count && team.tournament_count > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Performance Stats */}
@@ -603,7 +603,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                             <div className="flex justify-between">
                               <span className="text-gray-600">Win Rate</span>
                               <span className="font-medium">
-                                {team.wins && team.tournament_count 
+                                {team.wins && team.tournament_count
                                   ? `${Math.round((team.wins / team.tournament_count) * 100)}%`
                                   : '0%'
                                 }
@@ -685,6 +685,15 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                     )}
                   </div>
                 )}
+
+                {activeTab === 'chat' && userRole && (
+                  <div className="h-[600px]">
+                    <GroupChatInterface
+                      teamId={team.id}
+                      teamName={team.name}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -709,11 +718,10 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Active</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    team.is_active 
-                      ? 'bg-green-100 text-green-800' 
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${team.is_active
+                      ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
-                  }`}>
+                    }`}>
                     {team.is_active ? 'Yes' : 'No'}
                   </span>
                 </div>
@@ -725,14 +733,14 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
                 <div className="space-y-3">
-                  <button 
+                  <button
                     onClick={handleRegisterForTournament}
                     className="w-full flex items-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                   >
                     <Trophy className="w-5 h-5" />
                     Register for Tournament
                   </button>
-                  <button 
+                  <button
                     onClick={handleInvitePlayers}
                     className="w-full flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                   >
@@ -747,7 +755,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
             {userRole && userRole !== 'OWNER' && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Membership</h3>
-                <button 
+                <button
                   onClick={() => setShowLeaveConfirm(true)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium"
                 >
@@ -847,14 +855,14 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 <p className="text-sm text-gray-600">Are you sure you want to leave this team?</p>
               </div>
             </div>
-            
+
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-yellow-800">
-                <strong>Warning:</strong> You will lose access to team tournaments and activities. 
+                <strong>Warning:</strong> You will lose access to team tournaments and activities.
                 You'll need to be invited again to rejoin.
               </p>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLeaveConfirm(false)}
@@ -888,14 +896,14 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-red-800">
-                <strong>Warning:</strong> This member will be removed from all team activities 
+                <strong>Warning:</strong> This member will be removed from all team activities
                 and tournaments. They can be invited back later.
               </p>
             </div>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowKickConfirm(null)}

@@ -502,7 +502,7 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-gray-600">Entry Fee</p>
-                      <p className="font-semibold text-gray-900">${tournament.entry_fee}</p>
+                      <p className="font-semibold text-gray-900">NPR {tournament.entry_fee}</p>
                     </div>
                   </div>
                 </div>

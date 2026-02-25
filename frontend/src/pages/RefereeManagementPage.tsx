@@ -250,7 +250,7 @@ const RefereeManagementPage: React.FC = () => {
                           
                           <div className="flex items-center text-gray-600">
                             <DollarSign className="w-4 h-4 mr-2" />
-                            ${Number(booking.fee || 0).toFixed(2)}
+                            NPR {Number(booking.fee || 0).toFixed(2)}
                           </div>
                         </div>
                         

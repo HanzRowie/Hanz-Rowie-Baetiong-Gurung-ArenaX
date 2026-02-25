@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '@/utils/constants';
+import { useAuth } from '@/hooks/useAuth';
+import ChatButton from '@/components/chat/ChatButton';
 
 interface VenueCardProps {
   venue: {
@@ -22,6 +24,10 @@ interface VenueCardProps {
     capacity: number;
     images?: string[];
     image?: string;
+    owner?: {
+      id: string;
+      name: string;
+    };
   };
   onDelete?: (venueId: string) => void;
   showActions?: boolean;
@@ -29,6 +35,7 @@ interface VenueCardProps {
 
 export default function VenueCard({ venue, onDelete, showActions = true, showBookNow = false }: VenueCardProps & { showBookNow?: boolean }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -36,6 +43,9 @@ export default function VenueCard({ venue, onDelete, showActions = true, showBoo
   const displayImage = rawImage?.startsWith('/')
     ? `${API_URL?.replace(/\/$/, '')}${rawImage}`
     : rawImage;
+
+  // Show chat button for logged-in players and organizers
+  const showChatButton = user && (user.role === 'PLAYER' || user.role === 'ORGANIZER') && venue.owner;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 hover:border-indigo-200 group hover:-translate-y-1">
@@ -170,7 +180,7 @@ export default function VenueCard({ venue, onDelete, showActions = true, showBoo
             </div>
             <div>
               <p className="text-xs text-gray-500">Price/Hour</p>
-              <p className="font-semibold text-gray-900">${venue.price_per_hour}</p>
+              <p className="font-semibold text-gray-900">NPR {venue.price_per_hour}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -227,20 +237,31 @@ export default function VenueCard({ venue, onDelete, showActions = true, showBoo
             Manage Venue
           </button>
         ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => navigate(`/venues/${venue.id}`)}
-              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
-            >
-              View Details
-            </button>
-            {showBookNow && (
+          <div className="space-y-2">
+            <div className="flex gap-2">
               <button
-                onClick={() => navigate(`/venues/${venue.id}/book`)}
-                className="flex-1 px-4 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+                onClick={() => navigate(`/venues/${venue.id}`)}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors"
               >
-                Book Now
+                View Details
               </button>
+              {showBookNow && (
+                <button
+                  onClick={() => navigate(`/venues/${venue.id}/book`)}
+                  className="flex-1 px-4 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg hover:shadow-xl"
+                >
+                  Book Now
+                </button>
+              )}
+            </div>
+            {showChatButton && (
+              <ChatButton
+                targetUserId={venue.owner!.id}
+                targetUserName={venue.owner!.name}
+                buttonText="Message Owner"
+                variant="secondary"
+                context="venue"
+              />
             )}
           </div>
         )}

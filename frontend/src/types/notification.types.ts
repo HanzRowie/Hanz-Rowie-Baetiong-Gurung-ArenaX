@@ -1,105 +1,70 @@
+/**
+ * Notification Types
+ */
+
 export interface Notification {
   id: string;
-  notification_type: 'TOURNAMENT_REGISTRATION' | 'MATCH_RESULT' | 'BOOKING_REQUEST' | 'JOIN_REQUEST' | 'SYSTEM' | 'MESSAGE' | 'REFEREE_BOOKING' | 'VENUE_BOOKING';
+  type: string;
+  notification_type?: string; // Alias for type
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   title: string;
   message: string;
-  read: boolean;
+  icon?: string;
+  data?: Record<string, any>;
+  action_url?: string;
+  read: boolean; // Changed from is_read for consistency
+  is_read?: boolean; // Keep for backward compatibility
+  read_at?: string;
   created_at: string;
-  updated_at?: string;
-  // Related objects
-  tournament?: {
-    id: string;
-    title: string;
-    sport_type?: string;
-    date?: string;
-  };
-  match?: {
-    id: string;
-    tournament_title: string;
-    opponent_name?: string;
-    scheduled_time?: string;
-  };
-  booking?: {
-    id: string;
-    venue_name?: string;
-    booking_date?: string;
-    start_time?: string;
-  };
-  referee_booking?: {
-    id: string;
-    tournament_title: string;
-    match_date?: string;
-  };
+  expires_at?: string;
   sender?: {
     id: string;
-    name: string;
+    full_name: string;
+    name?: string; // Alias for full_name
     profile_picture?: string;
   };
-  related_id?: string;
-  action_url?: string;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  tournament?: {
+    id: string;
+    name: string;
+    // Optional date or other metadata may be present from the API
+    [key: string]: any;
+  };
 }
 
-export interface NotificationPreference {
-  id: string;
-  user: string;
-  notification_type: string;
-  email_enabled: boolean;
-  push_enabled: boolean;
-  in_app_enabled: boolean;
-  created_at: string;
-  updated_at?: string;
+export interface NotificationPreferences {
+  enable_push_notifications: boolean;
+  enable_email_notifications: boolean;
+  enable_sms_notifications: boolean;
+  notify_messages: boolean;
+  notify_tournaments: boolean;
+  notify_matches: boolean;
+  notify_teams: boolean;
+  notify_payments: boolean;
+  notify_connections: boolean;
+  notify_achievements: boolean;
+  notify_system: boolean;
+  enable_quiet_hours: boolean;
+  quiet_hours_start?: string;
+  quiet_hours_end?: string;
 }
 
+export interface NotificationsResponse {
+  notifications: Notification[];
+  unread_count: number;
+  // Optional total count of notifications (for pagination / tabs)
+  count?: number;
+}
+
+export interface UnreadCountResponse {
+  unread_count: number;
+}
+
+// Filters used when querying notifications from the API
 export interface NotificationFilters {
   notification_type?: string;
-  read?: boolean;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   date_from?: string;
   date_to?: string;
+  read?: boolean;
   search?: string;
-}
-
-export interface NotificationStats {
-  total_count: number;
-  unread_count: number;
-  read_count: number;
-  type_breakdown: Record<string, number>;
-  priority_breakdown: Record<string, number>;
-  recent_activity: Array<{
-    date: string;
-    count: number;
-  }>;
-}
-
-export interface NotificationUpdate {
-  new_notifications: Notification[];
-  updated_notifications: Notification[];
-  deleted_notifications: string[];
-  unread_count: number;
-  last_check: string;
-}
-
-export interface NotificationSettings {
-  preferences: NotificationPreference[];
-  available_types: Array<{
-    type: string;
-    display_name: string;
-    description: string;
-    default_settings: {
-      email_enabled: boolean;
-      push_enabled: boolean;
-      in_app_enabled: boolean;
-    };
-  }>;
-}
-
-export interface CreateNotificationData {
-  notification_type: string;
-  title: string;
-  message: string;
-  recipient_id?: string;
-  related_id?: string;
-  action_url?: string;
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 }

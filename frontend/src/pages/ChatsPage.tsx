@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
@@ -6,10 +6,14 @@ import {
   MoreVertical, Trash2, Paperclip,
   Star, StarOff, Volume2, VolumeX, UserX, UserCheck
 } from 'lucide-react';
-import { chatService, type Conversation, type PrivateMessage } from '@/services/chatService';
+import { chatService, type PrivateMessage } from '@/services/chatService';
+import type { Conversation } from '@/types/chat.types';
 import { profileService } from '@/services/profileService';
+import { notificationService } from '@/services/notificationService';
 import toastService from '@/services/toastService';
 import { BottomNavigation } from '@/components';
+import RoleTabFilter from '@/components/chat/RoleTabFilter';
+import { UserRole } from '@/types/auth.types';
 
 export default function ChatsPage() {
   const { user } = useAuth();
@@ -33,8 +37,33 @@ export default function ChatsPage() {
   const [isStarred, setIsStarred] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
+  const [isTyping, setIsTyping] = useState(false);
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState<UserRole | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Filter conversations based on selected role and search query
+  const filteredConversations = useMemo(() => {
+    let filtered = conversations;
+
+    // Apply role filter
+    if (selectedRoleFilter) {
+      filtered = filtered.filter(conv => conv.user.role === selectedRoleFilter);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(conv =>
+        conv.user.full_name?.toLowerCase().includes(query) ||
+        conv.user.username?.toLowerCase().includes(query) ||
+        conv.latest_message?.content?.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [conversations, selectedRoleFilter, searchQuery]);
 
   useEffect(() => {
     loadConversations();
@@ -53,8 +82,55 @@ export default function ChatsPage() {
       scrollToBottom();
     });
 
+    // Set up typing indicator handling with auto-cleanup
+    const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+    
+    chatService.onTyping((userId, userName, isTyping) => {
+      if (isTyping) {
+        // Clear existing timeout for this user
+        const existingTimeout = typingTimeouts.get(userId);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+        
+        // Add user to typing list
+        setTypingUsers(prev => new Map(prev).set(userId, userName));
+        
+        // Auto-remove after 5 seconds (in case stop_typing is not received)
+        const timeout = setTimeout(() => {
+          setTypingUsers(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(userId);
+            return newMap;
+          });
+          typingTimeouts.delete(userId);
+        }, 5000);
+        
+        typingTimeouts.set(userId, timeout);
+      } else {
+        // Clear timeout and remove user from typing list
+        const existingTimeout = typingTimeouts.get(userId);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+          typingTimeouts.delete(userId);
+        }
+        
+        setTypingUsers(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(userId);
+          return newMap;
+        });
+      }
+    });
+
     return () => {
+      // Clear all typing timeouts
+      typingTimeouts.forEach(timeout => clearTimeout(timeout));
+      typingTimeouts.clear();
+      
       chatService.disconnect();
+      // Notify notification service that user left chat
+      notificationService.setLeftChat();
     };
   }, [location.state, userId]);
 
@@ -207,6 +283,10 @@ export default function ChatsPage() {
 
       chatService.connectToPrivateChat(conversation.user.id);
       markAsRead(conversation.user.id);
+
+      // Notify notification service that user is viewing this chat
+      notificationService.setViewingChat(conversation.user.id);
+
       scrollToBottom();
     } catch (error) {
       toastService.error('Failed to load conversation');
@@ -243,6 +323,10 @@ export default function ChatsPage() {
       setView('chat');
       setMessageOffset(0);
       chatService.connectToPrivateChat(userId);
+
+      // Notify notification service that user is viewing this chat
+      notificationService.setViewingChat(userId);
+
       scrollToBottom();
     } catch (error) {
       toastService.error('Failed to start chat');
@@ -333,11 +417,6 @@ export default function ChatsPage() {
     }
   };
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.latest_message.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   const ConversationMenu = ({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) => (
     <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10 min-w-48">
       <button
@@ -370,6 +449,8 @@ export default function ChatsPage() {
           onClick={() => {
             setView('conversations');
             chatService.disconnect();
+            // Notify notification service that user left chat
+            notificationService.setLeftChat();
           }}
           className="p-2 hover:bg-gray-100 rounded-full"
         >
@@ -473,28 +554,6 @@ export default function ChatsPage() {
 
   if (!user) return null;
 
-  // Only allow players to access chat
-  if (user.role !== 'PLAYER') {
-    return (
-      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
-        <div className="text-center">
-          <MessageCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Chat Not Available</h2>
-          <p className="text-gray-600 mb-4">
-            Chat functionality is only available for players.
-          </p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Go to Dashboard
-          </button>
-        </div>
-        <BottomNavigation />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="space-y-4">
@@ -569,6 +628,12 @@ export default function ChatsPage() {
                 />
               </div>
 
+              {/* Role-Based Filter Tabs */}
+              <RoleTabFilter
+                conversations={conversations}
+                onRoleSelect={setSelectedRoleFilter}
+              />
+
               {/* Conversations List */}
               {loading ? (
                 <div className="flex items-center justify-center py-12">
@@ -584,9 +649,9 @@ export default function ChatsPage() {
                 <div className="space-y-2">
                   {filteredConversations.map((conversation) => (
                     <div key={conversation.user.id} className="relative">
-                      <button
+                      <div
                         onClick={() => openConversation(conversation)}
-                        className="w-full p-4 bg-white rounded-xl hover:bg-gray-50 transition-colors text-left shadow-sm"
+                        className="w-full p-4 bg-white rounded-xl hover:bg-gray-50 transition-colors text-left shadow-sm cursor-pointer"
                       >
                         <div className="flex items-center gap-3">
                           {conversation.user.profile_picture ? (
@@ -626,7 +691,7 @@ export default function ChatsPage() {
                             </p>
                           </div>
                         </div>
-                      </button>
+                      </div>
 
                       {showConversationMenu === conversation.user.id && (
                         <ConversationMenu
@@ -718,33 +783,53 @@ export default function ChatsPage() {
                     <p className="text-sm">No messages yet. Start the conversation!</p>
                   </div>
                 ) : (
-                  messages.map((message, index) => {
-                    const showDate = index === 0 ||
-                      formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
+                  <>
+                    {messages.map((message, index) => {
+                      const showDate = index === 0 ||
+                        formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
 
-                    return (
-                      <div key={message.id}>
-                        {showDate && (
-                          <div className="text-center text-xs text-gray-500 my-4">
-                            {formatDate(message.timestamp)}
-                          </div>
-                        )}
+                      return (
+                        <div key={message.id}>
+                          {showDate && (
+                            <div className="text-center text-xs text-gray-500 my-4">
+                              {formatDate(message.timestamp)}
+                            </div>
+                          )}
 
-                        <div className={`flex ${message.is_from_me ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xs px-4 py-3 rounded-2xl shadow-sm ${message.is_from_me
+                          <div className={`flex ${message.is_from_me ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-xs px-4 py-3 rounded-2xl shadow-sm ${message.is_from_me
                               ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-br-md'
                               : 'bg-white text-gray-900 rounded-bl-md border border-gray-100'
-                            }`}>
-                            <p className="text-sm leading-relaxed">{message.content}</p>
-                            <p className={`text-xs mt-2 ${message.is_from_me ? 'text-purple-200' : 'text-gray-500'
                               }`}>
-                              {formatTime(message.timestamp)}
-                            </p>
+                              <p className="text-sm leading-relaxed">{message.content}</p>
+                              <p className={`text-xs mt-2 ${message.is_from_me ? 'text-purple-200' : 'text-gray-500'
+                                }`}>
+                                {formatTime(message.timestamp)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Typing Indicator */}
+                    {typingUsers.size > 0 && (
+                      <div className="flex justify-start mb-4">
+                        <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 shadow-sm border border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-1">
+                              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {Array.from(typingUsers.values())[0]} is typing...
+                            </span>
                           </div>
                         </div>
                       </div>
-                    );
-                  })
+                    )}
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </div>
@@ -771,8 +856,32 @@ export default function ChatsPage() {
                     <input
                       type="text"
                       value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value);
+                        // Send typing indicator
+                        if (e.target.value.trim() && !isTyping) {
+                          setIsTyping(true);
+                          chatService.sendTyping();
+                        } else if (!e.target.value.trim() && isTyping) {
+                          setIsTyping(false);
+                          chatService.sendStopTyping();
+                        }
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          sendMessage();
+                          if (isTyping) {
+                            setIsTyping(false);
+                            chatService.sendStopTyping();
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (isTyping) {
+                          setIsTyping(false);
+                          chatService.sendStopTyping();
+                        }
+                      }}
                       placeholder="Type a message..."
                       className="flex-1 bg-transparent outline-none text-sm placeholder-gray-500"
                     />

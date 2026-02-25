@@ -61,6 +61,9 @@ class CustomUser(AbstractUser):
     wta_ranking = models.IntegerField(null=True, blank=True)  # For female tennis players
     atp_ranking = models.IntegerField(null=True, blank=True)  # For male tennis players
 
+    # Wallet & Earnings (For Referees and Organizers)
+    wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     # Venue Owner fields
     business_name = models.CharField(max_length=255, blank=True)
     business_registration = models.CharField(max_length=100, blank=True)

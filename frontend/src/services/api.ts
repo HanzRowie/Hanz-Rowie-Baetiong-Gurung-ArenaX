@@ -82,12 +82,7 @@ api.interceptors.response.use(
       console.error('Network error:', error.message);
       
       // Create a user-friendly error for network issues
-      const networkError: ApiError = {
-        message: 'Network error. Please check your internet connection and try again.',
-        code: 'NETWORK_ERROR'
-      };
-      
-      return Promise.reject(networkError);
+      throw new Error('Network error. Please check your internet connection and try again.');
     }
 
     // Handle 401 Unauthorized - attempt token refresh
@@ -100,7 +95,7 @@ api.interceptors.response.use(
           originalRequest.headers!.Authorization = `Bearer ${token}`;
           return api(originalRequest);
         }).catch(err => {
-          return Promise.reject(err);
+          throw err;
         });
       }
 
@@ -114,7 +109,7 @@ api.interceptors.response.use(
         processQueue(error, null);
         isRefreshing = false;
         clearTokensAndRedirect();
-        return Promise.reject(error);
+        throw error;
       }
 
       try {
@@ -149,8 +144,62 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         isRefreshing = false;
         clearTokensAndRedirect();
-        return Promise.reject(refreshError);
+        throw refreshError;
       }
+    }
+
+    // Handle 403 Forbidden - show error message
+    if (error.response.status === 403) {
+      const responseData = error.response?.data as any;
+      const apiError: ApiError = {
+        message: responseData?.error || responseData?.message || 'You do not have permission to access this resource',
+        code: 'FORBIDDEN',
+        details: responseData
+      };
+
+      console.error('API Error (403 Forbidden):', {
+        url: originalRequest.url,
+        method: originalRequest.method,
+        error: apiError
+      });
+
+      throw new Error(apiError.message);
+    }
+
+    // Handle 404 Not Found - show error message
+    if (error.response.status === 404) {
+      const responseData = error.response?.data as any;
+      const apiError: ApiError = {
+        message: responseData?.error || responseData?.message || 'The requested resource was not found',
+        code: 'NOT_FOUND',
+        details: responseData
+      };
+
+      console.error('API Error (404 Not Found):', {
+        url: originalRequest.url,
+        method: originalRequest.method,
+        error: apiError
+      });
+
+      throw new Error(apiError.message);
+    }
+
+    // Handle 500 Server Error - show generic error
+    if (error.response.status >= 500) {
+      const apiError: ApiError = {
+        message: 'A server error occurred. Please try again later.',
+        code: 'SERVER_ERROR',
+        details: error.response?.data
+      };
+
+      console.error('API Error (500 Server Error):', {
+        url: originalRequest.url,
+        method: originalRequest.method,
+        status: error.response.status,
+        error: apiError
+      });
+
+      throw new Error(apiError.message);
     }
 
     // Handle other HTTP errors
@@ -170,17 +219,7 @@ api.interceptors.response.use(
       originalResponse: responseData
     });
 
-    // Preserve the original error structure for better error handling
-    const enhancedError = {
-      ...error,
-      response: {
-        ...error.response,
-        data: responseData
-      },
-      ...apiError
-    };
-
-    return Promise.reject(enhancedError);
+    throw new Error(apiError.message);
   }
 );
 
@@ -190,8 +229,8 @@ const clearTokensAndRedirect = () => {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   
   // Only redirect if we're not already on the login page
-  if (window.location.pathname !== '/login') {
-    window.location.href = '/login';
+  if (globalThis.location.pathname !== '/login') {
+    globalThis.location.href = '/login';
   }
 };
 

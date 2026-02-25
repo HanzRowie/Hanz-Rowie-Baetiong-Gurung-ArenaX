@@ -5,6 +5,7 @@ import {
   Edit, Trash2, Eye, MoreVertical, Users,
   Calendar
 } from 'lucide-react';
+import ChatButton from '@/components/chat/ChatButton';
 
 interface TournamentCardProps {
   tournament: {
@@ -20,6 +21,10 @@ interface TournamentCardProps {
     tournament_image?: string;
     description?: string;
     prize_pool?: number;
+    organizer: {
+      id: string;
+      name: string;
+    };
   };
   onDelete?: (tournamentId: string) => void;
   showActions?: boolean;
@@ -205,7 +210,7 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
             </div>
             <div>
               <p className="text-xs text-gray-500">Entry Fee</p>
-              <p className="font-semibold text-gray-900">${tournament.entry_fee}</p>
+              <p className="font-semibold text-gray-900">NPR {tournament.entry_fee}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -214,7 +219,7 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
             </div>
             <div>
               <p className="text-xs text-gray-500">Prize Pool</p>
-              <p className="font-semibold text-gray-900">${tournament.prize_pool || (tournament.entry_fee * tournament.registered_count * 0.8)}</p>
+              <p className="font-semibold text-gray-900">NPR {tournament.prize_pool || (tournament.entry_fee * tournament.registered_count * 0.8)}</p>
             </div>
           </div>
         </div>
@@ -282,6 +287,17 @@ export default function TournamentCard({ tournament, onDelete, showActions = tru
               <Edit className="h-4 w-4" />
             </button>
           )}
+        </div>
+
+        {/* Message Organizer Button */}
+        <div className="mt-3">
+          <ChatButton
+            targetUserId={tournament.organizer.id}
+            targetUserName={tournament.organizer.name}
+            buttonText="Message Organizer"
+            variant="secondary"
+            context="tournament"
+          />
         </div>
       </div>
     </div>

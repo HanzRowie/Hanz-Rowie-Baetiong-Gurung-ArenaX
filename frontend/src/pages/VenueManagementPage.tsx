@@ -143,7 +143,7 @@ export default function VenueManagementPage() {
             <DollarSign className="h-4 w-4 text-purple-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            ${venues.reduce((sum, v) => sum + ((v.total_bookings || 0) * (v.price_per_hour || 0) * 2), 0).toLocaleString()}
+            NPR {venues.reduce((sum, v) => sum + ((v.total_bookings || 0) * (v.price_per_hour || 0) * 2), 0).toLocaleString()}
           </p>
           <span className="text-xs text-gray-500 mt-1">Estimated total</span>
         </div>
@@ -280,7 +280,7 @@ export default function VenueManagementPage() {
                       <div className="flex items-center gap-6 text-sm text-gray-600">
                         <div className="flex items-center gap-1">
                           <DollarSign className="h-4 w-4 text-green-600" />
-                          <span>${venue.price_per_hour}/hour</span>
+                          <span>NPR {venue.price_per_hour}/hour</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Users className="h-4 w-4" />
@@ -292,7 +292,7 @@ export default function VenueManagementPage() {
                         </div>
                         <div className="flex items-center gap-1">
                           <TrendingUp className="h-4 w-4" />
-                          <span>${((venue.total_bookings || 0) * (venue.price_per_hour || 0) * 2).toLocaleString()} revenue</span>
+                          <span>NPR {((venue.total_bookings || 0) * (venue.price_per_hour || 0) * 2).toLocaleString()} revenue</span>
                         </div>
                       </div>
                     </div>

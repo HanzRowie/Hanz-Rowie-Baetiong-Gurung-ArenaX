@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { venueService } from '../services/venueService';
 import type { VenueBooking, Venue } from '../types/venue.types';
 import { useAuth } from '../hooks/useAuth';
+import toastService from '@/services/toastService';
 import {
   Calendar, Clock, CheckCircle, XCircle,
   DollarSign, Building2, User,
@@ -45,8 +46,15 @@ const VenueBookingsPage: React.FC = () => {
       const venueId = selectedVenue === 'all' ? undefined : selectedVenue;
       const response = await venueService.getBookingRequests(venueId);
       setBookings(response.bookings);
+      
+      // Show success toast on manual refresh
+      if (showRefresh) {
+        toastService.success('Bookings refreshed successfully');
+      }
     } catch (err) {
-      setError('Failed to load bookings. Please try again.');
+      const errorMessage = 'Failed to load bookings. Please try again.';
+      setError(errorMessage);
+      toastService.error(errorMessage);
       console.error('Error loading bookings:', err);
     } finally {
       setLoading(false);
@@ -175,7 +183,7 @@ const VenueBookingsPage: React.FC = () => {
             <DollarSign className="h-4 w-4 text-purple-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            ${[...confirmedBookings, ...historyBookings].reduce((sum, booking) => sum + parseFloat(booking.total_cost?.toString() || '0'), 0).toLocaleString()}
+            NPR {[...confirmedBookings, ...historyBookings].reduce((sum, booking) => sum + parseFloat(booking.total_cost?.toString() || '0'), 0).toLocaleString()}
           </p>
           <span className="text-xs text-gray-500 mt-1">Total earnings</span>
         </div>
@@ -243,15 +251,19 @@ const VenueBookingsPage: React.FC = () => {
             onBookingAction={async (requestId, action) => {
               try {
                 const endpoint = action === 'accept' ? 'approve' : 'reject';
-                // Use the configured api instance (needs import if not available, or venueService method)
-                // Assuming we can use venueService or need to add a method there 
-                // or use the 'api' instance from services/api
                 const { default: api } = await import('../services/api');
-                await api.post(`/api/bookings/${requestId}/${endpoint}/`);
+                await api.post(`/api/venues/bookings/${requestId}/${endpoint}/`);
+                
+                // Show success toast
+                toastService.success(`Booking ${action === 'accept' ? 'approved' : 'rejected'} successfully`);
+                
                 // Reload bookings
                 loadBookings();
               } catch (e) {
-                console.error(e);
+                console.error('Error processing booking action:', e);
+                const errorMessage = `Failed to ${action} booking. Please try again.`;
+                setError(errorMessage);
+                toastService.error(errorMessage);
               }
             }}
           />
@@ -329,7 +341,7 @@ const BookingsList: React.FC<BookingsListProps> = ({ bookings, loading, activeTa
               </div>
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold text-gray-900">${booking.total_cost || 0}</p>
+              <p className="text-lg font-bold text-gray-900">NPR {booking.total_cost || 0}</p>
               {booking.payment_status && (
                 <p className="text-xs text-green-600">Payment: {booking.payment_status}</p>
               )}

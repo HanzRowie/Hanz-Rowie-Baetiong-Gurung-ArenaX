@@ -19,7 +19,7 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
 
   useEffect(() => {
     loadConversations();
-    
+
     // Set up chat service callbacks
     chatService.onPrivateMessage((message) => {
       setMessages(prev => [...prev, message]);
@@ -34,10 +34,42 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
       toastService.error(`Chat error: ${error}`);
     });
 
+    chatService.onStatusUpdate((messageId, status) => {
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: status as any, read: status === 'READ' } : m));
+    });
+
     return () => {
       chatService.disconnect();
     };
   }, []);
+
+  // Set up intersection observer for read receipts
+  useEffect(() => {
+    if (view !== 'chat' || messages.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const messageId = entry.target.getAttribute('data-message-id');
+            if (messageId) {
+              const message = messages.find(m => m.id === messageId);
+              if (message && !message.is_from_me && !message.read) {
+                chatService.markMessageRead(messageId);
+                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, read: true } : m));
+              }
+            }
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const messageElements = document.querySelectorAll('.chat-message-bubble');
+    messageElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [messages, view]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,10 +94,10 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
       setMessages(response.messages);
       setCurrentConversation(conversation);
       setView('chat');
-      
+
       // Connect to WebSocket for real-time messages
       chatService.connectToPrivateChat(conversation.user.id);
-      
+
       scrollToBottom();
     } catch {
       toastService.error('Failed to load conversation');
@@ -141,7 +173,7 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
             <ArrowLeft className="h-4 w-4" />
           </button>
         )}
-        
+
         <div className="flex items-center gap-3 flex-1">
           {view === 'conversations' ? (
             <>
@@ -222,7 +254,7 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
                           <User className="h-5 w-5 text-purple-600" />
                         </div>
                       )}
-                      
+
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-gray-900 truncate">
                           {conversation.user.full_name}
@@ -231,7 +263,7 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
                           {conversation.latest_message.content}
                         </p>
                       </div>
-                      
+
                       <div className="text-xs text-gray-400">
                         {formatTime(conversation.latest_message.timestamp)}
                       </div>
@@ -255,9 +287,9 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
                 </div>
               ) : (
                 messages.map((message, index) => {
-                  const showDate = index === 0 || 
+                  const showDate = index === 0 ||
                     formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
-                  
+
                   return (
                     <div key={message.id}>
                       {showDate && (
@@ -265,19 +297,31 @@ export default function ChatWindow({ onClose }: ChatWindowProps) {
                           {formatDate(message.timestamp)}
                         </div>
                       )}
-                      
-                      <div className={`flex ${message.is_from_me ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs px-4 py-3 rounded-2xl shadow-sm ${
-                          message.is_from_me
+
+                      <div
+                        className={`flex ${message.is_from_me ? 'justify-end' : 'justify-start'} chat-message-bubble`}
+                        data-message-id={message.id}
+                      >
+                        <div className={`max-w-xs px-4 py-3 rounded-2xl shadow-sm ${message.is_from_me
                             ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-br-md'
                             : 'bg-gray-50 text-gray-900 rounded-bl-md border border-gray-100'
-                        }`}>
-                          <p className="text-sm leading-relaxed">{message.content}</p>
-                          <p className={`text-xs mt-2 ${
-                            message.is_from_me ? 'text-purple-200' : 'text-gray-500'
                           }`}>
-                            {formatTime(message.timestamp)}
-                          </p>
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                          <div className={`flex items-center justify-end gap-1 mt-2 text-xs opacity-80 ${message.is_from_me ? 'text-purple-200' : 'text-gray-500'
+                            }`}>
+                            <span>{formatTime(message.timestamp)}</span>
+                            {message.is_from_me && (
+                              <div className="flex">
+                                {(message.status === 'READ' || message.read) ? (
+                                  <span className="text-blue-300 flex text-[10px] leading-none mb-[-2px]">✓✓</span>
+                                ) : message.status === 'DELIVERED' ? (
+                                  <span className="text-purple-200 flex text-[10px] leading-none mb-[-2px]">✓✓</span>
+                                ) : (
+                                  <span className="text-purple-200 flex text-[10px] leading-none mb-[-2px]">✓</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

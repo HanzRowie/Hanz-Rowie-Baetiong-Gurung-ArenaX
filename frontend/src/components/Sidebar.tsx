@@ -48,6 +48,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           path: '/venue-bookings',
           active: location.pathname.startsWith('/venue-bookings'),
         },
+        {
+          id: 'chats',
+          label: 'My Chats',
+          icon: MessageCircle,
+          path: '/chats',
+          active: location.pathname === '/chats',
+        },
         commonItems[1], // Profile
       ];
     }
@@ -75,6 +82,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           path: '/referee/availability',
           active: location.pathname.startsWith('/referee/availability'),
         },
+        {
+          id: 'chats',
+          label: 'My Chats',
+          icon: MessageCircle,
+          path: '/chats',
+          active: location.pathname === '/chats',
+        },
         commonItems[1], // Profile
       ];
     }
@@ -96,6 +110,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           icon: Building2,
           path: '/venues',
           active: location.pathname.startsWith('/venues') && !location.pathname.includes('/management'),
+        },
+        {
+          id: 'chats',
+          label: 'My Chats',
+          icon: MessageCircle,
+          path: '/chats',
+          active: location.pathname === '/chats',
         },
         commonItems[1], // Profile
       ];
@@ -149,7 +170,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         },
         {
           id: 'chats',
-          label: 'Chats',
+          label: 'My Chats',
           icon: MessageCircle,
           path: '/chats',
           active: location.pathname === '/chats',
@@ -191,7 +212,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       },
       {
         id: 'chats',
-        label: 'Chats',
+        label: 'My Chats',
         icon: MessageCircle,
         path: '/chats',
         active: location.pathname === '/chats',

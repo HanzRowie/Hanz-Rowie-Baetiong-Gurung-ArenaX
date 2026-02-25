@@ -21,7 +21,8 @@ import {
   EditVenuePage,
   VenueDetailsPage,
   NotificationsPage,
-  GlobalSearchPage
+  GlobalSearchPage,
+  WalletPage
 } from './pages';
 import TournamentsPage from './pages/TournamentsPage';
 import TournamentDetailPage from './pages/TournamentDetailPage';
@@ -192,6 +193,10 @@ export const router = createBrowserRouter([
       {
         path: 'referee/schedule',
         element: <RefereeSchedulePage />,
+      },
+      {
+        path: 'referee/wallet',
+        element: <WalletPage />,
       },
       {
         path: 'tournaments/:tournamentId/select-referee',

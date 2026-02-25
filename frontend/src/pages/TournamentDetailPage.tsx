@@ -20,6 +20,7 @@ import type { PlayerStats } from '@/components/TopScorersTable';
 import toastService from '@/services/toastService';
 import { api } from '@/services/api';
 import PaymentModal from '@/components/PaymentModal';
+import ChatButton from '@/components/chat/ChatButton';
 
 export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -44,7 +45,7 @@ export default function TournamentDetailPage() {
   const [refereesLoading, setRefereesLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
+
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
@@ -87,7 +88,7 @@ export default function TournamentDetailPage() {
 
   const loadStandings = async () => {
     if (!tournamentId) return;
-    
+
     try {
       const standingsData = await tournamentService.getStandings(tournamentId);
       setStandings(standingsData);
@@ -99,16 +100,16 @@ export default function TournamentDetailPage() {
 
   const loadLeaderboards = async () => {
     if (!tournamentId) return;
-    
+
     try {
       const [scorersData, assistsData] = await Promise.all([
         tournamentService.getTopScorers(tournamentId),
         tournamentService.getTopAssists(tournamentId)
       ]);
-      
+
       console.log('Top Scorers Data:', scorersData);
       console.log('Top Assists Data:', assistsData);
-      
+
       setTopScorers(scorersData);
       setTopAssists(assistsData);
     } catch (err: any) {
@@ -120,7 +121,7 @@ export default function TournamentDetailPage() {
 
   const loadReferees = async () => {
     if (!tournamentId) return;
-    
+
     try {
       const response = await api.get(`/api/tournaments/${tournamentId}/referees/`);
       setReferees(Array.isArray(response.data) ? response.data : []);
@@ -132,7 +133,7 @@ export default function TournamentDetailPage() {
 
   const loadMatches = async () => {
     if (!tournamentId) return;
-    
+
     try {
       const response = await api.get(`/api/tournaments/${tournamentId}/matches/`);
       const matchesData = response.data.matches || response.data || [];
@@ -211,7 +212,7 @@ export default function TournamentDetailPage() {
       console.log('Entry Fee:', tournament?.entry_fee);
       console.log('Entry Fee Type:', typeof tournament?.entry_fee);
       console.log('Participation Type:', tournament?.participation_type);
-      
+
       // Check if tournament requires team registration
       if (tournament?.participation_type === 'TEAM') {
         toastService.error('This tournament requires team registration. Please register as a team from the Teams page.');
@@ -219,14 +220,14 @@ export default function TournamentDetailPage() {
       }
 
       setRegistering(true);
-      
+
       // Check if tournament has entry fee (handle both string and number types)
-      const entryFee = typeof tournament?.entry_fee === 'string' 
-        ? parseFloat(tournament.entry_fee) 
+      const entryFee = typeof tournament?.entry_fee === 'string'
+        ? parseFloat(tournament.entry_fee)
         : tournament?.entry_fee || 0;
-      
+
       console.log('Parsed Entry Fee:', entryFee);
-      
+
       if (tournament && entryFee > 0) {
         console.log('Paid tournament - initiating payment flow');
         // Paid tournament - initiate payment flow
@@ -235,23 +236,23 @@ export default function TournamentDetailPage() {
         console.log('Response payment_required:', response.payment_required);
         console.log('Response payment:', response.payment);
         console.log('Response khalti_response:', response.khalti_response);
-        
+
         if (response.payment_required && response.payment && response.khalti_response) {
           console.log('✅ Payment required - setting state to show modal');
           console.log('Payment ID:', response.payment.id);
           console.log('Khalti Response:', response.khalti_response);
           console.log('Payment URL:', response.khalti_response.payment_url);
-          
+
           // Store payment ID, URL and show payment modal
           setPaymentId(response.payment.id);
           console.log('State updated: paymentId =', response.payment.id);
-          
+
           setPaymentUrl(response.khalti_response.payment_url);
           console.log('State updated: paymentUrl =', response.khalti_response.payment_url);
-          
+
           setShowPaymentModal(true);
           console.log('State updated: showPaymentModal = true');
-          
+
           toastService.info('Please complete the payment to confirm your registration');
         } else {
           console.log('❌ No payment required or payment failed');
@@ -318,7 +319,7 @@ export default function TournamentDetailPage() {
   const handleGenerateBracket = async () => {
     const isLeague = tournament?.tournament_type === 'league';
     const actionText = isLeague ? 'Generate schedule' : 'Generate tournament bracket';
-    
+
     if (confirm(`${actionText}? This cannot be undone.`)) {
       try {
         if (isLeague) {
@@ -356,7 +357,7 @@ export default function TournamentDetailPage() {
 
   const handleRemoveReferee = async (refereeId: string) => {
     if (!confirm('Are you sure you want to remove this referee assignment?')) return;
-    
+
     try {
       setRefereesLoading(true);
       await api.delete(`/api/tournaments/${tournamentId}/referees/${refereeId}/`);
@@ -371,22 +372,22 @@ export default function TournamentDetailPage() {
 
   const handleGenerateSchedule = async () => {
     if (!tournamentId) return;
-    
+
     if (!confirm('Generate league schedule? This will create matches for all teams.')) return;
-    
+
     try {
       setScheduleLoading(true);
       setError(null);
       setSuccessMessage(null);
-      
+
       const result = await tournamentService.generateSchedule(tournamentId);
-      
+
       setSuccessMessage(result.message || `Successfully generated ${result.matches_created} matches!`);
-      
+
       // Refresh matches and standings
       await loadMatches();
       await loadStandings();
-      
+
       // Auto-dismiss success message after 5 seconds
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
@@ -400,15 +401,15 @@ export default function TournamentDetailPage() {
 
   const handleEditMatch = async (matchId: string, updates: any) => {
     if (!tournamentId) return;
-    
+
     try {
       // Use the correct endpoint for updating match results
       await tournamentService.updateMatchResult(tournamentId, matchId, updates);
-      
+
       // Refresh matches and standings
       await loadMatches();
       await loadStandings();
-      
+
       setSuccessMessage('Match updated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
@@ -419,7 +420,7 @@ export default function TournamentDetailPage() {
 
   const handleDeleteTournament = async () => {
     if (!confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) return;
-    
+
     try {
       await api.delete(`/api/tournaments/tournaments/${tournamentId}/`);
       toastService.success('Tournament deleted successfully!');
@@ -620,43 +621,57 @@ export default function TournamentDetailPage() {
               Back to Tournaments
             </button>
 
-            {isOrganizer() && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowShareModal(true)}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </button>
+            <div className="flex items-center gap-2">
+              {/* Message Organizer button for non-organizers */}
+              {user && !isOrganizer() && (
+                <ChatButton
+                  targetUserId={tournament.organizer.id}
+                  targetUserName={tournament.organizer.name}
+                  buttonText="Message Organizer"
+                  variant="primary"
+                  context="tournament"
+                />
+              )}
 
-                {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && matches.length === 0 && (
+              {/* Organizer-only actions */}
+              {isOrganizer() && (
+                <>
                   <button
-                    onClick={handleGenerateBracket}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                    onClick={() => setShowShareModal(true)}
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
                   >
-                    <Play className="h-4 w-4" />
-                    {tournament.tournament_type === 'league' ? 'Generate Schedule' : 'Generate Bracket'}
+                    <Share2 className="h-4 w-4" />
+                    Share
                   </button>
-                )}
 
-                <button
-                  onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
-                >
-                  <Edit className="h-4 w-4" />
-                  Edit
-                </button>
+                  {tournament.status === 'UPCOMING' && tournament.registered_count >= (tournament.min_participants || 2) && matches.length === 0 && (
+                    <button
+                      onClick={handleGenerateBracket}
+                      className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <Play className="h-4 w-4" />
+                      {tournament.tournament_type === 'league' ? 'Generate Schedule' : 'Generate Bracket'}
+                    </button>
+                  )}
 
-                <button
-                  onClick={handleDeleteTournament}
-                  className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-              </div>
-            )}
+                  <button
+                    onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
+                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={handleDeleteTournament}
+                    className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -734,11 +749,11 @@ export default function TournamentDetailPage() {
                     { id: 'overview', label: 'Overview', icon: Info },
                     { id: 'participants', label: 'Participants', icon: Users },
                     // Show schedule and standings tabs for league tournaments
-                    ...(tournament.tournament_type === 'league' 
+                    ...(tournament.tournament_type === 'league'
                       ? [
-                          { id: 'schedule', label: 'Schedule', icon: Calendar },
-                          { id: 'standings', label: 'Standings', icon: Trophy }
-                        ]
+                        { id: 'schedule', label: 'Schedule', icon: Calendar },
+                        { id: 'standings', label: 'Standings', icon: Trophy }
+                      ]
                       // Show bracket tab only for knockout tournaments
                       : [{ id: 'bracket', label: 'Bracket', icon: Trophy }]
                     ),
@@ -749,8 +764,8 @@ export default function TournamentDetailPage() {
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
                       className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
-                          ? 'border-purple-500 text-purple-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-purple-500 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                     >
                       <tab.icon className="h-4 w-4" />
@@ -943,9 +958,9 @@ export default function TournamentDetailPage() {
                                   )}
                                   {participant.status && (
                                     <span className={`px-2 py-1 text-xs rounded-full ${participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
-                                        participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                          participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                                            'bg-gray-100 text-gray-800'
+                                      participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                                        participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                          'bg-gray-100 text-gray-800'
                                       }`}>
                                       {participant.status}
                                     </span>
@@ -1100,7 +1115,7 @@ export default function TournamentDetailPage() {
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">League Schedule</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          {matches.length > 0 
+                          {matches.length > 0
                             ? `${matches.length} matches scheduled`
                             : 'No schedule generated yet'
                           }
@@ -1153,8 +1168,8 @@ export default function TournamentDetailPage() {
                         <Calendar className="mx-auto h-16 w-16 text-gray-400 mb-4" />
                         <h3 className="text-lg font-semibold text-gray-900 mb-2">No Schedule Generated</h3>
                         <p className="text-gray-600">
-                          {isOrganizer() 
-                            ? 'Generate a schedule to see matches here' 
+                          {isOrganizer()
+                            ? 'Generate a schedule to see matches here'
                             : 'The organizer hasn\'t generated the schedule yet'}
                         </p>
                       </div>
@@ -1205,7 +1220,7 @@ export default function TournamentDetailPage() {
                         </button>
                       )}
                     </div>
-                    
+
                     {refereesLoading ? (
                       <div className="flex justify-center py-12">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
@@ -1215,8 +1230,8 @@ export default function TournamentDetailPage() {
                         <UserPlus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                         <h4 className="text-lg font-semibold text-gray-900 mb-2">No referees assigned</h4>
                         <p className="text-gray-600 mb-6">
-                          {isOrganizer() 
-                            ? 'Add referees to manage your tournament matches professionally' 
+                          {isOrganizer()
+                            ? 'Add referees to manage your tournament matches professionally'
                             : 'No referees have been assigned to this tournament yet'}
                         </p>
                         {isOrganizer() && (
@@ -1233,7 +1248,7 @@ export default function TournamentDetailPage() {
                       <div className="space-y-4">
                         {Array.isArray(referees) && referees.map((referee) => {
                           if (!referee || !referee.id) return null;
-                          
+
                           return (
                             <div key={referee.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                               <div className="flex items-center gap-4">
@@ -1248,8 +1263,8 @@ export default function TournamentDetailPage() {
                                     {referee.referee?.email || 'No email'}
                                   </p>
                                   <p className="text-xs text-gray-500">
-                                    Match Date: {referee.match_date 
-                                      ? new Date(referee.match_date).toLocaleDateString() 
+                                    Match Date: {referee.match_date
+                                      ? new Date(referee.match_date).toLocaleDateString()
                                       : 'TBD'}
                                   </p>
                                 </div>
@@ -1257,25 +1272,33 @@ export default function TournamentDetailPage() {
                               <div className="flex items-center gap-3">
                                 <div className="text-right">
                                   <p className="text-sm font-medium text-gray-900">NPR {referee.fee || 0}</p>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    referee.status === 'accepted' 
-                                      ? 'bg-green-100 text-green-700' 
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${referee.status === 'accepted'
+                                      ? 'bg-green-100 text-green-700'
                                       : referee.status === 'requested'
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : 'bg-red-100 text-red-700'
-                                  }`}>
+                                        ? 'bg-yellow-100 text-yellow-700'
+                                        : 'bg-red-100 text-red-700'
+                                    }`}>
                                     {referee.status || 'pending'}
                                   </span>
                                 </div>
                                 {isOrganizer() && (
-                                  <button
-                                    onClick={() => handleRemoveReferee(referee.id)}
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    disabled={refereesLoading}
-                                    title="Remove referee"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
+                                  <>
+                                    <ChatButton
+                                      targetUserId={referee.referee?.id || ''}
+                                      targetUserName={referee.referee?.full_name || 'Referee'}
+                                      buttonText="Message"
+                                      variant="icon"
+                                      context="referee"
+                                    />
+                                    <button
+                                      onClick={() => handleRemoveReferee(referee.id)}
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      disabled={refereesLoading}
+                                      title="Remove referee"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1297,11 +1320,10 @@ export default function TournamentDetailPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Format</span>
-                  <span className={`font-medium px-2 py-1 rounded-full text-xs ${
-                    tournament.tournament_type === 'league' 
-                      ? 'bg-indigo-100 text-indigo-700' 
+                  <span className={`font-medium px-2 py-1 rounded-full text-xs ${tournament.tournament_type === 'league'
+                      ? 'bg-indigo-100 text-indigo-700'
                       : 'bg-purple-100 text-purple-700'
-                  }`}>
+                    }`}>
                     {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
                   </span>
                 </div>

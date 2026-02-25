@@ -127,7 +127,7 @@ export default function BookingsPage() {
             <DollarSign className="h-4 w-4 text-purple-500" />
           </div>
           <p className="text-2xl font-bold text-gray-900">
-            ${[...confirmedBookings, ...historyBookings].reduce((sum, booking) => sum + (booking.total_cost || 0), 0).toLocaleString()}
+            NPR {[...confirmedBookings, ...historyBookings].reduce((sum, booking) => sum + (booking.total_cost || 0), 0).toLocaleString()}
           </p>
           <span className="text-xs text-gray-500 mt-1">Total earnings</span>
         </div>

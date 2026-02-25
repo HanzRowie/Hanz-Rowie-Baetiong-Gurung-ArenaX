@@ -72,12 +72,13 @@ class VenueBookingSerializer(serializers.ModelSerializer):
     booking_date = serializers.DateField(source='date', read_only=True)
     total_hours = serializers.SerializerMethodField()
     total_cost = serializers.DecimalField(source='amount', max_digits=8, decimal_places=2, read_only=True)
+    payment_details = serializers.SerializerMethodField()
     
     class Meta:
         model = VenueBooking
         fields = ['id', 'venue', 'venue_details', 'user', 'booker', 'date', 'booking_date', 
                  'start_time', 'end_time', 'purpose', 'total_hours', 'total_cost', 'amount', 'status', 
-                 'payment_status', 'notes', 'created_at']
+                 'payment_status', 'payment_details', 'notes', 'created_at']
     
     def get_total_hours(self, obj):
         if obj.start_time and obj.end_time:
@@ -87,3 +88,24 @@ class VenueBookingSerializer(serializers.ModelSerializer):
             duration_hours = (end - start).total_seconds() / 3600
             return duration_hours
         return 0
+    
+    def get_payment_details(self, obj):
+        """Include payment information for venue owners"""
+        try:
+            from payments.models import Payment
+            payment = Payment.objects.filter(venue_booking=obj).first()
+            if payment:
+                return {
+                    'payment_id': str(payment.id),
+                    'amount': str(payment.amount),
+                    'currency': payment.currency,
+                    'status': payment.status,
+                    'payment_type': payment.payment_type,
+                    'transaction_id': payment.transaction_id,
+                    'payment_processor': payment.payment_processor,
+                    'created_at': payment.created_at,
+                    'processed_at': payment.processed_at,
+                }
+            return None
+        except Exception:
+            return None

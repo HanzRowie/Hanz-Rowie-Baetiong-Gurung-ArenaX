@@ -86,7 +86,7 @@ export const API_ENDPOINTS = {
   CHAT: {
     CONVERSATIONS: '/api/chat/conversations/',
     MESSAGES: (userId: string) => `/api/chat/conversations/${userId}/`,
-    SEND: '/api/chat/messages/send',
+    SEND: '/api/chat/messages/',
     UNREAD_COUNT: '/api/chat/messages/unread-count',
   },
 } as const;

@@ -180,7 +180,7 @@ class VenueBookingViewSet(viewsets.ModelViewSet):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def book_venue(request, venue_id):
-    """Book a venue"""
+    """Book a venue - creates booking and initiates payment"""
     try:
         venue = get_object_or_404(Venue, id=venue_id)
         data = request.data
@@ -242,7 +242,6 @@ def book_venue(request, venue_id):
             return Response({'error': 'Venue is not available for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check for conflicting bookings
-        # Check for conflicting bookings
         print("Checking conflicts with:")
         print(f"Start < {end_time_obj}")
         print(f"End > {start_time_obj}")
@@ -264,7 +263,7 @@ def book_venue(request, venue_id):
         if conflicting_bookings.exists():
             return Response({'error': 'Venue is already booked for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create booking
+        # Create booking with PENDING status and payment
         print("Creating booking...")
         
         booking = VenueBooking.objects.create(
@@ -274,12 +273,52 @@ def book_venue(request, venue_id):
             start_time=start_time_obj,
             end_time=end_time_obj,
             purpose=data.get('purpose', ''),
-            notes=data.get('notes', '')
+            notes=data.get('notes', ''),
+            status='PENDING',
+            payment_status='PENDING'
         )
-        print(f"Booking created: {booking.id}")
+        print(f"Booking created: {booking.id}, Amount: {booking.amount}")
 
+        # Initiate payment
+        from payments.services import VenuePaymentService
+        from payments.serializers import PaymentSerializer
+        
+        payment_service = VenuePaymentService()
+        
+        # Create payment record
+        payment = payment_service.create_payment(
+            user=request.user,
+            payment_type='VENUE_BOOKING',
+            amount=booking.amount,
+            currency='NPR',
+            venue_booking=booking,
+            description=f'Venue booking for {venue.name} on {booking.date}'
+        )
+        
+        # Initiate Khalti payment
+        customer_info = {
+            'name': request.user.full_name,
+            'email': request.user.email,
+            'phone': request.user.phone_number or ''
+        }
+        
+        khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
+        
+        if 'error' in khalti_response:
+            # Delete booking if payment initiation fails
+            booking.delete()
+            return Response({
+                'error': 'Failed to initiate payment',
+                'details': khalti_response['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         serializer = VenueBookingSerializer(booking)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response({
+            'booking': serializer.data,
+            'payment': PaymentSerializer(payment).data,
+            'payment_url': khalti_response.get('payment_url'),
+            'pidx': khalti_response.get('pidx')
+        }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         print(f"Booking error: {str(e)}")
@@ -308,6 +347,66 @@ def cancel_booking(request, booking_id):
     booking.save()
 
     return Response({'message': 'Booking cancelled successfully'}, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_booking_payment(request, booking_id):
+    """Verify payment for venue booking"""
+    try:
+        booking = get_object_or_404(VenueBooking, id=booking_id, user=request.user)
+        
+        # Get payment record
+        from payments.models import Payment
+        payment = Payment.objects.filter(venue_booking=booking).first()
+        if not payment:
+            return Response({
+                'error': 'No payment found for this booking'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Verify with Khalti
+        from payments.services import VenuePaymentService
+        from payments.serializers import PaymentSerializer
+        
+        payment_service = VenuePaymentService()
+        verification = payment_service.verify_payment(payment)
+        
+        if 'error' in verification:
+            return Response({
+                'error': 'Payment verification failed',
+                'details': verification['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update booking status if payment is completed
+        if payment.status == 'COMPLETED':
+            booking.status = 'CONFIRMED'
+            booking.payment_status = 'COMPLETED'
+            booking.save()
+            
+            # Send confirmation notification
+            try:
+                from notifications.models import Notification
+                Notification.objects.create(
+                    user=booking.user,
+                    notification_type='BOOKING_CONFIRMED',
+                    title='Venue Booking Confirmed',
+                    message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
+                )
+            except Exception as e:
+                # Don't fail if notification creation fails
+                print(f"Failed to create notification: {e}")
+        
+        return Response({
+            'booking': VenueBookingSerializer(booking).data,
+            'payment': PaymentSerializer(payment).data,
+            'verification': verification
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -429,19 +528,39 @@ def my_venue_bookings(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_my_venues(request):
-    """Get venues owned by the current user"""
+    """Get venues owned by the current user with booking statistics"""
     try:
         if request.user.role != 'VENUE_OWNER':
             return Response({'error': 'Only venue owners can access this endpoint'}, status=status.HTTP_403_FORBIDDEN)
         
         venues = Venue.objects.filter(owner=request.user)
         serializer = VenueSerializer(venues, many=True)
+        
+        # Add booking statistics to each venue
+        venues_data = list(serializer.data)  # Convert to list to modify
+        for venue_data in venues_data:
+            venue_id = venue_data['id']
+            # Get booking stats for this venue
+            from venues.models import VenueBooking
+            confirmed_bookings = VenueBooking.objects.filter(
+                venue_id=venue_id,
+                status__in=['CONFIRMED', 'COMPLETED']
+            )
+            total_bookings = confirmed_bookings.count()
+            total_revenue = sum(booking.amount for booking in confirmed_bookings if booking.amount)
+            
+            # Add stats to venue data
+            venue_data['total_bookings'] = total_bookings
+            venue_data['revenue'] = float(total_revenue)
+        
         return Response({
-            'venues': serializer.data,
-            'count': len(serializer.data)
+            'venues': venues_data,
+            'count': len(venues_data)
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
+        import traceback
+        print(f"Error in get_my_venues: {traceback.format_exc()}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
@@ -620,3 +739,77 @@ def venue_reviews(request, venue_id):
         'count': len(mock_reviews),
         'average_rating': 4.5
     }, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def calculate_booking_cost(request, venue_id):
+    """Calculate booking cost without creating booking (preview for smooth UX)"""
+    try:
+        venue = get_object_or_404(Venue, id=venue_id)
+        data = request.data
+        
+        # Validate required fields
+        if not all(key in data for key in ['start_time', 'end_time']):
+            return Response({
+                'error': 'start_time and end_time are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Parse times
+        from datetime import datetime, date as date_class
+        start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+        end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+        
+        # Calculate duration
+        start_dt = datetime.combine(date_class.today(), start_time)
+        end_dt = datetime.combine(date_class.today(), end_time)
+        duration_hours = (end_dt - start_dt).total_seconds() / 3600
+        
+        if duration_hours <= 0:
+            return Response({
+                'error': 'End time must be after start time'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Calculate costs
+        from decimal import Decimal
+        base_price = float(venue.price_per_hour) * duration_hours
+        service_fee = base_price * 0.05  # 5% service fee
+        total = base_price + service_fee
+        
+        return Response({
+            'venue': {
+                'id': venue.id,
+                'name': venue.name,
+                'location': venue.location,
+                'price_per_hour': float(venue.price_per_hour),
+                'sport_type': venue.sport_type
+            },
+            'duration_hours': round(duration_hours, 2),
+            'breakdown': {
+                'base_price': round(base_price, 2),
+                'service_fee': round(service_fee, 2),
+                'service_fee_percentage': 5,
+                'total': round(total, 2),
+                'currency': 'NPR'
+            },
+            'policies': {
+                'cancellation': 'Free cancellation up to 48 hours before booking',
+                'refund': '100% refund if cancelled 48+ hours before',
+                'payment_protection': 'Secure payment via Khalti',
+                'instant_confirmation': True
+            },
+            'formatted': {
+                'calculation': f'NPR {venue.price_per_hour:,.0f}/hr × {duration_hours:.1f} hrs = NPR {base_price:,.0f}',
+                'total': f'NPR {total:,.0f}'
+            }
+        })
+        
+    except ValueError as e:
+        return Response({
+            'error': f'Invalid time format: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

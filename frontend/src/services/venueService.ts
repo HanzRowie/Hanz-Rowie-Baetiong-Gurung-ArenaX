@@ -250,6 +250,33 @@ class VenueService {
     console.log('Venue response:', response.data);
     return response.data;
   }
+
+  // Payment-related methods
+  async calculateBookingCost(venueId: string, data: { start_time: string; end_time: string }): Promise<any> {
+    const response = await api.post(`/api/venues/venues/${venueId}/calculate-cost/`, data);
+    return response.data;
+  }
+
+  async bookVenueWithPayment(venueId: string, bookingData: {
+    date: string;
+    start_time: string;
+    end_time: string;
+    purpose?: string;
+    notes?: string;
+  }): Promise<any> {
+    const response = await api.post(`/api/venues/venues/${venueId}/book/`, bookingData);
+    return response.data;
+  }
+
+  async verifyBookingPayment(bookingId: string, paymentData: any): Promise<any> {
+    const response = await api.post(`/api/venues/bookings/${bookingId}/verify-payment/`, paymentData);
+    return response.data;
+  }
+
+  async getBooking(bookingId: string): Promise<any> {
+    const response = await api.get(`/api/venues/bookings/${bookingId}/`);
+    return response.data;
+  }
 }
 
 export const venueService = new VenueService();

@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../design-system/components/Card';
 import { Button } from '../design-system/components/Button';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { 
-  Calendar, 
-  Clock, 
-  Star, 
-  Trophy, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Calendar,
+  Clock,
+  Star,
+  Trophy,
+  CheckCircle,
+  XCircle,
   AlertCircle,
-  Users
+  Users,
+  Wallet
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -73,8 +74,8 @@ const RefereeDashboardPage: React.FC = () => {
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
-      <Star 
-        key={i} 
+      <Star
+        key={i}
         className={`w-4 h-4 ${i < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
       />
     ));
@@ -114,7 +115,7 @@ const RefereeDashboardPage: React.FC = () => {
         <Card className="p-6 text-center">
           <h2 className="text-xl font-semibold text-red-600 mb-4">Error</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <Button 
+          <Button
             onClick={fetchDashboardData}
             className="bg-purple-600 text-white hover:bg-purple-700"
           >
@@ -200,8 +201,8 @@ const RefereeDashboardPage: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">Upcoming Assignments</h2>
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               size="sm"
               onClick={() => navigate('/referee/bookings')}
             >
@@ -216,8 +217,8 @@ const RefereeDashboardPage: React.FC = () => {
               <p className="text-sm text-gray-500 mt-2">
                 Set your availability to receive referee requests
               </p>
-              <Button 
-                className="mt-4" 
+              <Button
+                className="mt-4"
                 size="sm"
                 onClick={() => navigate('/referee/availability')}
               >
@@ -237,16 +238,16 @@ const RefereeDashboardPage: React.FC = () => {
                       </div>
                       <div className="flex items-center text-sm text-gray-600">
                         <Clock className="w-4 h-4 mr-1" />
-                        {new Date(booking.match_date).toLocaleTimeString([], { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
+                        {new Date(booking.match_date).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
                         })}
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
                     <span className="text-sm font-medium text-green-600">
-                      ${booking.fee.toFixed(2)}
+                      NPR {booking.fee.toFixed(2)}
                     </span>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${getStatusColor(booking.status)}`}>
                       {getStatusIcon(booking.status)}
@@ -263,8 +264,8 @@ const RefereeDashboardPage: React.FC = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900">Recent Ratings</h2>
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               size="sm"
               onClick={() => navigate('/referee/ratings')}
             >
@@ -316,24 +317,32 @@ const RefereeDashboardPage: React.FC = () => {
       {/* Quick Actions */}
       <Card className="p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Button 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Button
             className="flex items-center justify-center space-x-2 p-4 bg-purple-600 text-white hover:bg-purple-700"
             onClick={() => navigate('/referee/availability')}
           >
             <Calendar className="w-5 h-5" />
             <span>Manage Availability</span>
           </Button>
-          
-          <Button 
+
+          <Button
             className="flex items-center justify-center space-x-2 p-4 bg-gray-100 text-gray-700 hover:bg-gray-200"
             onClick={() => navigate('/referee/management')}
           >
             <Trophy className="w-5 h-5" />
             <span>View Assignments</span>
           </Button>
-          
-          <Button 
+
+          <Button
+            className="flex items-center justify-center space-x-2 p-4 bg-gray-100 text-gray-700 hover:bg-gray-200"
+            onClick={() => navigate('/referee/wallet')}
+          >
+            <Wallet className="w-5 h-5" />
+            <span>Virtual Wallet</span>
+          </Button>
+
+          <Button
             className="flex items-center justify-center space-x-2 p-4 bg-gray-100 text-gray-700 hover:bg-gray-200"
             onClick={() => navigate('/profile')}
           >

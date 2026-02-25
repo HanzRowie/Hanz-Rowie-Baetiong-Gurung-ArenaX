@@ -9,6 +9,8 @@ import toastService from '@/services/toastService';
 import TimePicker from '@/components/TimePicker';
 import TournamentTypeSelector from '@/components/TournamentTypeSelector';
 import LeagueOptionsForm, { type LeagueOptions } from '@/components/LeagueOptionsForm';
+import { VenueCostPreview } from '@/components/VenueCostPreview';
+import PaymentModal from '@/components/PaymentModal';
 
 export default function CreateTournamentPage() {
   const navigate = useNavigate();
@@ -18,6 +20,11 @@ export default function CreateTournamentPage() {
   const [availableVenues, setAvailableVenues] = useState<Venue[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
   const [useCustomVenue, setUseCustomVenue] = useState(false);
+  
+  // Payment flow states
+  const [showVenuePaymentModal, setShowVenuePaymentModal] = useState(false);
+  const [venuePaymentData, setVenuePaymentData] = useState<any>(null);
+  const [createdTournament, setCreatedTournament] = useState<any>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -272,11 +279,29 @@ export default function CreateTournamentPage() {
       const result = await tournamentService.createTournament(tournamentData);
 
       console.log('Tournament created:', result);
-      toastService.success('Tournament created successfully!');
-      setSuccess(true);
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+      
+      // Check if venue payment is required
+      if (result.requires_venue_payment && result.venue_payment) {
+        setCreatedTournament(result);
+        setVenuePaymentData({
+          tournamentId: result.id,
+          paymentId: result.venue_payment.payment_id,
+          paymentUrl: result.venue_payment.payment_url,
+          pidx: result.venue_payment.pidx,
+          amount: parseFloat(result.venue_payment.amount),
+          venueBookingId: result.venue_payment.venue_booking_id
+        });
+        setShowVenuePaymentModal(true);
+        
+        toastService.info('Please complete venue payment to activate your tournament');
+      } else {
+        // No payment required (custom venue)
+        toastService.success('Tournament created successfully!');
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      }
     } catch (err: any) {
       console.error('Error creating tournament:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to create tournament. Please try again.';
@@ -285,6 +310,40 @@ export default function CreateTournamentPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVenuePaymentSuccess = async () => {
+    try {
+      setShowVenuePaymentModal(false);
+      
+      // Verify payment with backend
+      await tournamentService.verifyTournamentVenuePayment(
+        venuePaymentData.tournamentId,
+        { pidx: venuePaymentData.pidx }
+      );
+      
+      toastService.success('Venue payment successful! Your tournament is now active.');
+      setSuccess(true);
+      
+      setTimeout(() => {
+        navigate(`/tournaments/${createdTournament.id}`);
+      }, 2000);
+    } catch (error: any) {
+      console.error('Payment verification error:', error);
+      toastService.error('Payment verification failed. Please contact support.');
+    }
+  };
+
+  const handleVenuePaymentError = (error: any) => {
+    console.error('Payment error:', error);
+    toastService.error('Payment failed. Your tournament has been created but venue is not confirmed.');
+    setShowVenuePaymentModal(false);
+  };
+
+  const handleVenuePaymentClose = () => {
+    setShowVenuePaymentModal(false);
+    toastService.warning('Payment cancelled. Your tournament has been created but venue is not confirmed.');
+    navigate('/dashboard');
   };
 
   if (success) {
@@ -684,7 +743,7 @@ export default function CreateTournamentPage() {
                         </option>
                         {availableVenues.map((venue) => (
                           <option key={venue.id} value={venue.id}>
-                            {venue.name} - {venue.location} (${venue.price_per_hour}/hr)
+                            {venue.name} - {venue.location} (NPR {venue.price_per_hour}/hr)
                           </option>
                         ))}
                       </select>
@@ -706,6 +765,20 @@ export default function CreateTournamentPage() {
                           No venues available for the selected date and time. Consider using a custom venue or changing the schedule.
                         </span>
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Venue Cost Preview */}
+                  {formData.linked_venue_id && formData.start_time && formData.end_time && (
+                    <div className="mt-4">
+                      <VenueCostPreview
+                        venueId={formData.linked_venue_id}
+                        venueName={formData.venue}
+                        startTime={formData.start_time}
+                        endTime={formData.end_time}
+                        entryFee={formData.entry_fee}
+                        maxParticipants={formData.max_participants}
+                      />
                     </div>
                   )}
                 </div>
@@ -858,6 +931,20 @@ export default function CreateTournamentPage() {
       </main>
 
       <BottomNavigation />
+      
+      {/* Venue Payment Modal */}
+      {showVenuePaymentModal && venuePaymentData && (
+        <PaymentModal
+          isOpen={showVenuePaymentModal}
+          onClose={handleVenuePaymentClose}
+          amount={venuePaymentData.amount}
+          productName={`Venue Booking - ${formData.venue}`}
+          paymentId={venuePaymentData.paymentId}
+          paymentUrl={venuePaymentData.paymentUrl}
+          onSuccess={handleVenuePaymentSuccess}
+          onError={handleVenuePaymentError}
+        />
+      )}
     </div>
   );
 }

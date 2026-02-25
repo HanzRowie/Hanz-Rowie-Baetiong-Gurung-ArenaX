@@ -6,6 +6,7 @@ import type { Venue } from '@/types/venue.types';
 import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import { API_URL } from '@/utils/constants';
+import ChatButton from '@/components/chat/ChatButton';
 import {
     MapPin, Users, Star, Calendar,
     Clock, Info, Edit, ArrowLeft
@@ -40,6 +41,7 @@ export default function VenueDetailsPage() {
     };
 
     const isOwner = user?.role === 'VENUE_OWNER' && venue?.owner?.id === user?.id;
+    const showChatButton = user && (user.role === 'PLAYER' || user.role === 'ORGANIZER') && !isOwner && venue?.owner;
     const rawImage = (venue?.images && venue.images.length > 0) ? venue.images[0] : venue?.image;
     const displayImage = rawImage?.startsWith('/')
         ? `${API_URL?.replace(/\/$/, '')}${rawImage}`
@@ -70,6 +72,16 @@ export default function VenueDetailsPage() {
                             Edit
                         </button>
                     </div>
+                )}
+                
+                {showChatButton && (
+                    <ChatButton
+                        targetUserId={venue.owner!.id}
+                        targetUserName={venue.owner!.name}
+                        buttonText="Message Owner"
+                        variant="primary"
+                        context="venue"
+                    />
                 )}
             </div>
 
@@ -113,7 +125,7 @@ export default function VenueDetailsPage() {
                                 <span className="text-sm text-gray-500">({venue.total_bookings || 0} bookings)</span>
                             </div>
                             <div className="text-2xl font-bold text-indigo-600">
-                                ${venue.price_per_hour}<span className="text-sm font-normal text-gray-500">/hour</span>
+                                NPR {venue.price_per_hour}<span className="text-sm font-normal text-gray-500">/hour</span>
                             </div>
                         </div>
                     </div>
@@ -372,11 +384,10 @@ function OperatingHoursManager({ venueId, venue }: { venueId: string, venue: Ven
                             <button
                                 key={day}
                                 onClick={() => handleDayToggle(dayNumber)}
-                                className={`p-3 rounded-lg border-2 transition-colors text-center ${
-                                    isSelected
+                                className={`p-3 rounded-lg border-2 transition-colors text-center ${isSelected
                                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                }`}
+                                    }`}
                             >
                                 <div className="font-medium text-sm">{day}</div>
                                 {isSelected && (
@@ -398,8 +409,8 @@ function OperatingHoursManager({ venueId, venue }: { venueId: string, venue: Ven
                     <p><strong>Status:</strong> {settings.is_active ? 'Active' : 'Inactive'}</p>
                     <p><strong>Operating Hours:</strong> {settings.default_opening_time} - {settings.default_closing_time}</p>
                     <p><strong>Operating Days:</strong> {
-                        settings.operating_days.length === 7 
-                            ? 'All days' 
+                        settings.operating_days.length === 7
+                            ? 'All days'
                             : settings.operating_days.map(d => dayNames[d - 1]).join(', ')
                     }</p>
                 </div>
