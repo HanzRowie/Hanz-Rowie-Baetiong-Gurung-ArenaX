@@ -28,7 +28,25 @@ export function useGroupChat(teamId: string): UseGroupChatReturn {
     setError(null);
     try {
       const response = await groupChatService.getGroupMessages(tid);
-      setMessages(response.messages);
+      // Normalize REST API messages to match WebSocket format
+      const normalizedMessages = response.messages.map(msg => {
+        const msgAny = msg as any; // Type assertion for REST API fields
+        // If sender is already an object, keep it; otherwise create the object
+        const senderObj = typeof msg.sender === 'object' && msg.sender !== null
+          ? msg.sender
+          : {
+              id: msg.sender,
+              username: msgAny.sender_username,
+              full_name: msgAny.sender_name,
+              profile_picture: msgAny.sender_avatar
+            };
+        
+        return {
+          ...msg,
+          sender: senderObj
+        };
+      });
+      setMessages(normalizedMessages);
     } catch (err) {
       setError(err as Error);
       console.error('Failed to load group messages:', err);
@@ -96,8 +114,16 @@ export function useGroupChat(teamId: string): UseGroupChatReturn {
         console.log(`Disconnected from group chat for team ${teamId}`);
       },
       onMessage: (data) => {
-        if (data.type === 'group_message' && data.message) {
-          setMessages(prev => [...prev, data.message]);
+        // Backend sends type: 'message' for group messages
+        if ((data.type === 'message' || data.type === 'group_message') && data.message) {
+          // Prevent duplicates by checking if message already exists
+          setMessages(prev => {
+            const exists = prev.some(msg => msg.id === data.message.id);
+            if (exists) {
+              return prev;
+            }
+            return [...prev, data.message];
+          });
         } else if (data.type === 'user_joined') {
           console.log(`User ${data.user_name} joined the chat`);
         } else if (data.type === 'user_left') {

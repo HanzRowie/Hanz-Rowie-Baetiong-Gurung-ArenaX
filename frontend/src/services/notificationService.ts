@@ -161,7 +161,10 @@ class NotificationService {
     }
     this.stopHeartbeat();
     if (this.ws) {
-      this.ws.close();
+      // Only close if connection is fully open to avoid "closed before established" errors in React Strict Mode
+      if (this.ws.readyState === WebSocket.OPEN) {
+        this.ws.close();
+      }
       this.ws = null;
     }
     this.reconnectAttempts = 0;
@@ -406,7 +409,8 @@ class NotificationService {
    */
   async deleteMultiple(ids: string[]): Promise<void> {
     try {
-      await api.post('/api/notifications/notifications/delete_multiple/', { ids });
+      // Delete each notification individually since bulk delete endpoint may not exist
+      await Promise.all(ids.map(id => this.deleteNotification(id)));
     } catch (error) {
       console.error('Error deleting multiple notifications:', error);
       throw error;

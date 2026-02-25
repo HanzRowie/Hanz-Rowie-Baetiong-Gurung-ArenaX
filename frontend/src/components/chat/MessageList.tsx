@@ -149,15 +149,15 @@ const MessageList: React.FC<MessageListProps> = ({
                     {/* Avatar for group chat */}
                     {showSenderInfo && (
                       <div className="flex-shrink-0">
-                        {message.sender.profile_picture ? (
+                        {message.sender?.profile_picture ? (
                           <img
                             src={message.sender.profile_picture}
-                            alt={message.sender.full_name}
+                            alt={message.sender.full_name || message.sender.username || 'User'}
                             className="h-8 w-8 rounded-full object-cover"
                           />
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white text-xs font-semibold">
-                            {message.sender.full_name.charAt(0).toUpperCase()}
+                            {(message.sender?.full_name || message.sender?.username || 'U').charAt(0).toUpperCase()}
                           </div>
                         )}
                       </div>
@@ -168,7 +168,7 @@ const MessageList: React.FC<MessageListProps> = ({
                       {/* Sender name for group chat */}
                       {showSenderInfo && (
                         <p className="text-xs text-gray-600 mb-1 ml-1">
-                          {message.sender.full_name}
+                          {message.sender?.full_name || message.sender?.username || 'Unknown User'}
                         </p>
                       )}
 
