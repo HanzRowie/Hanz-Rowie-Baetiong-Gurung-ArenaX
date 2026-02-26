@@ -4,10 +4,10 @@ import { formatDate } from '@/utils/dateUtils';
 import { 
   Trophy, User, Calendar, Eye, 
   Award, BarChart3,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, CheckCircle
 } from 'lucide-react';
 import { UserRole } from '@/types/auth.types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import PlayerCard from '@/components/PlayerCard';
@@ -18,6 +18,29 @@ import OrganizerDashboardPage from './OrganizerDashboardPage';
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [bookingDetails, setBookingDetails] = useState<any>(null);
+  
+  // Check for booking success state
+  useEffect(() => {
+    if (location.state?.bookingSuccess) {
+      setShowSuccessBanner(true);
+      setBookingDetails({
+        venueName: location.state.venueName,
+        bookingDate: location.state.bookingDate,
+        bookingTime: location.state.bookingTime
+      });
+      
+      // Clear the state to prevent showing banner on refresh
+      window.history.replaceState({}, document.title);
+      
+      // Auto-hide banner after 10 seconds
+      setTimeout(() => {
+        setShowSuccessBanner(false);
+      }, 10000);
+    }
+  }, [location]);
   
   // Redirect referees to their specific dashboard
   useEffect(() => {
@@ -171,6 +194,52 @@ export default function DashboardPage() {
       case UserRole.PLAYER:
         return (
           <div className="space-y-6">
+            {/* Booking Success Banner */}
+            {showSuccessBanner && bookingDetails && (
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4 shadow-sm animate-fade-in">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0">
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-green-900 mb-1">
+                      Booking Confirmed! 🎉
+                    </h3>
+                    <p className="text-sm text-green-800 mb-2">
+                      Your venue booking has been successfully confirmed and payment processed.
+                    </p>
+                    <div className="bg-white bg-opacity-60 rounded-lg p-3 space-y-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        📍 {bookingDetails.venueName}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        📅 {new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        ⏰ {bookingDetails.bookingTime}
+                      </p>
+                    </div>
+                    <p className="text-xs text-green-700 mt-2">
+                      You'll receive notifications about your booking status. Check your notifications for updates.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSuccessBanner(false)}
+                    className="flex-shrink-0 text-green-600 hover:text-green-800 transition-colors"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Welcome Section */}
             <div>
               <h1 className="text-2xl font-bold text-gray-900">

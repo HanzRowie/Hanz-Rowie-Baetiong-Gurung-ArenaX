@@ -1,387 +1,594 @@
-import React, { useState, useEffect } from 'react';
-import { venueService } from '../services/venueService';
-import type { VenueBooking, Venue } from '../types/venue.types';
-import { useAuth } from '../hooks/useAuth';
-import toastService from '@/services/toastService';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Calendar, Clock, CheckCircle, XCircle,
-  DollarSign, Building2, User,
-  RefreshCw
+  Clock, DollarSign, MapPin, Building2,
+  Users, Star, ArrowLeft, Send, AlertCircle
 } from 'lucide-react';
+import { venueService } from '@/services/venueService';
+import toastService from '@/services/toastService';
+import { DashboardSkeleton } from '@/components/LoadingSkeleton';
+import { BookingSummaryModal } from '@/components/BookingSummaryModal';
+import PaymentModal from '@/components/PaymentModal';
 
-const VenueBookingsPage: React.FC = () => {
-  const { user } = useAuth();
-  const [bookings, setBookings] = useState<VenueBooking[]>([]);
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenue, setSelectedVenue] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'history'>('pending');
+export default function VenueBookingPage() {
+  const { venueId } = useParams<{ venueId: string }>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [venue, setVenue] = useState<any>(null);
+  const [bookingData, setBookingData] = useState({
+    date: '',
+    start_time: '',
+    end_time: '',
+    purpose: '',
+    notes: '',
+    expected_participants: ''
+  });
+  const [availabilities, setAvailabilities] = useState<any[]>([]);
+  const [existingBookings, setExistingBookings] = useState<any[]>([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  
+  // Payment flow states
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   useEffect(() => {
-    if (user?.role === 'VENUE_OWNER') {
-      loadVenues();
-      loadBookings();
+    if (venueId) {
+      loadVenue();
     }
-  }, [user, selectedVenue]);
+  }, [venueId]);
 
-  const loadVenues = async () => {
+  const loadVenue = async () => {
     try {
-      const response = await venueService.getMyVenues();
-      setVenues(response.venues);
-    } catch (err) {
-      console.error('Error loading venues:', err);
-    }
-  };
-
-  const loadBookings = async (showRefresh = false) => {
-    try {
-      if (showRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-      const venueId = selectedVenue === 'all' ? undefined : selectedVenue;
-      const response = await venueService.getBookingRequests(venueId);
-      setBookings(response.bookings);
-      
-      // Show success toast on manual refresh
-      if (showRefresh) {
-        toastService.success('Bookings refreshed successfully');
-      }
-    } catch (err) {
-      const errorMessage = 'Failed to load bookings. Please try again.';
-      setError(errorMessage);
-      toastService.error(errorMessage);
-      console.error('Error loading bookings:', err);
+      setLoading(true);
+      const response = await venueService.getVenueDetail(venueId!);
+      setVenue(response.venue);
+    } catch (error) {
+      console.error('Error loading venue:', error);
+      toastService.error('Failed to load venue details');
+      navigate('/venues');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const getFilteredBookings = () => {
-    switch (activeTab) {
-      case 'pending':
-        return bookings.filter(b => b.status === 'PENDING');
-      case 'confirmed':
-        return bookings.filter(b => b.status === 'CONFIRMED');
-      case 'history':
-        return bookings.filter(b => ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(b.status));
-      default:
-        return bookings;
+  useEffect(() => {
+    if (venueId && bookingData.date) {
+      loadAvailability();
+    }
+  }, [venueId, bookingData.date]);
+
+  const loadAvailability = async () => {
+    try {
+      setLoadingAvailability(true);
+      const data = await venueService.getVenueAvailability(venueId!, bookingData.date);
+      setAvailabilities((data as any).availabilities || []);
+      setExistingBookings((data as any).bookings || []);
+    } catch (error) {
+      console.error('Error loading availability:', error);
+    } finally {
+      setLoadingAvailability(false);
     }
   };
 
-  const pendingBookings = bookings.filter(b => b.status === 'PENDING');
-  const confirmedBookings = bookings.filter(b => b.status === 'CONFIRMED');
-  const historyBookings = bookings.filter(b => ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(b.status));
+  // Helper to parse "HH:MM:SS" or "HH:MM" to minutes from midnight
+  const parseTimeToMinutes = (timeStr: string) => {
+    if (!timeStr || typeof timeStr !== 'string') {
+      console.warn('Invalid timeStr provided to parseTimeToMinutes:', timeStr);
+      return 0;
+    }
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
 
-  const getStatusColor = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'CONFIRMED':
-        return 'bg-green-100 text-green-800';
-      case 'PENDING':
-        return 'bg-orange-100 text-orange-800';
-      case 'REJECTED':
-        return 'bg-red-100 text-red-800';
-      case 'COMPLETED':
-        return 'bg-blue-100 text-blue-800';
-      case 'CANCELLED':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  // Helper to convert minutes from midnight to "HH:MM"
+  const formatMinutesToTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+
+  // Calculate effective free slots
+  const getEffectiveAvailability = () => {
+    if (!availabilities.length) return [];
+
+    // Convert initial slots to minutes ranges
+    let freeSlots = availabilities.map(slot => ({
+      start: parseTimeToMinutes(slot.opening_time),
+      end: parseTimeToMinutes(slot.closing_time),
+      originalId: slot.id
+    }));
+
+    // Subtract booked slots
+    existingBookings.forEach(booking => {
+      // Basic booking status check - ignore cancelled/rejected
+      if (['CANCELLED', 'REJECTED'].includes(booking.status)) return;
+
+      const bookStart = parseTimeToMinutes(booking.start_time);
+      const bookEnd = parseTimeToMinutes(booking.end_time);
+
+      const nextFreeSlots = [];
+
+      for (const slot of freeSlots) {
+        // Check for overlap
+        // Overlap if max(start1, start2) < min(end1, end2)
+        const overlapStart = Math.max(slot.start, bookStart);
+        const overlapEnd = Math.min(slot.end, bookEnd);
+
+        if (overlapStart < overlapEnd) {
+          // They overlap. Split the slot.
+
+          // Part before booking
+          if (slot.start < overlapStart) {
+            nextFreeSlots.push({ start: slot.start, end: overlapStart, originalId: slot.originalId });
+          }
+
+          // Part after booking
+          if (overlapEnd < slot.end) {
+            nextFreeSlots.push({ start: overlapEnd, end: slot.end, originalId: slot.originalId });
+          }
+        } else {
+          // No overlap, keep slot as is
+          nextFreeSlots.push(slot);
+        }
+      }
+      freeSlots = nextFreeSlots;
+    });
+
+    return freeSlots;
+  };
+
+  const effectiveAvailabilities = getEffectiveAvailability();
+
+  const calculateCost = () => {
+    if (!bookingData.start_time || !bookingData.end_time || !venue?.price_per_hour) {
+      return 0;
+    }
+
+    const start = new Date(`2000-01-01T${bookingData.start_time}`);
+    const end = new Date(`2000-01-01T${bookingData.end_time}`);
+    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+
+    return Math.max(0, hours * venue.price_per_hour);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!bookingData.date || !bookingData.start_time || !bookingData.end_time || !bookingData.purpose) {
+      toastService.error('Please fill in all required fields');
+      return;
+    }
+
+    // Show booking summary modal for review
+    setShowSummaryModal(true);
+  };
+
+  const handleConfirmBooking = async () => {
+    try {
+      setSubmitting(true);
+      setShowSummaryModal(false);
+
+      console.log('Creating booking with payment...');
+
+      const response = await venueService.bookVenueWithPayment(venueId!, {
+        date: bookingData.date,
+        start_time: bookingData.start_time,
+        end_time: bookingData.end_time,
+        purpose: bookingData.purpose,
+        notes: bookingData.notes
+      });
+
+      console.log('Booking response:', response);
+
+      if (response.payment && response.payment_url) {
+        // Store payment data and show payment modal
+        const paymentInfo = {
+          bookingId: response.booking.id,
+          paymentId: response.payment.id,
+          paymentUrl: response.payment_url,
+          pidx: response.pidx,
+          amount: parseFloat(response.payment.amount)
+        };
+        
+        console.log('Setting payment data:', paymentInfo);
+        setPaymentData(paymentInfo);
+        
+        console.log('Setting showPaymentModal to true');
+        setShowPaymentModal(true);
+
+        toastService.info('Please complete payment to confirm your booking');
+      } else {
+        console.error('Missing payment data in response:', response);
+        toastService.error('Failed to initiate payment - missing payment data');
+      }
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      console.error('Error response:', error.response);
+      
+      let errorMessage = 'Failed to create booking';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toastService.error(errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'CONFIRMED':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'REJECTED':
-        return <XCircle className="h-4 w-4" />;
-      case 'COMPLETED':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'CANCELLED':
-        return <XCircle className="h-4 w-4" />;
-      default:
-        return <Clock className="h-4 w-4" />;
-    }
-  };
-
-  if (user?.role !== 'VENUE_OWNER') {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-          <p className="text-gray-600">You need to be a venue owner to access this page.</p>
-        </div>
-      </div>
+  const handlePaymentSuccess = async () => {
+    setShowPaymentModal(false);
+    
+    // Show detailed success message
+    toastService.success(
+      `Booking confirmed! ${venue?.name} is reserved for ${bookingData.date}. Check your notifications for updates.`
     );
-  }
+    
+    // Wait a moment for the user to see the success message
+    setTimeout(() => {
+      // Redirect to dashboard with success state
+      navigate('/dashboard', { 
+        state: { 
+          bookingSuccess: true,
+          venueName: venue?.name,
+          bookingDate: bookingData.date,
+          bookingTime: `${bookingData.start_time} - ${bookingData.end_time}`
+        } 
+      });
+    }, 2000);
+  };
+
+  const handlePaymentError = (error: any) => {
+    console.error('Payment error:', error);
+    toastService.error('Payment failed. Please try again.');
+  };
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false);
+    setPaymentData(null);
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setBookingData(prev => ({ ...prev, [field]: value }));
+  };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Venue Bookings</h1>
-          <p className="text-gray-600">Manage booking requests and track your venue performance</p>
-        </div>
-
+  if (!venue) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Venue Not Found</h2>
+        <p className="text-gray-600 mb-4">The venue you're looking for doesn't exist or has been removed.</p>
         <button
-          onClick={() => loadBookings(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          onClick={() => navigate('/venues')}
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
         >
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
+          Back to Venues
         </button>
       </div>
-
-      {/* Venue Filter */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Select Venue</label>
-        <select
-          value={selectedVenue}
-          onChange={(e) => setSelectedVenue(e.target.value)}
-          className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        >
-          <option value="all">All Venues</option>
-          {venues.map((venue) => (
-            <option key={venue.id} value={venue.id}>
-              {venue.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Confirmed</span>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{confirmedBookings.length}</p>
-          <span className="text-xs text-gray-500 mt-1">Upcoming bookings</span>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Revenue</span>
-            <DollarSign className="h-4 w-4 text-purple-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">
-            NPR {[...confirmedBookings, ...historyBookings].reduce((sum, booking) => sum + parseFloat(booking.total_cost?.toString() || '0'), 0).toLocaleString()}
-          </p>
-          <span className="text-xs text-gray-500 mt-1">Total earnings</span>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Completed</span>
-            <Calendar className="h-4 w-4 text-blue-500" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">
-            {historyBookings.filter(booking => booking.status === 'COMPLETED').length}
-          </p>
-          <span className="text-xs text-gray-500 mt-1">Past bookings</span>
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="border-b border-gray-200">
-          <nav className="flex">
-            <button
-              onClick={() => setActiveTab('pending')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'pending'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              Pending ({pendingBookings.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('confirmed')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'confirmed'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              Confirmed ({confirmedBookings.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              History ({historyBookings.length})
-            </button>
-          </nav>
-        </div>
-
-        <div className="p-6">
-          <BookingsList
-            bookings={getFilteredBookings()}
-            loading={loading}
-            activeTab={activeTab}
-            getStatusColor={getStatusColor}
-            getStatusIcon={getStatusIcon}
-            onBookingAction={async (requestId, action) => {
-              try {
-                const endpoint = action === 'accept' ? 'approve' : 'reject';
-                const { default: api } = await import('../services/api');
-                await api.post(`/api/venues/bookings/${requestId}/${endpoint}/`);
-                
-                // Show success toast
-                toastService.success(`Booking ${action === 'accept' ? 'approved' : 'rejected'} successfully`);
-                
-                // Reload bookings
-                loadBookings();
-              } catch (e) {
-                console.error('Error processing booking action:', e);
-                const errorMessage = `Failed to ${action} booking. Please try again.`;
-                setError(errorMessage);
-                toastService.error(errorMessage);
-              }
-            }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Bookings List Component
-interface BookingsListProps {
-  bookings: VenueBooking[];
-  loading: boolean;
-  activeTab: string;
-  getStatusColor: (status: string) => string;
-  getStatusIcon: (status: string) => React.ReactNode;
-  onBookingAction: (requestId: string, action: 'accept' | 'reject') => Promise<void>;
-}
-
-const BookingsList: React.FC<BookingsListProps> = ({ bookings, loading, activeTab, getStatusColor, getStatusIcon, onBookingAction }) => {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
     );
   }
 
-  if (bookings.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-          No {activeTab} bookings
-        </h3>
-        <p className="text-gray-600">
-          {activeTab === 'pending' && 'No pending booking requests.'}
-          {activeTab === 'confirmed' && 'No confirmed bookings yet.'}
-          {activeTab === 'history' && 'No booking history available.'}
-        </p>
-      </div>
-    );
-  }
+  const totalCost = calculateCost();
 
   return (
-    <div className="space-y-4">
-      {bookings.map((booking) => (
-        <div key={booking.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">{booking.purpose || 'Venue Booking'}</h3>
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                  {getStatusIcon(booking.status)}
-                  {booking.status}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  <span>{booking.booker?.name || 'Unknown User'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  <span>{booking.venue?.name || 'Venue'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span>{new Date(booking.booking_date).toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span>{booking.start_time} - {booking.end_time} ({booking.total_hours || 0}h)</span>
-                </div>
-              </div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/venues')}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5 text-gray-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Book Venue</h1>
+          <p className="text-gray-500 text-sm">Send a booking request to the venue owner</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Venue Details */}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-6">
+            <div className="h-48 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg mb-4 flex items-center justify-center">
+              <Building2 className="h-16 w-16 text-indigo-600" />
             </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-gray-900">NPR {booking.total_cost || 0}</p>
-              {booking.payment_status && (
-                <p className="text-xs text-green-600">Payment: {booking.payment_status}</p>
+
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{venue.name}</h3>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <MapPin className="h-4 w-4" />
+                <span>{venue.location}</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-gray-600">
+                <Users className="h-4 w-4" />
+                <span>Capacity: {venue.capacity} people</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-gray-600">
+                <DollarSign className="h-4 w-4" />
+                <span className="font-semibold text-gray-900">NPR {venue.price_per_hour}/hour</span>
+              </div>
+
+              {venue.rating && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Star className="h-4 w-4 text-yellow-400 fill-current" />
+                  <span>{venue.rating.toFixed(1)} rating</span>
+                </div>
               )}
             </div>
-          </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">
-              {activeTab === 'confirmed'
-                ? `Scheduled for ${new Date(booking.booking_date).toLocaleDateString()}`
-                : activeTab === 'pending'
-                  ? `Requested on ${new Date(booking.created_at || Date.now()).toLocaleDateString()}`
-                  : `${booking.status === 'COMPLETED' ? 'Completed' :
-                    booking.status === 'REJECTED' ? 'Rejected' : 'Cancelled'} on ${new Date(booking.updated_at || booking.created_at).toLocaleDateString()}`
-              }
-            </span>
+            {venue.sport_types && venue.sport_types.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Sports Available:</p>
+                <div className="flex flex-wrap gap-1">
+                  {venue.sport_types.map((sport: string) => (
+                    <span key={sport} className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">
+                      {sport}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {activeTab === 'pending' && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onBookingAction(booking.id.toString(), 'accept')}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <CheckCircle className="h-3 w-3" />
-                  Accept
-                </button>
-                <button
-                  onClick={() => onBookingAction(booking.id.toString(), 'reject')}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  <XCircle className="h-3 w-3" />
-                  Reject
-                </button>
+            {venue.amenities && venue.amenities.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-medium text-gray-700 mb-2">Amenities:</p>
+                <div className="flex flex-wrap gap-1">
+                  {venue.amenities.slice(0, 6).map((amenity: string) => (
+                    <span key={amenity} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      {amenity}
+                    </span>
+                  ))}
+                  {venue.amenities.length > 6 && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      +{venue.amenities.length - 6} more
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
-      ))}
+
+        {/* Booking Form */}
+        <div className="lg:col-span-2">
+          <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Booking Details</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Date */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={bookingData.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              {/* Start Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Start Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={bookingData.start_time}
+                  onChange={(e) => handleInputChange('start_time', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              {/* End Time */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  End Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={bookingData.end_time}
+                  onChange={(e) => handleInputChange('end_time', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+
+              {/* Expected Participants */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Expected Participants
+                </label>
+                <input
+                  type="number"
+                  value={bookingData.expected_participants}
+                  onChange={(e) => handleInputChange('expected_participants', e.target.value)}
+                  placeholder="Number of participants"
+                  min="1"
+                  max={venue.capacity}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Availability Display */}
+            {bookingData.date && (
+              <div className="mt-6 bg-blue-50 rounded-lg p-4 border border-blue-100">
+                <h3 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Available Slots for {bookingData.date}
+                </h3>
+
+                {loadingAvailability ? (
+                  <div className="text-sm text-blue-700 animate-pulse">Checking availability...</div>
+                ) : effectiveAvailabilities.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {effectiveAvailabilities.map((slot: any, idx: number) => (
+                        <span key={idx} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                          {formatMinutesToTime(slot.start)} - {formatMinutesToTime(slot.end)}
+                        </span>
+                      ))}
+                    </div>
+
+                    {existingBookings.length > 0 && (
+                      <div>
+                        <p className="text-xs text-blue-700 mb-1">Booked times (Unavailable):</p>
+                        <div className="flex flex-wrap gap-2">
+                          {existingBookings.map((booking: any) => (
+                            <span key={booking.id} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 decoration-line-through">
+                              {booking.start_time.slice(0, 5)} - {booking.end_time.slice(0, 5)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-blue-600 mt-2">
+                      * Please choose a time within the available slots (green) and avoid booked times (red).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-blue-800">
+                      {availabilities.length > 0
+                        ? "All time slots for this date are currently booked."
+                        : "No specific time slots are defined for this date."}
+                    </p>
+                    {availabilities.length === 0 && (
+                      <p className="text-xs text-blue-600">
+                        You can try to book any time, subject to venue approval.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Purpose */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Purpose/Event Type <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={bookingData.purpose}
+                onChange={(e) => handleInputChange('purpose', e.target.value)}
+                placeholder="e.g., Badminton Tournament, Training Session, Corporate Event"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Notes
+              </label>
+              <textarea
+                value={bookingData.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+                placeholder="Any special requirements, equipment needed, or additional information..."
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Cost Summary */}
+            {totalCost > 0 && (
+              <div className="mt-6 bg-gray-50 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Cost Estimate</h3>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    Duration: {bookingData.start_time && bookingData.end_time ?
+                      `${((new Date(`2000-01-01T${bookingData.end_time}`).getTime() - new Date(`2000-01-01T${bookingData.start_time}`).getTime()) / (1000 * 60 * 60)).toFixed(1)} hours` :
+                      '0 hours'
+                    }
+                  </span>
+                  <span className="text-lg font-semibold text-gray-900">
+                    NPR {totalCost.toFixed(2)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  * Final cost will be confirmed by the venue owner
+                </p>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/venues')}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Review & Pay
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Booking Summary Modal */}
+      {showSummaryModal && venue && (
+        <BookingSummaryModal
+          isOpen={showSummaryModal}
+          venue={venue}
+          date={bookingData.date}
+          startTime={bookingData.start_time}
+          endTime={bookingData.end_time}
+          purpose={bookingData.purpose}
+          onConfirm={handleConfirmBooking}
+          onCancel={() => setShowSummaryModal(false)}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && paymentData && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={handlePaymentClose}
+          amount={paymentData.amount}
+          productName={`Venue Booking - ${venue?.name}`}
+          paymentId={paymentData.paymentId}
+          paymentUrl={paymentData.paymentUrl}
+          onSuccess={handlePaymentSuccess}
+          onError={handlePaymentError}
+        />
+      )}
     </div>
   );
-};
-
-export default VenueBookingsPage;
+}
