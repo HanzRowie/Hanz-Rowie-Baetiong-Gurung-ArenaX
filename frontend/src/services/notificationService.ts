@@ -247,6 +247,39 @@ class NotificationService {
   }
 
   /**
+   * Notify that user is viewing a specific group chat
+   */
+  setViewingGroupChat(teamId: string): void {
+    console.log('[NotificationService] Setting viewing group chat:', teamId);
+    
+    const sendMessage = () => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'viewing_group_chat',
+          team_id: teamId
+        }));
+        console.log('[NotificationService] Sent viewing_group_chat message');
+      } else {
+        console.warn('[NotificationService] WebSocket not open, cannot send viewing_group_chat');
+      }
+    };
+    
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      sendMessage();
+    } else {
+      console.log('[NotificationService] Waiting for WebSocket connection to send viewing_group_chat');
+      const checkConnection = setInterval(() => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          clearInterval(checkConnection);
+          sendMessage();
+        }
+      }, 100);
+      
+      setTimeout(() => clearInterval(checkConnection), 5000);
+    }
+  }
+
+  /**
    * Notify that user left chat view
    */
   setLeftChat(): void {
@@ -258,6 +291,21 @@ class NotificationService {
       console.log('[NotificationService] Sent left_chat message');
     } else {
       console.warn('[NotificationService] WebSocket not open, cannot send left_chat');
+    }
+  }
+
+  /**
+   * Notify that user left group chat view
+   */
+  setLeftGroupChat(): void {
+    console.log('[NotificationService] Setting left group chat');
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'left_group_chat'
+      }));
+      console.log('[NotificationService] Sent left_group_chat message');
+    } else {
+      console.warn('[NotificationService] WebSocket not open, cannot send left_group_chat');
     }
   }
 

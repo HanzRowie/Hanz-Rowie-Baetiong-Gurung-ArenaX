@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { groupChatService } from '@/services/groupChatService';
 import type { GroupMessage } from '@/services/groupChatService';
 import { websocketService } from '@/services/websocketService';
+import { notificationService } from '@/services/notificationService';
 import type { WebSocketHandlers } from '@/types/chat.types';
 
 interface UseGroupChatReturn {
@@ -140,9 +141,15 @@ export function useGroupChat(teamId: string): UseGroupChatReturn {
 
     // Load initial messages
     loadMessages(teamId);
+    
+    // Notify that user is viewing this group chat
+    notificationService.setViewingGroupChat(teamId);
 
     // Cleanup on unmount
     return () => {
+      // Notify that user left the group chat
+      notificationService.setLeftGroupChat();
+      
       if (wsUrlRef.current) {
         websocketService.disconnect(wsUrlRef.current);
       }

@@ -109,6 +109,8 @@ class Notification(models.Model):
         ('MATCH_SCHEDULED', 'Match Scheduled'),
         ('BOOKING_CONFIRMED', 'Booking Confirmed'),
         ('PAYMENT_RECEIVED', 'Payment Received'),
+        ('NEW_MESSAGE', 'New Message'),
+        ('NEW_GROUP_MESSAGE', 'New Group Message'),
         ('GENERAL', 'General Notification'),
     )
 

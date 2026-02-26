@@ -1,0 +1,23 @@
+# Core Django
+Django==6.0
+djangorestframework==3.16.1
+django-cors-headers==4.9.0
+
+# WebSocket & Real-time
+channels==4.3.2
+channels-redis==4.3.0
+daphne==4.2.1
+redis==7.2.0
+
+# Authentication
+djangorestframework-simplejwt==5.5.1
+
+# Image handling
+Pillow==12.1.1
+
+# Environment variables
+python-decouple==3.8
+
+# Testing (optional)
+pytest==8.3.4
+pytest-django==4.12.0

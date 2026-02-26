@@ -80,6 +80,9 @@ export default function ChatsPage() {
     chatService.onPrivateMessage((message) => {
       setMessages(prev => [...prev, message]);
       scrollToBottom();
+      
+      // Reload conversations to update the list with new message
+      loadConversations();
     });
 
     // Set up typing indicator handling with auto-cleanup
@@ -287,7 +290,10 @@ export default function ChatsPage() {
       // Notify notification service that user is viewing this chat
       notificationService.setViewingChat(conversation.user.id);
 
-      scrollToBottom();
+      // Auto-scroll to bottom after messages load
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     } catch (error) {
       toastService.error('Failed to load conversation');
     } finally {
@@ -327,7 +333,10 @@ export default function ChatsPage() {
       // Notify notification service that user is viewing this chat
       notificationService.setViewingChat(userId);
 
-      scrollToBottom();
+      // Auto-scroll to bottom after messages load
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     } catch (error) {
       toastService.error('Failed to start chat');
     } finally {

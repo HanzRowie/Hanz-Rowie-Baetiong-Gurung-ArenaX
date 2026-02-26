@@ -473,6 +473,11 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
             # Persist message to database
             message = await self.save_message(self.user, receiver, content, message_type)
             
+            # Create notification for receiver and broadcast via WebSocket
+            notification = await self.create_message_notification(receiver, self.user, content)
+            if notification:
+                await self.broadcast_notification(receiver, notification, self.user.id)
+            
             # Serialize message for transmission
             message_data = await self.serialize_message(message)
             
@@ -825,6 +830,97 @@ class DirectChatConsumer(AsyncWebsocketConsumer):
         user_ids.update(str(uid) for uid in receivers)
         
         return list(user_ids)
+    
+    @database_sync_to_async
+    def create_message_notification(self, recipient, sender, message_content):
+        """
+        Create a notification for new message.
+        Only creates if recipient is not currently viewing this chat.
+        """
+        from accounts.models import Notification
+        from django.core.cache import cache
+        
+        try:
+            # Check if recipient is currently viewing this chat
+            cache_key = f"user_{recipient.id}_viewing_chat"
+            viewing_chat_user_id = cache.get(cache_key)
+            
+            if viewing_chat_user_id == str(sender.id):
+                logger.info(f"DirectChatConsumer: Skipping notification creation - user {recipient.id} is viewing chat with {sender.id}")
+                return None
+            
+            # Truncate long messages for notification
+            preview = message_content[:100] + '...' if len(message_content) > 100 else message_content
+            
+            # Create notification
+            notification = Notification.objects.create(
+                user=recipient,
+                notification_type='NEW_MESSAGE',
+                title=f'New message from {sender.full_name or sender.username}',
+                message=preview,
+                related_id=sender.id
+            )
+            
+            logger.info(f"DirectChatConsumer: Created notification for {recipient.id} from {sender.id}")
+            
+            return notification
+            
+        except Exception as e:
+            logger.error(f"DirectChatConsumer: Error creating notification: {str(e)}")
+            return None
+    
+    async def broadcast_notification(self, user, notification, sender_id):
+        """
+        Broadcast notification to user's notification WebSocket channel.
+        """
+        try:
+            # If notification is None, it was suppressed during creation
+            if notification is None:
+                return
+            
+            await self.channel_layer.group_send(
+                f"notifications_{user.id}",
+                {
+                    'type': 'notification_message',
+                    'message': {
+                        'type': 'notification',
+                        'notification': {
+                            'id': str(notification.id),
+                            'type': notification.notification_type,
+                            'title': notification.title,
+                            'message': notification.message,
+                            'is_read': notification.read,
+                            'created_at': notification.created_at.isoformat(),
+                            'priority': 'MEDIUM',  # Default priority
+                            'action_url': f'/chats?user={notification.related_id}' if notification.related_id else None
+                        }
+                    }
+                }
+            )
+            
+            # Also send updated unread count
+            unread_count = await self.get_unread_count(user)
+            await self.channel_layer.group_send(
+                f"notifications_{user.id}",
+                {
+                    'type': 'notification_message',
+                    'message': {
+                        'type': 'unread_count',
+                        'count': unread_count
+                    }
+                }
+            )
+            
+            logger.info(f"DirectChatConsumer: Broadcast notification to user {user.id}")
+            
+        except Exception as e:
+            logger.error(f"DirectChatConsumer: Error broadcasting notification: {str(e)}")
+    
+    @database_sync_to_async
+    def get_unread_count(self, user):
+        """Get unread notification count for user"""
+        from accounts.models import Notification
+        return Notification.objects.filter(user=user, read=False).count()
 
 
 
@@ -968,6 +1064,11 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
             
             # Persist message to database
             message = await self.save_group_message(self.team_id, self.user, content, message_type)
+            
+            # Create notifications for all team members except sender and broadcast
+            notifications = await self.create_group_message_notifications(self.team, self.user, content)
+            if notifications:
+                await self.broadcast_group_notifications(notifications, self.team_id, self.user.id)
             
             # Serialize message for transmission
             message_data = await self.serialize_group_message(message)
@@ -1124,3 +1225,104 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                 'team_name': message.group_chat.team.name
             }
         }
+    
+    @database_sync_to_async
+    def create_group_message_notifications(self, team, sender, message_content):
+        """
+        Create notifications for all team members except the sender.
+        Only creates for members who are NOT currently viewing the group chat.
+        """
+        from accounts.models import Notification
+        from teams.models import TeamMembership
+        from django.core.cache import cache
+        
+        try:
+            # Get all team members except sender
+            team_members = TeamMembership.objects.filter(
+                team=team
+            ).exclude(player=sender).select_related('player')
+            
+            # Truncate long messages for notification
+            preview = message_content[:100] + '...' if len(message_content) > 100 else message_content
+            
+            # Create notifications for each team member (except those viewing the chat)
+            notifications = []
+            for member in team_members:
+                # Check if member is currently viewing this group chat
+                cache_key = f"user_{member.player.id}_viewing_group_chat"
+                viewing_group_chat_id = cache.get(cache_key)
+                
+                if viewing_group_chat_id == str(team.id):
+                    logger.info(f"GroupChatConsumer: Skipping notification for user {member.player.id} - viewing group chat {team.id}")
+                    continue
+                
+                notification = Notification(
+                    user=member.player,
+                    notification_type='NEW_GROUP_MESSAGE',
+                    title=f'New message in {team.name}',
+                    message=f'{sender.full_name or sender.username}: {preview}',
+                    related_id=team.id
+                )
+                notifications.append(notification)
+            
+            # Bulk create notifications
+            if notifications:
+                created_notifications = Notification.objects.bulk_create(notifications)
+                logger.info(f"GroupChatConsumer: Created {len(created_notifications)} notifications for team {team.id}")
+                return created_notifications
+            
+            return []
+            
+        except Exception as e:
+            logger.error(f"GroupChatConsumer: Error creating group notifications: {str(e)}")
+            return []
+    
+    async def broadcast_group_notifications(self, notifications, team_id, sender_id):
+        """
+        Broadcast notifications to all recipients via WebSocket.
+        """
+        try:
+            for notification in notifications:
+                await self.channel_layer.group_send(
+                    f"notifications_{notification.user.id}",
+                    {
+                        'type': 'notification_message',
+                        'message': {
+                            'type': 'notification',
+                            'notification': {
+                                'id': str(notification.id),
+                                'type': notification.notification_type,
+                                'title': notification.title,
+                                'message': notification.message,
+                                'is_read': notification.read,
+                                'created_at': notification.created_at.isoformat(),
+                                'priority': 'MEDIUM',
+                                'action_url': f'/teams/{notification.related_id}/chat' if notification.related_id else None
+                            }
+                        }
+                    }
+                )
+                
+                # Also send updated unread count
+                unread_count = await self.get_unread_count(notification.user)
+                await self.channel_layer.group_send(
+                    f"notifications_{notification.user.id}",
+                    {
+                        'type': 'notification_message',
+                        'message': {
+                            'type': 'unread_count',
+                            'count': unread_count
+                        }
+                    }
+                )
+            
+            logger.info(f"GroupChatConsumer: Broadcast {len(notifications)} group notifications")
+            
+        except Exception as e:
+            logger.error(f"GroupChatConsumer: Error broadcasting group notifications: {str(e)}")
+    
+    @database_sync_to_async
+    def get_unread_count(self, user):
+        """Get unread notification count for user"""
+        from accounts.models import Notification
+        return Notification.objects.filter(user=user, read=False).count()

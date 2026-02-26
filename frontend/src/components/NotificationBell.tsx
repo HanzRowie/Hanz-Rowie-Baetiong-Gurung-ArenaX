@@ -18,7 +18,14 @@ export function NotificationBell() {
 
     // Set up callbacks
     notificationService.onNotification((notification) => {
-      setNotifications(prev => [notification, ...prev].slice(0, 20)); // Keep last 20
+      setNotifications(prev => {
+        // Check if notification already exists
+        const exists = prev.some(n => n.id === notification.id);
+        if (exists) {
+          return prev;
+        }
+        return [notification, ...prev].slice(0, 20); // Keep last 20
+      });
       // Show toast notification
       showNotificationToast(notification);
       // Play notification sound

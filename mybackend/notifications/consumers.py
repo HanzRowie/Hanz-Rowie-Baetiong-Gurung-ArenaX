@@ -2,13 +2,15 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from accounts.models import Notification
+from django.core.cache import cache
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.user = self.scope["user"]
+        self.user = self.scope.get("user")
+        self.viewing_chat_user_id = None
         
-        if self.user.is_anonymous:
+        if not self.user or self.user.is_anonymous:
             await self.close()
             return
         
@@ -31,6 +33,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         }))
 
     async def disconnect(self, close_code):
+        # Clear viewing chat status
+        if self.viewing_chat_user_id:
+            cache_key = f"user_{self.user.id}_viewing_chat"
+            cache.delete(cache_key)
+        
         if hasattr(self, 'notification_group_name'):
             await self.channel_layer.group_discard(
                 self.notification_group_name,
@@ -51,6 +58,29 @@ class NotificationConsumer(AsyncWebsocketConsumer):
                 'type': 'unread_count',
                 'count': unread_count
             }))
+        elif message_type == 'viewing_chat':
+            # User is viewing a specific direct chat
+            user_id = data.get('user_id')
+            if user_id:
+                self.viewing_chat_user_id = user_id
+                cache_key = f"user_{self.user.id}_viewing_chat"
+                cache.set(cache_key, user_id, timeout=3600)  # 1 hour timeout
+        elif message_type == 'viewing_group_chat':
+            # User is viewing a specific group chat
+            team_id = data.get('team_id')
+            if team_id:
+                cache_key = f"user_{self.user.id}_viewing_group_chat"
+                cache.set(cache_key, team_id, timeout=3600)  # 1 hour timeout
+        elif message_type == 'left_chat':
+            # User left the direct chat view
+            if self.viewing_chat_user_id:
+                cache_key = f"user_{self.user.id}_viewing_chat"
+                cache.delete(cache_key)
+                self.viewing_chat_user_id = None
+        elif message_type == 'left_group_chat':
+            # User left the group chat view
+            cache_key = f"user_{self.user.id}_viewing_group_chat"
+            cache.delete(cache_key)
 
     async def notification_message(self, event):
         """Send notification to WebSocket"""

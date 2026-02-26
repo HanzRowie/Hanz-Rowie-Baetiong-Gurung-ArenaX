@@ -168,7 +168,10 @@ class WebSocketService {
     // Close WebSocket connection
     const ws = this.connections.get(url);
     if (ws) {
-      ws.close();
+      // Only close if connection is fully open to avoid "closed before established" errors
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
       this.connections.delete(url);
     }
 

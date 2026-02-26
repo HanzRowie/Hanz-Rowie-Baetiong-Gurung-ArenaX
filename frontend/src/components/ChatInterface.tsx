@@ -20,6 +20,7 @@ import {
   Pause
 } from 'lucide-react';
 import { chatService, type PrivateMessage } from '@/services/chatService';
+import { notificationService } from '@/services/notificationService';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ChatInterfaceProps {
@@ -55,8 +56,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   useEffect(() => {
     loadMessages();
     connectToChat();
+    
+    // Notify that user is viewing this chat
+    notificationService.setViewingChat(otherUser.id);
 
     return () => {
+      // Notify that user left the chat
+      notificationService.setLeftChat();
       chatService.disconnect();
     };
   }, [otherUser.id]);
