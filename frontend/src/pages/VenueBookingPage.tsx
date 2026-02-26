@@ -184,21 +184,28 @@ export default function VenueBookingPage() {
 
       if (response.payment && response.payment_url) {
         // Store payment data and show payment modal
-        setPaymentData({
+        const paymentInfo = {
           bookingId: response.booking.id,
           paymentId: response.payment.id,
           paymentUrl: response.payment_url,
           pidx: response.pidx,
           amount: parseFloat(response.payment.amount)
-        });
+        };
+        
+        console.log('Setting payment data:', paymentInfo);
+        setPaymentData(paymentInfo);
+        
+        console.log('Setting showPaymentModal to true');
         setShowPaymentModal(true);
 
         toastService.info('Please complete payment to confirm your booking');
       } else {
-        toastService.error('Failed to initiate payment');
+        console.error('Missing payment data in response:', response);
+        toastService.error('Failed to initiate payment - missing payment data');
       }
     } catch (error: any) {
       console.error('Booking error:', error);
+      console.error('Error response:', error.response);
       
       let errorMessage = 'Failed to create booking';
       if (error.response?.data?.error) {
@@ -215,10 +222,24 @@ export default function VenueBookingPage() {
 
   const handlePaymentSuccess = async () => {
     setShowPaymentModal(false);
-    toastService.success('Payment successful! Your booking is confirmed.');
-
-    // Navigate to bookings page
-    navigate('/venue-bookings');
+    
+    // Show detailed success message
+    toastService.success(
+      `Booking confirmed! ${venue?.name} is reserved for ${bookingData.date}. Check your notifications for updates.`
+    );
+    
+    // Wait a moment for the user to see the success message
+    setTimeout(() => {
+      // Redirect to dashboard with success state
+      navigate('/dashboard', { 
+        state: { 
+          bookingSuccess: true,
+          venueName: venue?.name,
+          bookingDate: bookingData.date,
+          bookingTime: `${bookingData.start_time} - ${bookingData.end_time}`
+        } 
+      });
+    }, 2000);
   };
 
   const handlePaymentError = (error: any) => {
@@ -501,7 +522,7 @@ export default function VenueBookingPage() {
                     }
                   </span>
                   <span className="text-lg font-semibold text-gray-900">
-                    ${totalCost.toFixed(2)}
+                    NPR {totalCost.toFixed(2)}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">

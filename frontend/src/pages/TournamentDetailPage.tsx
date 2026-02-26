@@ -355,7 +355,7 @@ export default function TournamentDetailPage() {
     navigate(`/tournaments/${tournamentId}/select-referee`);
   };
 
-  const handleRemoveReferee = async (refereeId: string) => {
+  const handleRemoveReferee = async (refereeId: number) => {
     if (!confirm('Are you sure you want to remove this referee assignment?')) return;
 
     try {
@@ -1273,10 +1273,10 @@ export default function TournamentDetailPage() {
                                 <div className="text-right">
                                   <p className="text-sm font-medium text-gray-900">NPR {referee.fee || 0}</p>
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${referee.status === 'accepted'
-                                      ? 'bg-green-100 text-green-700'
-                                      : referee.status === 'requested'
-                                        ? 'bg-yellow-100 text-yellow-700'
-                                        : 'bg-red-100 text-red-700'
+                                    ? 'bg-green-100 text-green-700'
+                                    : referee.status === 'requested'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-red-100 text-red-700'
                                     }`}>
                                     {referee.status || 'pending'}
                                   </span>
@@ -1321,8 +1321,8 @@ export default function TournamentDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Format</span>
                   <span className={`font-medium px-2 py-1 rounded-full text-xs ${tournament.tournament_type === 'league'
-                      ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-purple-100 text-purple-700'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-purple-100 text-purple-700'
                     }`}>
                     {tournament.tournament_type === 'league' ? 'League' : 'Knockout'}
                   </span>

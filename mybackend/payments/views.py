@@ -16,6 +16,7 @@ from .serializers import (
     RefundSerializer
 )
 from .utils import khalti_gateway, process_khalti_webhook
+from notifications.utils import send_notification
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentMethodSerializer
@@ -107,6 +108,15 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.processed_at = timezone.now()
             payment.save()
 
+            # Notify user about successful payment
+            send_notification(
+                user=payment.user,
+                notification_type='PAYMENT_SUCCESSFUL',
+                title='Payment Successful',
+                message=f'Your payment of {payment.amount} {payment.currency} for {payment.description} was successful.',
+                related_id=payment.id
+            )
+
             # Create transaction record if not exists
             if not Transaction.objects.filter(payment=payment, transaction_type='CHARGE').exists():
                 Transaction.objects.create(
@@ -135,6 +145,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
                         registration.status = 'PENDING'
                         registration.payment_verified_at = timezone.now()
                         registration.save()
+
+                        # Notify organizer
+                        send_notification(
+                            user=payment.tournament.organizer,
+                            notification_type='GENERAL',
+                            title='Tournament Fee Paid',
+                            message=f'{payment.user.full_name} has paid the entry fee for {payment.tournament.title}.',
+                            tournament=payment.tournament,
+                            related_id=registration.id,
+                            action_url=f'/organizer/tournaments/{payment.tournament.id}/participants'
+                        )
                 except TournamentRegistration.DoesNotExist:
                     pass
                 
@@ -148,6 +169,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
                         team_registration.status = 'PENDING'
                         team_registration.payment_verified_at = timezone.now()
                         team_registration.save()
+
+                        # Notify organizer
+                        send_notification(
+                            user=payment.tournament.organizer,
+                            notification_type='GENERAL',
+                            title='Team Tournament Fee Paid',
+                            message=f'Team "{team_registration.team.name}" has paid the entry fee for {payment.tournament.title}.',
+                            tournament=payment.tournament,
+                            related_id=team_registration.id,
+                            action_url=f'/organizer/tournaments/{payment.tournament.id}/participants'
+                        )
                 except TeamTournamentRegistration.DoesNotExist:
                     pass
             
@@ -163,16 +195,21 @@ class PaymentViewSet(viewsets.ModelViewSet):
                         booking.save()
                         
                         # Send notification
-                        try:
-                            from notifications.models import Notification
-                            Notification.objects.create(
-                                user=booking.user,
-                                notification_type='BOOKING_CONFIRMED',
-                                title='Venue Booking Confirmed',
-                                message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
-                            )
-                        except Exception as e:
-                            print(f"Failed to create notification: {e}")
+                        send_notification(
+                            user=booking.user,
+                            notification_type='BOOKING_CONFIRMED',
+                            title='Venue Booking Confirmed',
+                            message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
+                        )
+                        
+                        # Notify venue owner about payment received
+                        send_notification(
+                            user=booking.venue.owner,
+                            notification_type='PAYMENT_RECEIVED',
+                            title='Payment Received',
+                            message=f'You have received a payment of {booking.amount} NPR for the booking at {booking.venue.name} on {booking.date}.',
+                            related_id=booking.id
+                        )
                 except Exception as e:
                     print(f"Failed to update venue booking: {e}")
 
@@ -435,6 +472,15 @@ class MockPaymentCompleteView(APIView):
         payment.status = 'COMPLETED'
         payment.processed_at = timezone.now()
         payment.save()
+
+        # Notify user about successful payment
+        send_notification(
+            user=payment.user,
+            notification_type='PAYMENT_SUCCESSFUL',
+            title='Payment Successful (Mock)',
+            message=f'Your payment of {payment.amount} {payment.currency} for {payment.description} was successful.',
+            related_id=payment.id
+        )
         
         # Update transaction
         txn = Transaction.objects.filter(
@@ -583,6 +629,15 @@ class WalletWithdrawalView(APIView):
             payment_processor='wallet_withdrawal',
             processed_at=timezone.now(),
             processor_response={"note": "Funds successfully transferred."}
+        )
+
+        # Notify user about withdrawal
+        send_notification(
+            user=user,
+            notification_type='GENERAL',
+            title='Withdrawal Processed',
+            message=f'Your withdrawal of {amount_to_withdraw} NPR has been processed successfully.',
+            related_id=withdrawal_payment.id
         )
         
         return Response({

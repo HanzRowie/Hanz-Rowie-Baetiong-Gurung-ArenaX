@@ -11,6 +11,7 @@ from django.utils.decorators import method_decorator
 from .models import Venue, VenueBooking, VenueAvailability
 from .serializers import VenueSerializer, VenueBookingSerializer, VenueAvailabilitySerializer
 from accounts.decorators import jwt_required
+from notifications.utils import send_notification
 
 class VenueViewSet(viewsets.ModelViewSet):
     queryset = Venue.objects.all()
@@ -313,6 +314,27 @@ def book_venue(request, venue_id):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = VenueBookingSerializer(booking)
+        
+        # Notify venue owner about new booking request
+        send_notification(
+            user=venue.owner,
+            notification_type='BOOKING_REQUESTED',
+            title='New Booking Request',
+            message=f'{request.user.full_name} has requested to book {venue.name} on {booking.date}.',
+            related_id=booking.id,
+            action_url=f'/venue-owner/bookings'
+        )
+        
+        # Notify player that request was received
+        send_notification(
+            user=request.user,
+            notification_type='GENERAL',
+            title='Booking Request Submitted',
+            message=f'Your booking request for {venue.name} on {booking.date} has been submitted.',
+            related_id=booking.id,
+            action_url=f'/player/bookings'
+        )
+
         return Response({
             'booking': serializer.data,
             'payment': PaymentSerializer(payment).data,
@@ -338,13 +360,37 @@ def cancel_booking(request, booking_id):
 
     # Cannot cancel confirmed bookings within 24 hours
     from django.utils import timezone
-    from datetime import timedelta
-    booking_datetime = timezone.datetime.combine(booking.date, booking.start_time)
+    from datetime import timedelta, datetime
+    
+    # Make booking_datetime timezone-aware
+    booking_datetime = datetime.combine(booking.date, booking.start_time)
+    booking_datetime = timezone.make_aware(booking_datetime)
+    
     if booking_datetime - timezone.now() < timedelta(hours=24) and booking.status == 'CONFIRMED':
         return Response({'error': 'Cannot cancel booking within 24 hours'}, status=status.HTTP_400_BAD_REQUEST)
 
     booking.status = 'CANCELLED'
     booking.save()
+
+    # Notify other party
+    if request.user == booking.user:
+        # Notify owner
+        send_notification(
+            user=booking.venue.owner,
+            notification_type='BOOKING_CANCELLED',
+            title='Booking Cancelled',
+            message=f'{request.user.full_name} has cancelled their booking for {booking.venue.name} on {booking.date}.',
+            related_id=booking.id
+        )
+    else:
+        # Notify player
+        send_notification(
+            user=booking.user,
+            notification_type='BOOKING_CANCELLED',
+            title='Booking Cancelled',
+            message=f'Your booking for {booking.venue.name} on {booking.date} has been cancelled by the venue owner.',
+            related_id=booking.id
+        )
 
     return Response({'message': 'Booking cancelled successfully'}, status=status.HTTP_200_OK)
 
@@ -383,17 +429,21 @@ def verify_booking_payment(request, booking_id):
             booking.save()
             
             # Send confirmation notification
-            try:
-                from notifications.models import Notification
-                Notification.objects.create(
-                    user=booking.user,
-                    notification_type='BOOKING_CONFIRMED',
-                    title='Venue Booking Confirmed',
-                    message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
-                )
-            except Exception as e:
-                # Don't fail if notification creation fails
-                print(f"Failed to create notification: {e}")
+            send_notification(
+                user=booking.user,
+                notification_type='BOOKING_CONFIRMED',
+                title='Venue Booking Confirmed',
+                message=f'Your booking at {booking.venue.name} on {booking.date} has been confirmed.'
+            )
+            
+            # Notify venue owner about payment received
+            send_notification(
+                user=booking.venue.owner,
+                notification_type='PAYMENT_RECEIVED',
+                title='Payment Received',
+                message=f'You have received a payment for the booking at {booking.venue.name} on {booking.date}.',
+                related_id=booking.id
+            )
         
         return Response({
             'booking': VenueBookingSerializer(booking).data,
@@ -457,6 +507,15 @@ def approve_booking(request, booking_id):
     booking.status = 'CONFIRMED'
     booking.save()
 
+    # Notify player
+    send_notification(
+        user=booking.user,
+        notification_type='BOOKING_APPROVED',
+        title='Booking Approved',
+        message=f'Your booking for {booking.venue.name} on {booking.date} has been approved.',
+        related_id=booking.id
+    )
+
     serializer = VenueBookingSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -475,6 +534,15 @@ def reject_booking(request, booking_id):
 
     booking.status = 'REJECTED'
     booking.save()
+
+    # Notify player
+    send_notification(
+        user=booking.user,
+        notification_type='BOOKING_REJECTED',
+        title='Booking Rejected',
+        message=f'Your booking for {booking.venue.name} on {booking.date} has been rejected.',
+        related_id=booking.id
+    )
 
     serializer = VenueBookingSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)

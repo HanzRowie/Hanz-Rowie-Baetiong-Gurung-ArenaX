@@ -13,26 +13,43 @@ export function NotificationBell() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('[NotificationBell] Component mounting, setting up callbacks');
+    
+    // DON'T clear callbacks - let the cleanup functions handle removal
+    // This prevents HMR from breaking active callbacks
+    
     // Connect to WebSocket
     notificationService.connectToNotifications();
 
-    // Set up callbacks
-    notificationService.onNotification((notification) => {
+    // Set up callbacks and store cleanup functions
+    const cleanupNotification = notificationService.onNotification((notification) => {
+      console.log('[NotificationBell] Received notification:', notification.id);
+      console.log('[NotificationBell] Current notifications count before update');
+      
       setNotifications(prev => {
         // Check if notification already exists
         const exists = prev.some(n => n.id === notification.id);
         if (exists) {
+          console.log('[NotificationBell] Notification already exists, skipping');
           return prev;
         }
-        return [notification, ...prev].slice(0, 20); // Keep last 20
+        const newNotifications = [notification, ...prev].slice(0, 20);
+        console.log('[NotificationBell] Updated notifications, new count:', newNotifications.length);
+        return newNotifications;
       });
-      // Show toast notification
-      showNotificationToast(notification);
-      // Play notification sound
-      playNotificationSound();
+      
+      // Increment unread count for new notification
+      setUnreadCount(prev => {
+        const newCount = prev + 1;
+        console.log('[NotificationBell] Unread count:', prev, '→', newCount);
+        return newCount;
+      });
+      
+      // Toast and sound are now handled in notificationService
     });
 
-    notificationService.onUnreadCount((count) => {
+    const cleanupUnreadCount = notificationService.onUnreadCount((count) => {
+      console.log('[NotificationBell] Unread count updated:', count);
       setUnreadCount(count);
     });
 
@@ -40,7 +57,10 @@ export function NotificationBell() {
     loadNotifications();
 
     return () => {
-      notificationService.disconnect();
+      console.log('[NotificationBell] Component unmounting, cleaning up callbacks');
+      // Cleanup this component's callbacks
+      cleanupNotification();
+      cleanupUnreadCount();
     };
   }, []);
 
@@ -57,10 +77,44 @@ export function NotificationBell() {
     }
   };
 
-  const showNotificationToast = (notification: Notification) => {
-    const icon = getNotificationIcon(notification.type);
-    const message = `${icon} ${notification.title}: ${notification.message.substring(0, 80)}${notification.message.length > 80 ? '...' : ''}`;
-    toastService.info(message);
+  const getNotificationIcon = (type: string): string => {
+    // Use the same icon map from the service for consistency
+    const iconMap: Record<string, string> = {
+      'NEW_MESSAGE': '💬',
+      'MESSAGE_REPLY': '💬',
+      'TOURNAMENT_STARTING_SOON': '🏆',
+      'TOURNAMENT_REGISTRATION_OPEN': '🏆',
+      'TOURNAMENT_REGISTRATION_CLOSING': '⏰',
+      'TOURNAMENT_CANCELLED': '❌',
+      'TOURNAMENT_RESCHEDULED': '📅',
+      'TOURNAMENT_RESULT': '🏅',
+      'TOURNAMENT_BRACKET_UPDATE': '🌳',
+      'MATCH_STARTING_SOON': '▶️',
+      'MATCH_RESULT': '✅',
+      'MATCH_RESCHEDULED': '📅',
+      'MATCH_CANCELLED': '❌',
+      'TEAM_INVITATION': '👥',
+      'TEAM_INVITATION_ACCEPTED': '✅',
+      'TEAM_INVITATION_REJECTED': '❌',
+      'TEAM_MEMBER_LEFT': '👋',
+      'TEAM_MEMBER_REMOVED': '🚫',
+      'PAYMENT_SUCCESS': '✅',
+      'PAYMENT_FAILED': '❌',
+      'PAYMENT_REFUND': '💰',
+      'PAYMENT_PENDING': '⏳',
+      'CONNECTION_REQUEST': '🤝',
+      'CONNECTION_ACCEPTED': '✅',
+      'CONNECTION_REJECTED': '❌',
+      'ACHIEVEMENT_UNLOCKED': '🏅',
+      'LEVEL_UP': '📈',
+      'MILESTONE_REACHED': '🎯',
+      'SYSTEM_ANNOUNCEMENT': '📢',
+      'MAINTENANCE_SCHEDULED': '🔧',
+      'ACCOUNT_UPDATE': '👤',
+      'REFEREE_ASSIGNED': '👨‍⚖️',
+      'GENERAL': '🔔',
+    };
+    return iconMap[type] || '🔔';
   };
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -110,55 +164,6 @@ export function NotificationBell() {
     }
   };
 
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio('/notification.mp3');
-      audio.volume = 0.3;
-      audio.play().catch(() => {
-        // Ignore errors (e.g., user hasn't interacted with page yet)
-      });
-    } catch (error) {
-      // Ignore errors
-    }
-  };
-
-  const getNotificationIcon = (type: string): string => {
-    const iconMap: Record<string, string> = {
-      'NEW_MESSAGE': '💬',
-      'MESSAGE_REPLY': '💬',
-      'TOURNAMENT_STARTING_SOON': '🏆',
-      'TOURNAMENT_REGISTRATION_OPEN': '🏆',
-      'TOURNAMENT_REGISTRATION_CLOSING': '⏰',
-      'TOURNAMENT_CANCELLED': '❌',
-      'TOURNAMENT_RESCHEDULED': '📅',
-      'TOURNAMENT_RESULT': '🏅',
-      'TOURNAMENT_BRACKET_UPDATE': '🌳',
-      'MATCH_STARTING_SOON': '▶️',
-      'MATCH_RESULT': '✅',
-      'MATCH_RESCHEDULED': '📅',
-      'MATCH_CANCELLED': '❌',
-      'TEAM_INVITATION': '👥',
-      'TEAM_INVITATION_ACCEPTED': '✅',
-      'TEAM_INVITATION_REJECTED': '❌',
-      'TEAM_MEMBER_LEFT': '👋',
-      'TEAM_MEMBER_REMOVED': '🚫',
-      'PAYMENT_SUCCESS': '✅',
-      'PAYMENT_FAILED': '❌',
-      'PAYMENT_REFUND': '💰',
-      'PAYMENT_PENDING': '⏳',
-      'CONNECTION_REQUEST': '🤝',
-      'CONNECTION_ACCEPTED': '✅',
-      'CONNECTION_REJECTED': '❌',
-      'ACHIEVEMENT_UNLOCKED': '🏅',
-      'LEVEL_UP': '📈',
-      'MILESTONE_REACHED': '🎯',
-      'SYSTEM_ANNOUNCEMENT': '📢',
-      'MAINTENANCE_SCHEDULED': '🔧',
-      'ACCOUNT_UPDATE': '👤',
-    };
-    return iconMap[type] || '🔔';
-  };
-
   const getPriorityColor = (priority: string): string => {
     const colorMap: Record<string, string> = {
       'LOW': 'text-gray-500',
@@ -184,7 +189,20 @@ export function NotificationBell() {
   return (
     <div className="relative">
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
+        onClick={() => {
+          const newState = !showDropdown;
+          console.log('[NotificationBell] Toggling dropdown:', showDropdown, '→', newState);
+          console.log('[NotificationBell] Current notifications in state:', notifications.length);
+          console.log('[NotificationBell] Notifications:', notifications.map(n => n.id));
+          
+          // Reload notifications when opening dropdown to ensure we have latest data
+          if (newState) {
+            console.log('[NotificationBell] Reloading notifications on dropdown open');
+            loadNotifications();
+          }
+          
+          setShowDropdown(newState);
+        }}
         className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
         aria-label="Notifications"
       >
@@ -238,7 +256,7 @@ export function NotificationBell() {
             </div>
 
             {/* Notifications List */}
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1" key={`notifications-${notifications.length}-${unreadCount}`}>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>

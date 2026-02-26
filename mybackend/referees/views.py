@@ -16,6 +16,7 @@ from .serializers import (
     RefereeProfileSerializer, RefereeAvailabilitySerializer, RefereeBookingSerializer,
     RefereeRatingSerializer, RefereeCertificationSerializer, RefereeMatchReportSerializer
 )
+from notifications.utils import send_notification
 
 class RefereeProfileViewSet(viewsets.ModelViewSet):
     queryset = RefereeProfile.objects.all()
@@ -143,6 +144,17 @@ def respond_to_booking_request(request, booking_id):
     booking.responded_at = datetime.now()
     booking.save()
 
+    # Notify organizer
+    status_text = 'accepted' if response == 'accept' else 'declined'
+    send_notification(
+        user=booking.requested_by,
+        notification_type='GENERAL',
+        title=f'Referee Booking {status_text.capitalize()}',
+        message=f'Referee {request.user.full_name} has {status_text} your booking request for the match on {booking.match_date}.',
+        related_id=booking.id,
+        action_url=f'/organizer/referee-bookings'
+    )
+
     serializer = RefereeBookingSerializer(booking)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -174,7 +186,18 @@ def request_referee_booking(request, referee_id, match_id):
         notes=request.data.get('notes', '')
     )
 
+    # Notify referee
+    send_notification(
+        user=referee,
+        notification_type='REFEREE_ASSIGNED',
+        title='New Match Request',
+        message=f'Organizer {request.user.full_name} has requested you to referee a match on {booking.match_date}.',
+        related_id=booking.id,
+        action_url=f'/referee/requests'
+    )
+
     serializer = RefereeBookingSerializer(booking)
+
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class RefereeRatingViewSet(viewsets.ModelViewSet):
@@ -428,14 +451,14 @@ def assign_referee_to_tournament(request, tournament_id):
     )
     
     # Create notification for referee
-    from accounts.models import Notification
-    Notification.objects.create(
+    send_notification(
         user=referee,
-        notification_type='GENERAL',
+        notification_type='REFEREE_ASSIGNED',
         title='New Referee Assignment Request',
         message=f'You have been requested to referee the tournament "{tournament.title}" on {tournament_date}.',
         tournament=tournament,
-        related_id=booking.id
+        related_id=booking.id,
+        action_url=f'/referee/requests'
     )
     
     serializer = RefereeBookingSerializer(booking)

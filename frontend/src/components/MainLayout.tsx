@@ -171,10 +171,8 @@ export default function MainLayout() {
               <div className="hidden md:flex items-center space-x-2">
                 {getHeaderActions()}
                 
-                {/* Notifications - Only for players and organizers */}
-                {(user?.role === UserRole.PLAYER || user?.role === UserRole.ORGANIZER) && (
-                  <NotificationBell />
-                )}
+                {/* Notifications - Available for all roles */}
+                <NotificationBell />
                 
                 {/* Profile */}
                 <button
@@ -208,8 +206,11 @@ export default function MainLayout() {
                 </button>
               </div>
 
-              {/* Mobile-only profile and logout */}
+              {/* Mobile-only notifications and profile */}
               <div className="md:hidden flex items-center space-x-2">
+                {/* Notifications */}
+                <NotificationBell />
+                
                 {/* Profile */}
                 <button
                   onClick={() => navigate('/profile')}

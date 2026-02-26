@@ -15,6 +15,7 @@ from referees.models import RefereeBooking
 from referees.serializers import RefereeBookingSerializer
 from payments.services import VenuePaymentService
 from payments.models import Payment
+from notifications.utils import send_notification
 
 class TournamentViewSet(viewsets.ModelViewSet):
     queryset = Tournament.objects.all().order_by('-created_at')
@@ -59,7 +60,47 @@ class TournamentViewSet(viewsets.ModelViewSet):
                     'error': 'Cannot change tournament type after matches have been created.'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        return super().update(request, *args, **kwargs)
+        # Perform the update
+        response = super().update(request, *args, **kwargs)
+        
+        # Notify all participants about tournament update
+        if response.status_code == 200:
+            tournament = self.get_object()
+            
+            # Notify individual players
+            if tournament.registration_type == 'INDIVIDUAL':
+                registrations = TournamentRegistration.objects.filter(
+                    tournament=tournament,
+                    status__in=['ACCEPTED', 'PENDING']
+                )
+                for reg in registrations:
+                    send_notification(
+                        user=reg.player,
+                        notification_type='TOURNAMENT_UPDATED',
+                        title='Tournament Updated',
+                        message=f'The tournament "{tournament.title}" has been updated. Check the latest details!',
+                        tournament=tournament,
+                        action_url=f'/player/tournaments/{tournament.id}'
+                    )
+            
+            # Notify teams
+            else:
+                from teams.models import TeamTournamentRegistration
+                team_registrations = TeamTournamentRegistration.objects.filter(
+                    tournament=tournament,
+                    status__in=['CONFIRMED', 'PENDING']
+                )
+                for reg in team_registrations:
+                    send_notification(
+                        user=reg.registered_by,
+                        notification_type='TOURNAMENT_UPDATED',
+                        title='Tournament Updated',
+                        message=f'The tournament "{tournament.title}" has been updated. Check the latest details!',
+                        tournament=tournament,
+                        action_url=f'/team/tournaments/{tournament.id}'
+                    )
+        
+        return response
     
     @action(detail=True, methods=['post'])
     def generate_schedule(self, request, pk=None):
@@ -117,6 +158,18 @@ class TournamentViewSet(viewsets.ModelViewSet):
                 double_round_robin=double_round_robin
             )
             
+            # Notify all teams that the schedule is ready
+            team_registrations = TeamTournamentRegistration.objects.filter(tournament=tournament, status='CONFIRMED')
+            for reg in team_registrations:
+                send_notification(
+                    user=reg.registered_by,
+                    notification_type='MATCH_ASSIGNED',
+                    title='Tournament Schedule Generated',
+                    message=f'The schedule for {tournament.title} is now available. Check your team\'s scheduled matches!',
+                    tournament=tournament,
+                    action_url=f'/team/tournaments/{tournament.id}/schedule'
+                )
+
             return Response({
                 'message': 'Schedule generated successfully',
                 'tournament_id': str(tournament.id),
@@ -305,6 +358,17 @@ def register_for_tournament(request, tournament_id):
             status='PENDING'
         )
 
+        # Notify organizer
+        send_notification(
+            user=tournament.organizer,
+            notification_type='GENERAL',
+            title='New Tournament Registration',
+            message=f'{user.full_name} has registered for {tournament.title}.',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+        )
+
         return Response({
             'message': 'Registration submitted successfully. Awaiting organizer approval.',
             'registration_id': str(registration.id),
@@ -443,6 +507,17 @@ def register_with_payment(request, tournament_id):
                 status='PENDING'  # Awaiting organizer approval
             )
             
+            # Notify organizer
+            send_notification(
+                user=tournament.organizer,
+                notification_type='GENERAL',
+                title='New Tournament Registration',
+                message=f'{user.full_name} has registered for {tournament.title}.',
+                tournament=tournament,
+                related_id=registration.id,
+                action_url=f'/organizer/tournaments/{tournament.id}/participants'
+            )
+            
             return Response({
                 'message': 'Registration submitted successfully. Awaiting organizer approval.',
                 'registration_id': str(registration.id),
@@ -481,6 +556,17 @@ def withdraw_from_tournament(request, tournament_id):
             return Response({'error': 'Cannot withdraw from an ongoing tournament'}, status=status.HTTP_400_BAD_REQUEST)
 
         registration.delete()
+
+        # Notify organizer
+        send_notification(
+            user=tournament.organizer,
+            notification_type='GENERAL',
+            title='Player Withdrawn',
+            message=f'{user.full_name} has withdrawn from {tournament.title}.',
+            tournament=tournament,
+            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+        )
+
         return Response({'message': 'Successfully withdrawn from tournament'}, status=status.HTTP_200_OK)
 
     except TournamentRegistration.DoesNotExist:
@@ -873,6 +959,16 @@ def update_match_result(request, tournament_id, match_id):
                             processed_at=timezone.now(),
                             processor_response={"note": f"Automated Escrow Release for officiating Match ID {match.id}"}
                         )
+
+                        # Notify referee about payout
+                        send_notification(
+                            user=referee,
+                            notification_type="PAYMENT_SUCCESSFUL",
+                            title="Payment Received",
+                            message=f"You have received {payout_amount} {organizer_payment.currency} in your wallet for officiating match {match.match_number} in {tournament.title}.",
+                            tournament=tournament,
+                            action_url="/referee/wallet"
+                        )
         except Exception as e:
             print(f"Error handling referee payout: {str(e)}")
         # ------------------------------------
@@ -895,6 +991,40 @@ def update_match_result(request, tournament_id, match_id):
             import traceback
             traceback.print_exc()
         
+        # Notify participants about the match result
+        try:
+            if tournament.registration_type == 'INDIVIDUAL':
+                # Notify both players
+                for player in [match.player1, match.player2]:
+                    if player:
+                        is_winner = (player == match.winner)
+                        send_notification(
+                            user=player,
+                            notification_type='GENERAL',
+                            title='Match Result Updated',
+                            message=f'Your match in {tournament.title} ended with score {match.player1_score}-{match.player2_score}. You {"won!" if is_winner else "lost."}',
+                            tournament=tournament,
+                            action_url=f'/player/tournaments/{tournament.id}/brackets'
+                        )
+            else:
+                # TEAM
+                from teams.models import TeamTournamentRegistration
+                for team in [match.team1, match.team2]:
+                    if team:
+                        reg = TeamTournamentRegistration.objects.filter(tournament=tournament, team=team).first()
+                        if reg:
+                             is_winner = (team == match.winning_team)
+                             send_notification(
+                                user=reg.registered_by,
+                                notification_type='GENERAL',
+                                title='Match Result Updated',
+                                message=f'Your team "{team.name}" match in {tournament.title} ended with score {match.player1_score}-{match.player2_score}. Your team {"won!" if is_winner else "lost."}',
+                                tournament=tournament,
+                                action_url=f'/team/tournaments/{tournament.id}/brackets'
+                             )
+        except Exception as e:
+            print(f"Error sending match result notifications: {str(e)}")
+
         # Return updated match data
         serializer = MatchSerializer(match)
         return Response({
@@ -1127,6 +1257,16 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
                             processed_at=timezone.now(),
                             processor_response={"note": f"Automated Escrow Release for officiating Match ID {match.id}"}
                         )
+
+                        # Notify referee about payout
+                        send_notification(
+                            user=referee,
+                            notification_type="PAYMENT_SUCCESSFUL",
+                            title="Payment Received",
+                            message=f"You have received {payout_amount} {organizer_payment.currency} in your wallet for officiating match between {match.team1.name} and {match.team2.name} in {tournament.title}.",
+                            tournament=tournament,
+                            action_url="/referee/wallet"
+                        )
         except Exception as e:
             print(f"Error handling referee payout: {str(e)}")
         # ------------------------------------
@@ -1161,6 +1301,28 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
         # Trigger standings recalculation (happens automatically on next request)
         # The standings calculator reads from completed matches
         
+        # Notify participants about the match result
+        try:
+            from teams.models import TeamTournamentRegistration
+            for team in [home_team, away_team]:
+                if team:
+                    reg = TeamTournamentRegistration.objects.filter(tournament=tournament, team=team).first()
+                    if reg:
+                        is_winner = (team == match.winning_team)
+                        is_draw = (home_score == away_score)
+                        outcome = "drew." if is_draw else ("won!" if is_winner else "lost.")
+                        
+                        send_notification(
+                            user=reg.registered_by,
+                            notification_type='GENERAL',
+                            title='Match Result Submitted',
+                            message=f'Your team "{team.name}" match in {tournament.title} ended with score {home_score}-{away_score}. Your team {outcome}',
+                            tournament=tournament,
+                            action_url=f'/team/tournaments/{tournament.id}/schedule'
+                        )
+        except Exception as e:
+            print(f"Error sending match result notifications: {str(e)}")
+
         return Response({
             'message': 'Match result submitted successfully',
             'match_id': str(match.id),
@@ -1472,7 +1634,7 @@ def tournament_referees(request, tournament_id):
     
     for booking in referee_bookings:
         referees.append({
-            'id': str(booking.id),
+            'id': booking.id,  # Keep as integer
             'referee': {
                 'id': str(booking.referee.id),
                 'full_name': booking.referee.full_name,
@@ -1561,6 +1723,17 @@ def accept_tournament_participant(request, tournament_id, participant_id):
         
         registration.status = 'ACCEPTED'
         registration.save()
+
+        # Notify player
+        send_notification(
+            user=registration.player,
+            notification_type='GENERAL',
+            title='Tournament Registration Approved',
+            message=f'Your registration for {tournament.title} has been approved.',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/player/tournaments/{tournament.id}'
+        )
         
         return Response({
             'message': f'Participant {registration.player.full_name} accepted successfully',
@@ -1595,6 +1768,17 @@ def reject_tournament_participant(request, tournament_id, participant_id):
         registration.status = 'REJECTED'
         registration.notes = request.data.get('reason', 'No reason provided')
         registration.save()
+
+        # Notify player
+        send_notification(
+            user=registration.player,
+            notification_type='GENERAL',
+            title='Tournament Registration Rejected',
+            message=f'Your registration for {tournament.title} has been rejected. Reason: {registration.notes}',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/player/tournaments'
+        )
         
         return Response({
             'message': f'Participant {registration.player.full_name} rejected successfully',
@@ -1641,14 +1825,27 @@ def bulk_accept_participants(request, tournament_id):
                 'error': f'Cannot accept {len(participant_ids)} participants. Only {tournament.max_participants - accepted_count} spots remaining.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Update registrations
-        updated_registrations = TournamentRegistration.objects.filter(
+        # Get registrations to be updated for notification purposes
+        registrations_to_notify = list(TournamentRegistration.objects.filter(
             id__in=participant_ids,
             tournament=tournament,
             status='PENDING'
-        )
+        ).select_related('player'))
         
-        updated_count = updated_registrations.update(status='ACCEPTED')
+        updated_count = TournamentRegistration.objects.filter(
+            id__in=[r.id for r in registrations_to_notify]
+        ).update(status='ACCEPTED')
+
+        # Send notifications
+        for reg in registrations_to_notify:
+            send_notification(
+                user=reg.player,
+                notification_type='REGISTRATION_CONFIRMED',
+                title='Tournament Registration Approved',
+                message=f'Your registration for {tournament.title} has been approved. Get ready for the game!',
+                tournament=tournament,
+                action_url=f'/player/tournaments/{tournament.id}'
+            )
         
         return Response({
             'message': f'Successfully accepted {updated_count} participants',
@@ -1676,17 +1873,30 @@ def bulk_reject_participants(request, tournament_id):
         return Response({'error': 'No participant IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Update registrations
-        updated_registrations = TournamentRegistration.objects.filter(
+        # Get registrations to be updated for notification purposes
+        registrations_to_notify = list(TournamentRegistration.objects.filter(
             id__in=participant_ids,
             tournament=tournament,
             status='PENDING'
-        )
+        ).select_related('player'))
         
-        updated_count = updated_registrations.update(
+        updated_count = TournamentRegistration.objects.filter(
+            id__in=[r.id for r in registrations_to_notify]
+        ).update(
             status='REJECTED',
             notes=rejection_reason
         )
+
+        # Send notifications
+        for reg in registrations_to_notify:
+            send_notification(
+                user=reg.player,
+                notification_type='REGISTRATION_REJECTED',
+                title='Tournament Registration Rejected',
+                message=f'Your registration for {tournament.title} has been rejected. Reason: {rejection_reason}',
+                tournament=tournament,
+                action_url=f'/player/tournaments'
+            )
         
         return Response({
             'message': f'Successfully rejected {updated_count} participants',
@@ -1866,6 +2076,17 @@ def register_team_for_tournament(request, tournament_id):
             }
         )
         
+        # Notify organizer
+        send_notification(
+            user=tournament.organizer,
+            notification_type='GENERAL',
+            title='New Team Registration',
+            message=f'Team "{team.name}" has registered for {tournament.title}.',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+        )
+
         return Response({
             'message': 'Team registered successfully. Awaiting organizer approval.',
             'registration_id': str(registration.id),
@@ -2082,6 +2303,17 @@ def register_team_with_payment(request, tournament_id):
                 }
             )
             
+            # Notify organizer
+            send_notification(
+                user=tournament.organizer,
+                notification_type='GENERAL',
+                title='New Team Registration',
+                message=f'Team "{team.name}" has registered for {tournament.title}.',
+                tournament=tournament,
+                related_id=registration.id,
+                action_url=f'/organizer/tournaments/{tournament.id}/participants'
+            )
+            
             return Response({
                 'message': 'Team registered successfully. Awaiting organizer approval.',
                 'registration_id': str(registration.id),
@@ -2284,6 +2516,31 @@ def generate_tournament_bracket(request, tournament_id):
         tournament.status = 'ONGOING'
         tournament.save()
         
+        # Notify all participants that the bracket is ready
+        if tournament.registration_type == 'INDIVIDUAL':
+            registrations = TournamentRegistration.objects.filter(tournament=tournament, status='ACCEPTED')
+            for reg in registrations:
+                send_notification(
+                    user=reg.player,
+                    notification_type='MATCH_ASSIGNED',
+                    title='Tournament Bracket Generated',
+                    message=f'The bracket for {tournament.title} is now available. Check your scheduled matches!',
+                    tournament=tournament,
+                    action_url=f'/player/tournaments/{tournament.id}/bracket'
+                )
+        else:
+            # TEAM
+            registrations = TeamTournamentRegistration.objects.filter(tournament=tournament, status='CONFIRMED')
+            for reg in registrations:
+                send_notification(
+                    user=reg.registered_by,
+                    notification_type='MATCH_ASSIGNED',
+                    title='Tournament Bracket Generated',
+                    message=f'The bracket for {tournament.title} is now available. Check your team\'s scheduled matches!',
+                    tournament=tournament,
+                    action_url=f'/team/tournaments/{tournament.id}/bracket'
+                )
+
         return Response({
             'message': 'Tournament bracket generated successfully',
             'tournament_id': str(tournament.id),
@@ -2542,6 +2799,17 @@ def accept_team_participant(request, tournament_id, registration_id):
         
         registration.status = 'CONFIRMED'
         registration.save()
+
+        # Notify team captain/members (assuming registered_by is the captain)
+        send_notification(
+            user=registration.registered_by,
+            notification_type='GENERAL',
+            title='Team Tournament Registration Approved',
+            message=f'Your team "{registration.team.name}" registration for {tournament.title} has been approved.',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/team/tournaments/{tournament.id}'
+        )
         
         # Record activity history
         from teams.models import ActivityHistory
@@ -2591,6 +2859,17 @@ def reject_team_participant(request, tournament_id, registration_id):
         
         registration.status = 'CANCELLED'
         registration.save()
+
+        # Notify team captain
+        send_notification(
+            user=registration.registered_by,
+            notification_type='GENERAL',
+            title='Team Tournament Registration Rejected',
+            message=f'Your team "{registration.team.name}" registration for {tournament.title} has been rejected. Reason: {rejection_reason}',
+            tournament=tournament,
+            related_id=registration.id,
+            action_url=f'/team/tournaments'
+        )
         
         # Record activity history
         ActivityHistory.objects.create(

@@ -16,6 +16,7 @@ import {
   Eye
 } from 'lucide-react';
 import { api } from '../services/api';
+import { notificationService } from '../services/notificationService';
 
 interface RefereeBooking {
   id: string;
@@ -53,6 +54,24 @@ const RefereeManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchBookings();
+    
+    // Set up real-time notification listener
+    console.log('[RefereeManagement] Setting up notification listener');
+    const cleanup = notificationService.onNotification((notification) => {
+      console.log('[RefereeManagement] Received notification:', notification.type);
+      
+      // Reload bookings when receiving referee-related notifications
+      if (notification.type === 'REFEREE_ASSIGNED' || 
+          notification.type === 'GENERAL' && notification.title.includes('Referee')) {
+        console.log('[RefereeManagement] Referee notification received, reloading bookings');
+        fetchBookings();
+      }
+    });
+    
+    return () => {
+      console.log('[RefereeManagement] Cleaning up notification listener');
+      cleanup();
+    };
   }, []);
 
   const fetchBookings = async () => {

@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.conf import settings
 from .models import Payment, PaymentMethod, Transaction, Refund
 from .utils import KhaltiPaymentGateway
+from notifications.utils import send_notification
 
 
 class PaymentService:
@@ -280,6 +281,15 @@ class RefereePaymentService(PaymentService):
         if payment.referee_booking:
             payment.referee_booking.payment_status = 'COMPLETED'
             payment.referee_booking.save()
+            
+            # Notify referee about escrow
+            send_notification(
+                user=payment.referee_booking.referee,
+                notification_type='GENERAL',
+                title='Payment Held in Escrow',
+                message=f'Payment for your match on {payment.referee_booking.match_date} is being held in escrow.',
+                related_id=payment.referee_booking.id
+            )
     
     @transaction.atomic
     def release_to_referee(self, referee_booking):
@@ -301,6 +311,16 @@ class RefereePaymentService(PaymentService):
         referee_booking.payment_released = True
         referee_booking.payment_released_at = timezone.now()
         referee_booking.save()
+
+        # Notify referee about payment release
+        send_notification(
+            user=referee_booking.referee,
+            notification_type='PAYMENT_RECEIVED',
+            title='Payment Released',
+            message=f'Payment for your match on {referee_booking.match_date} has been released to your wallet.',
+            related_id=referee_booking.id,
+            action_url='/wallet'
+        )
         
         return True
     

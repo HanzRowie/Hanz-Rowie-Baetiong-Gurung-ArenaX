@@ -34,7 +34,7 @@ urlpatterns = [
     path('<uuid:tournament_id>/participants/bulk-reject/', views.bulk_reject_participants, name='bulk_reject_participants'),
     path('<uuid:tournament_id>/referees/', views.tournament_referees, name='tournament_referees'),
     path('<uuid:tournament_id>/participants/<uuid:participant_id>/', views.remove_tournament_participant, name='remove_tournament_participant'),
-    path('<uuid:tournament_id>/referees/<uuid:referee_id>/', views.remove_tournament_referee, name='remove_tournament_referee'),
+    path('<uuid:tournament_id>/referees/<int:referee_id>/', views.remove_tournament_referee, name='remove_tournament_referee'),
     path('teams/<uuid:team_id>/available/', views.team_available_tournaments, name='team_available_tournaments'),
     path('<uuid:tournament_id>/registered-players/', views.tournament_registered_players, name='tournament_registered_players'),
     

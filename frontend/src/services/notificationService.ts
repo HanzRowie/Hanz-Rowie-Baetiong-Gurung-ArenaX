@@ -2,6 +2,7 @@
  * Notification Service - Real-time notifications via WebSocket and REST API
  */
 import { api } from './api';
+import toastService from './toastService';
 import type {  Notification, NotificationPreferences, NotificationsResponse } from '@/types/notification.types';
 
 export interface NotificationFilters {
@@ -17,15 +18,36 @@ export interface NotificationFilters {
 }
 
 class NotificationService {
+  private static instance: NotificationService | null = null;
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
   private reconnectTimeout: number | null = null;
   private heartbeatInterval: number | null = null;
+  private connectionInProgress = false;
+  private hasShownToast = new Set<string>(); // Track which notifications have shown toasts
 
-  private onNotificationCallback?: (notification: Notification) => void;
-  private onUnreadCountCallback?: (count: number) => void;
-  private onConnectionCallback?: (connected: boolean) => void;
+  private onNotificationCallbacks: Set<(notification: Notification) => void> = new Set();
+  private onUnreadCountCallbacks: Set<(count: number) => void> = new Set();
+  private onConnectionCallbacks: Set<(connected: boolean) => void> = new Set();
+
+  // Singleton pattern
+  constructor() {
+    if (NotificationService.instance) {
+      return NotificationService.instance;
+    }
+    NotificationService.instance = this;
+  }
+
+  /**
+   * Clear all callbacks (useful for cleanup)
+   */
+  clearCallbacks(): void {
+    console.log('[NotificationService] Clearing all callbacks');
+    this.onNotificationCallbacks.clear();
+    this.onUnreadCountCallbacks.clear();
+    this.onConnectionCallbacks.clear();
+  }
 
   /**
    * Connect to notifications WebSocket
@@ -37,21 +59,35 @@ class NotificationService {
       return false;
     }
 
-    // Disconnect existing connection
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    // Prevent multiple simultaneous connection attempts
+    if (this.connectionInProgress) {
+      console.log('[NotificationService] Connection already in progress, skipping...');
       return true;
     }
 
+    // Disconnect existing connection first to prevent duplicates
+    if (this.ws) {
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        console.log('WebSocket already connected or connecting, skipping...');
+        return true;
+      }
+      // Clean up old connection
+      this.disconnect();
+    }
+
     try {
+      this.connectionInProgress = true;
       const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
       const wsUrl = `${wsBaseUrl}/ws/notifications/?token=${token}`;
 
+      console.log('[NotificationService] Connecting to WebSocket...');
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('Connected to notifications WebSocket');
+        console.log('[NotificationService] Connected to notifications WebSocket');
         this.reconnectAttempts = 0;
-        this.onConnectionCallback?.(true);
+        this.connectionInProgress = false;
+        this.onConnectionCallbacks.forEach(callback => callback(true));
         this.startHeartbeat();
       };
 
@@ -65,14 +101,15 @@ class NotificationService {
       };
 
       this.ws.onclose = () => {
-        console.log('Disconnected from notifications WebSocket');
+        console.log('[NotificationService] Disconnected from notifications WebSocket');
         this.stopHeartbeat();
-        this.onConnectionCallback?.(false);
+        this.connectionInProgress = false;
+        this.onConnectionCallbacks.forEach(callback => callback(false));
         this.attemptReconnect();
       };
 
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[NotificationService] WebSocket error:', error);
       };
 
       return true;
@@ -87,19 +124,35 @@ class NotificationService {
     switch (data.type) {
       case 'notification':
         console.log('[NotificationService] New notification:', data.notification);
-        this.onNotificationCallback?.(data.notification);
+        
+        // Show toast and play sound ONCE in the service
+        const notificationId = data.notification.id;
+        if (!this.hasShownToast.has(notificationId)) {
+          this.hasShownToast.add(notificationId);
+          this.showNotificationToast(data.notification);
+          this.playNotificationSound();
+          
+          // Clean up old entries to prevent memory leak (keep last 100)
+          if (this.hasShownToast.size > 100) {
+            const firstItem = this.hasShownToast.values().next().value;
+            this.hasShownToast.delete(firstItem);
+          }
+        }
+        
+        // Notify all callbacks
+        this.onNotificationCallbacks.forEach(callback => callback(data.notification));
         break;
 
       case 'unread_count':
-        this.onUnreadCountCallback?.(data.count);
+        this.onUnreadCountCallbacks.forEach(callback => callback(data.count));
         break;
 
       case 'marked_read':
-        this.onUnreadCountCallback?.(data.unread_count);
+        this.onUnreadCountCallbacks.forEach(callback => callback(data.unread_count));
         break;
 
       case 'marked_all_read':
-        this.onUnreadCountCallback?.(0);
+        this.onUnreadCountCallbacks.forEach(callback => callback(0));
         break;
 
       case 'pong':
@@ -113,6 +166,63 @@ class NotificationService {
       default:
         console.warn('Unknown WebSocket message type:', data.type);
     }
+  }
+
+  private showNotificationToast(notification: Notification): void {
+    const icon = this.getNotificationIcon(notification.type);
+    const message = `${icon} ${notification.title}: ${notification.message.substring(0, 80)}${notification.message.length > 80 ? '...' : ''}`;
+    toastService.info(message);
+  }
+
+  private playNotificationSound(): void {
+    try {
+      const audio = new Audio('/notification.mp3');
+      audio.volume = 0.3;
+      audio.play().catch(() => {
+        // Ignore errors (e.g., user hasn't interacted with page yet)
+      });
+    } catch (error) {
+      // Ignore errors
+    }
+  }
+
+  private getNotificationIcon(type: string): string {
+    const iconMap: Record<string, string> = {
+      'NEW_MESSAGE': '💬',
+      'MESSAGE_REPLY': '💬',
+      'TOURNAMENT_STARTING_SOON': '🏆',
+      'TOURNAMENT_REGISTRATION_OPEN': '🏆',
+      'TOURNAMENT_REGISTRATION_CLOSING': '⏰',
+      'TOURNAMENT_CANCELLED': '❌',
+      'TOURNAMENT_RESCHEDULED': '📅',
+      'TOURNAMENT_RESULT': '🏅',
+      'TOURNAMENT_BRACKET_UPDATE': '🌳',
+      'MATCH_STARTING_SOON': '▶️',
+      'MATCH_RESULT': '✅',
+      'MATCH_RESCHEDULED': '📅',
+      'MATCH_CANCELLED': '❌',
+      'TEAM_INVITATION': '👥',
+      'TEAM_INVITATION_ACCEPTED': '✅',
+      'TEAM_INVITATION_REJECTED': '❌',
+      'TEAM_MEMBER_LEFT': '👋',
+      'TEAM_MEMBER_REMOVED': '🚫',
+      'PAYMENT_SUCCESS': '✅',
+      'PAYMENT_FAILED': '❌',
+      'PAYMENT_REFUND': '💰',
+      'PAYMENT_PENDING': '⏳',
+      'CONNECTION_REQUEST': '🤝',
+      'CONNECTION_ACCEPTED': '✅',
+      'CONNECTION_REJECTED': '❌',
+      'ACHIEVEMENT_UNLOCKED': '🏅',
+      'LEVEL_UP': '📈',
+      'MILESTONE_REACHED': '🎯',
+      'SYSTEM_ANNOUNCEMENT': '📢',
+      'MAINTENANCE_SCHEDULED': '🔧',
+      'ACCOUNT_UPDATE': '👤',
+      'REFEREE_ASSIGNED': '👨‍⚖️',
+      'GENERAL': '🔔',
+    };
+    return iconMap[type] || '🔔';
   }
 
   private startHeartbeat(): void {
@@ -155,19 +265,31 @@ class NotificationService {
    * Disconnect from WebSocket
    */
   disconnect(): void {
+    console.log('[NotificationService] Disconnecting...');
+    
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+    
     this.stopHeartbeat();
+    
     if (this.ws) {
-      // Only close if connection is fully open to avoid "closed before established" errors in React Strict Mode
-      if (this.ws.readyState === WebSocket.OPEN) {
+      // Remove event listeners to prevent reconnection attempts
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
+      this.ws.onopen = null;
+      
+      // Only close if connection is open or connecting
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
         this.ws.close();
       }
       this.ws = null;
     }
+    
     this.reconnectAttempts = 0;
+    console.log('[NotificationService] Disconnected');
   }
 
   /**
@@ -330,16 +452,28 @@ class NotificationService {
   /**
    * Set callback handlers
    */
-  onNotification(callback: (notification: Notification) => void): void {
-    this.onNotificationCallback = callback;
+  onNotification(callback: (notification: Notification) => void): () => void {
+    this.onNotificationCallbacks.add(callback);
+    // Return cleanup function
+    return () => {
+      this.onNotificationCallbacks.delete(callback);
+    };
   }
 
-  onUnreadCount(callback: (count: number) => void): void {
-    this.onUnreadCountCallback = callback;
+  onUnreadCount(callback: (count: number) => void): () => void {
+    this.onUnreadCountCallbacks.add(callback);
+    // Return cleanup function
+    return () => {
+      this.onUnreadCountCallbacks.delete(callback);
+    };
   }
 
-  onConnection(callback: (connected: boolean) => void): void {
-    this.onConnectionCallback = callback;
+  onConnection(callback: (connected: boolean) => void): () => void {
+    this.onConnectionCallbacks.add(callback);
+    // Return cleanup function
+    return () => {
+      this.onConnectionCallbacks.delete(callback);
+    };
   }
 
   // REST API Methods
