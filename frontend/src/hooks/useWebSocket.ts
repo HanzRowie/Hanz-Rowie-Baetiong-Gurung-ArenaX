@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { websocketService, WebSocketHandlers } from '@/services/websocketService';
+import { websocketService } from '@/services/websocketService';
+import type { WebSocketHandlers } from '@/types/chat.types';
 
 interface UseWebSocketReturn {
   isConnected: boolean;

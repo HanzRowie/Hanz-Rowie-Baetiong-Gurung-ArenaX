@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { presenceService, PresenceStatus } from '@/services/presenceService';
-import { websocketService, WebSocketHandlers } from '@/services/websocketService';
+import { presenceService } from '@/services/presenceService';
+import type { PresenceStatus } from '@/services/presenceService';
+import { websocketService } from '@/services/websocketService';
+import type { WebSocketHandlers } from '@/types/chat.types';
 
 interface UsePresenceReturn {
   presenceMap: Map<string, PresenceStatus>;
@@ -58,7 +60,7 @@ export function usePresence(userIds: string[] = []): UsePresenceReturn {
           user_ids: userIds
         });
       },
-      onMessage: (data) => {
+      onMessage: (data: any) => {
         if (data.type === 'presence' && data.user_id) {
           // Update presence map
           setPresenceMap(prev => {
@@ -72,7 +74,7 @@ export function usePresence(userIds: string[] = []): UsePresenceReturn {
           });
         }
       },
-      onError: (err) => {
+      onError: (err: Event) => {
         console.error('Presence WebSocket error:', err);
       },
       onClose: () => {

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { chatService, Conversation, PrivateMessage, ConversationsResponse } from '@/services/chatService';
-import { websocketService, WebSocketHandlers } from '@/services/websocketService';
+import { chatService } from '@/services/chatService';
+import type { Conversation, PrivateMessage, ConversationsResponse } from '@/services/chatService';
+import { websocketService } from '@/services/websocketService';
+import type { WebSocketHandlers } from '@/types/chat.types';
 
 interface UseChatReturn {
   conversations: Conversation[];
@@ -53,11 +55,17 @@ export function useChat(roleFilter?: string): UseChatReturn {
       const conv = conversations.find(c => c.user.id === userId);
       if (conv) {
         setActiveConversation(conv);
-      } else {
+      } else if (response.other_user) {
         // Create conversation object from response
+        const lastMessage = response.messages.at(-1);
         setActiveConversation({
           user: response.other_user,
-          latest_message: response.messages[response.messages.length - 1] || {
+          latest_message: lastMessage ? {
+            id: lastMessage.id,
+            content: lastMessage.content,
+            timestamp: lastMessage.timestamp,
+            is_from_me: lastMessage.is_from_me
+          } : {
             id: '',
             content: '',
             timestamp: new Date().toISOString(),
@@ -69,45 +77,68 @@ export function useChat(roleFilter?: string): UseChatReturn {
 
       activeUserIdRef.current = userId;
 
-      // Connect to WebSocket for real-time updates
+      // Connect to WebSocket for real-time updates using DirectChatConsumer
       const token = localStorage.getItem('access_token');
       if (token) {
         const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
-        const wsUrl = `${wsBaseUrl}/ws/chat/${userId}/?token=${token}`;
+        // Use DirectChatConsumer endpoint that supports all user roles
+        const wsUrl = `${wsBaseUrl}/ws/chat/direct/?token=${token}`;
         wsUrlRef.current = wsUrl;
 
         const handlers: WebSocketHandlers = {
           onOpen: () => setIsConnected(true),
           onClose: () => setIsConnected(false),
-          onMessage: (data) => {
-            if (data.type === 'message' && data.message) {
-              setMessages(prev => [...prev, data.message]);
-              
-              // Update conversation list
-              setConversations(prev => {
-                const updated = prev.map(c => {
-                  if (c.user.id === userId) {
-                    return {
-                      ...c,
-                      latest_message: {
-                        id: data.message.id,
-                        content: data.message.content,
-                        timestamp: data.message.timestamp,
-                        is_from_me: data.message.is_from_me
-                      }
-                    };
-                  }
-                  return c;
+          onMessage: (data: any) => {
+            if (data.type === 'chat_message' && data.message) {
+              // Only add message if it's for the active conversation
+              const msg = data.message;
+              if (msg.sender_id === userId || msg.receiver_id === userId) {
+                // Construct a proper Message object from WebSocket data
+                const newMessage: PrivateMessage = {
+                  id: msg.id,
+                  content: msg.content,
+                  timestamp: msg.timestamp,
+                  is_from_me: msg.sender_id !== userId,
+                  status: msg.status || 'SENT',
+                  message_type: msg.message_type || 'TEXT',
+                  read: false,
+                  edited: msg.edited || false,
+                  deleted: msg.deleted || false,
+                  sender: msg.sender || { id: msg.sender_id, username: '', full_name: '' },
+                  receiver: msg.receiver || { id: msg.receiver_id, username: '', full_name: '' }
+                };
+                
+                setMessages(prev => [...prev, newMessage]);
+                
+                // Update conversation list
+                setConversations(prev => {
+                  const updated = prev.map(c => {
+                    if (c.user.id === userId) {
+                      return {
+                        ...c,
+                        latest_message: {
+                          id: msg.id,
+                          content: msg.content,
+                          timestamp: msg.timestamp,
+                          is_from_me: msg.sender_id !== userId
+                        }
+                      };
+                    }
+                    return c;
+                  });
+                  // Sort by most recent
+                  return updated.sort((a, b) => 
+                    new Date(b.latest_message.timestamp).getTime() - 
+                    new Date(a.latest_message.timestamp).getTime()
+                  );
                 });
-                // Sort by most recent
-                return updated.sort((a, b) => 
-                  new Date(b.latest_message.timestamp).getTime() - 
-                  new Date(a.latest_message.timestamp).getTime()
-                );
-              });
+              }
+            } else if (data.type === 'typing_indicator') {
+              // Handle typing indicators
+              console.log('Typing indicator:', data);
             }
           },
-          onError: (err) => {
+          onError: (err: Event) => {
             console.error('WebSocket error:', err);
             setError(new Error('WebSocket connection error'));
           }
@@ -133,8 +164,10 @@ export function useChat(roleFilter?: string): UseChatReturn {
       // Send via WebSocket if connected
       if (isConnected) {
         websocketService.send(wsUrlRef.current, {
-          type: 'message',
-          message: content.trim()
+          type: 'chat_message',
+          receiver_id: activeUserIdRef.current,
+          message: content.trim(),
+          message_type: 'TEXT'
         });
       } else {
         // Fallback to REST API

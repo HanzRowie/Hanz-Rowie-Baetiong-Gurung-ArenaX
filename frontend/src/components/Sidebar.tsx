@@ -1,14 +1,16 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3 } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -253,19 +255,43 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-64 bg-white border-r border-gray-200 z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-          } lg:shadow-none shadow-2xl`}
+        className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 z-50 transform transition-all duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
+          isCollapsed ? 'lg:w-20' : 'w-64'
+        } lg:shadow-none shadow-2xl`}
         style={{ zIndex: 9999 }}
       >
         <div className="flex flex-col h-full overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">A</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">ArenaX</span>
-            </div>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} p-6 border-b border-gray-100 transition-all duration-300`}>
+            {!isCollapsed && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">A</span>
+                  </div>
+                  <span className="text-xl font-bold text-gray-900">ArenaX</span>
+                </div>
+                {/* Collapse button - Desktop only, inline with logo */}
+                <button
+                  onClick={onToggleCollapse}
+                  className="hidden lg:block p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600 hover:text-purple-600"
+                  title="Collapse sidebar"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              </>
+            )}
+            {isCollapsed && (
+              <button
+                onClick={onToggleCollapse}
+                className="hidden lg:flex w-8 h-8 bg-purple-600 rounded-lg items-center justify-center hover:bg-purple-700 transition-colors"
+                title="Expand sidebar"
+              >
+                <ChevronRight className="h-4 w-4 text-white" />
+              </button>
+            )}
             <button
               onClick={handleClose}
               className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -282,30 +308,50 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <button
                   key={item.id}
                   onClick={() => handleNavigate(item.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${item.active
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
+                  className={`w-full flex items-center ${
+                    isCollapsed ? 'justify-center px-2' : 'gap-3 px-4'
+                  } py-3 rounded-lg transition-all duration-200 ${
+                    item.active
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  } group relative`}
+                  title={isCollapsed ? item.label : undefined}
                 >
                   <IconComponent
-                    className={`h-5 w-5 ${item.active ? 'text-white' : 'text-gray-500'
-                      }`}
+                    className={`h-5 w-5 ${
+                      item.active ? 'text-white' : 'text-gray-500'
+                    }`}
                   />
-                  <span className={`font-medium ${item.active ? 'text-white' : 'text-gray-700'
-                    }`}>
-                    {item.label}
-                  </span>
+                  {!isCollapsed && (
+                    <span
+                      className={`font-medium ${
+                        item.active ? 'text-white' : 'text-gray-700'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
+                  
+                  {/* Tooltip for collapsed state */}
+                  {isCollapsed && (
+                    <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50">
+                      {item.label}
+                      <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
+                    </div>
+                  )}
                 </button>
               );
             })}
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-100">
-            <div className="text-xs text-gray-500 text-center">
-              © 2025 ArenaX
+          {!isCollapsed && (
+            <div className="p-4 border-t border-gray-100">
+              <div className="text-xs text-gray-500 text-center">
+                © 2025 ArenaX
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </aside>
     </>

@@ -1,5 +1,8 @@
 import type { WebSocketHandlers } from '@/types/chat.types';
 
+// Re-export for convenience
+export type { WebSocketHandlers };
+
 // WebSocket Service for managing multiple WebSocket connections
 
 class WebSocketService {
