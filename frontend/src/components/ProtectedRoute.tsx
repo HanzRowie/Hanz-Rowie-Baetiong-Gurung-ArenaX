@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/store';
 import { ROUTES } from '@/utils/constants';
@@ -8,7 +8,8 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated, isLoading, user } = useSelector((state: RootState) => state.auth);
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -20,6 +21,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} replace />;
+  }
+
+  // Check if user is unapproved and not already on the account status page
+  if (user && (user.approval_status === 'PENDING' || user.approval_status === 'REJECTED')) {
+    if (location.pathname !== '/account-status') {
+      return <Navigate to="/account-status" replace />;
+    }
   }
 
   return <>{children}</>;

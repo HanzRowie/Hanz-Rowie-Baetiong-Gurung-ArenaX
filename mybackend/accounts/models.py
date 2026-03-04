@@ -69,6 +69,50 @@ class CustomUser(AbstractUser):
     business_registration = models.CharField(max_length=100, blank=True)
     business_contact = models.CharField(max_length=100, blank=True)
 
+    # Approval Workflow Fields
+    APPROVAL_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    )
+    
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+        help_text='Current approval status of the user account'
+    )
+    
+    approval_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when the account was approved or rejected'
+    )
+    
+    approved_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_users',
+        limit_choices_to={'role': 'ADMIN'},
+        help_text='Administrator who approved or rejected this account'
+    )
+    
+    rejection_reason = models.TextField(
+        blank=True,
+        help_text='Explanation provided when account is rejected'
+    )
+    
+    verification_document = models.FileField(
+        upload_to='verification_documents/%Y/%m/',
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text='Identity or business registration document'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -90,6 +134,81 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return f"{self.full_name} ({self.role})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['approval_status', 'created_at']),
+            models.Index(fields=['role', 'approval_status']),
+            models.Index(fields=['email']),
+        ]
+
+
+class AdminAuditLog(models.Model):
+    """
+    Tracks all administrative actions for accountability and compliance.
+    Retention period: 12 months minimum.
+    """
+    
+    ACTION_CHOICES = (
+        ('APPROVE', 'Approve User'),
+        ('REJECT', 'Reject User'),
+        ('BULK_APPROVE', 'Bulk Approve Users'),
+        ('BULK_REJECT', 'Bulk Reject Users'),
+        ('VIEW_DOCUMENT', 'View Verification Document'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    administrator = models.ForeignKey(
+        CustomUser,
+        on_delete=models.PROTECT,  # Never delete audit logs
+        related_name='admin_actions',
+        limit_choices_to={'role': 'ADMIN'}
+    )
+    
+    action_type = models.CharField(
+        max_length=20,
+        choices=ACTION_CHOICES,
+        db_index=True
+    )
+    
+    target_user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.PROTECT,
+        related_name='audit_logs',
+        null=True,
+        blank=True
+    )
+    
+    target_user_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='For bulk operations, list of affected user IDs'
+    )
+    
+    rejection_reason = models.TextField(
+        blank=True,
+        help_text='Reason provided for rejection actions'
+    )
+    
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional context (IP address, user agent, etc.)'
+    )
+    
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['administrator', 'timestamp']),
+            models.Index(fields=['action_type', 'timestamp']),
+            models.Index(fields=['target_user', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.administrator.full_name} - {self.action_type} - {self.timestamp}"
 
 
 # Player Finder / Join Requests - MOVED FROM core
@@ -120,6 +239,8 @@ class Notification(models.Model):
         ('TOURNAMENT_STARTING', 'Tournament Starting'),
         ('NEW_MESSAGE', 'New Message'),
         ('NEW_GROUP_MESSAGE', 'New Group Message'),
+        ('ACCOUNT_APPROVED', 'Account Approved'),
+        ('ACCOUNT_REJECTED', 'Account Rejected'),
         ('GENERAL', 'General Notification'),
     )
 

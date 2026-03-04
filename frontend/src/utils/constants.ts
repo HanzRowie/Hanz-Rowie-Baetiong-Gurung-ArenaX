@@ -99,6 +99,7 @@ export const ROUTES = {
   VERIFY_EMAIL: '/verify-email',
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password',
+  ACCOUNT_PENDING_APPROVAL: '/account-pending-approval',
   DASHBOARD: '/dashboard',
   PROFILE: '/profile',
   SETTINGS: '/settings',

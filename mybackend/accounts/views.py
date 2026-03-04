@@ -41,6 +41,10 @@ def register(request):
         if not all([email, full_name, password]):
             return Response({'error': 'Email, full name, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Prevent ADMIN role registration - admins can only be created via database/management command
+        if role == 'ADMIN':
+            return Response({'error': 'Cannot register as admin. Admin accounts must be created by system administrators.'}, status=status.HTTP_403_FORBIDDEN)
+
         if CustomUser.objects.filter(email=email).exists():
             return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
 

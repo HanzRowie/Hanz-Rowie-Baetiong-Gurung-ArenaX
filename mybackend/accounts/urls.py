@@ -1,9 +1,19 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 from . import player_statistics_views
+from .admin_views import AdminUserViewSet
+
+# Router for admin viewsets
+router = DefaultRouter()
+router.register(r'admin/users', AdminUserViewSet, basename='admin-users')
 
 # URL patterns for accounts app
 urlpatterns = [
+    # Admin Control System API (viewset-based)
+    path('', include(router.urls)),
+    
+    # Existing patterns
     path('auth/register/', views.register, name='register'),
     path('auth/login/', views.login, name='login'),
     path('auth/logout/', views.logout, name='logout'),

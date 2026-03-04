@@ -4,6 +4,7 @@ import type { RootState, AppDispatch } from '@/store';
 import { setLoading, loginSuccess, loginFailure, logout as logoutAction } from '@/store/authSlice';
 import { authService } from '@/services/authService';
 import type { LoginRequest, RegisterRequest } from '@/types/auth.types';
+import { UserRole } from '@/types/auth.types';
 import { ROUTES } from '@/utils/constants';
 
 export const useAuth = () => {
@@ -22,8 +23,16 @@ export const useAuth = () => {
         refreshToken: response.refresh_token,
       }));
 
-      // Navigate to dashboard based on role
-      navigate(ROUTES.DASHBOARD);
+      // Check approval status and redirect accordingly
+      if (response.user.approval_status === 'PENDING' || response.user.approval_status === 'REJECTED') {
+        navigate('/account-status');
+      } else if (response.user.role === UserRole.ADMIN) {
+        // Navigate to admin page for admin users
+        navigate('/admin');
+      } else {
+        // Navigate to dashboard for other approved users
+        navigate(ROUTES.DASHBOARD);
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error 
         ? error.message 

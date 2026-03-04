@@ -1,0 +1,253 @@
+/**
+ * Admin Accessibility Styles
+ * 
+ * Provides enhanced focus indicators and accessibility features for the admin control system.
+ * 
+ * Requirements:
+ * - 19.2, 19.3, 19.4: Keyboard navigation with visible focus indicators
+ * - 19.5: Color contrast compliance (4.5:1 minimum)
+ */
+
+/* ===== FOCUS INDICATORS ===== */
+
+/* Global focus styles for keyboard navigation */
+*:focus {
+  outline: 2px solid #3b82f6; /* Blue-600 */
+  outline-offset: 2px;
+}
+
+/* Enhanced focus for interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+/* Focus for table rows */
+tr[tabindex]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Focus for checkboxes */
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+/* Focus for modal close buttons */
+[aria-label*="Close"]:focus-visible,
+[aria-label*="close"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+/* ===== SKIP LINKS ===== */
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #3b82f6;
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+  z-index: 100;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid #1e40af;
+  outline-offset: 2px;
+}
+
+/* ===== HIGH CONTRAST MODE SUPPORT ===== */
+
+@media (prefers-contrast: high) {
+  *:focus-visible {
+    outline-width: 4px;
+    outline-color: currentColor;
+  }
+  
+  button:focus-visible,
+  a:focus-visible {
+    outline-width: 4px;
+  }
+}
+
+/* ===== REDUCED MOTION SUPPORT ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== SCREEN READER ONLY TEXT ===== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ===== COLOR CONTRAST ENHANCEMENTS ===== */
+
+/* Ensure text meets 4.5:1 contrast ratio */
+.text-gray-500 {
+  color: #6b7280; /* Verified 4.5:1 on white */
+}
+
+.text-gray-600 {
+  color: #4b5563; /* Verified 7:1 on white */
+}
+
+.text-gray-700 {
+  color: #374151; /* Verified 10:1 on white */
+}
+
+/* Status badge contrast improvements */
+.status-badge-pending {
+  background-color: #fef3c7; /* yellow-100 */
+  color: #92400e; /* yellow-900 for better contrast */
+  border: 1px solid #fbbf24; /* yellow-400 */
+}
+
+.status-badge-approved {
+  background-color: #d1fae5; /* green-100 */
+  color: #065f46; /* green-900 for better contrast */
+  border: 1px solid #10b981; /* green-500 */
+}
+
+.status-badge-rejected {
+  background-color: #fee2e2; /* red-100 */
+  color: #991b1b; /* red-900 for better contrast */
+  border: 1px solid #ef4444; /* red-500 */
+}
+
+/* ===== KEYBOARD NAVIGATION HELPERS ===== */
+
+/* Visual indicator for keyboard users */
+body.keyboard-navigation *:focus {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Hide focus for mouse users */
+body:not(.keyboard-navigation) *:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ===== ARIA LIVE REGION STYLING ===== */
+
+[aria-live] {
+  position: relative;
+}
+
+/* Toast container for announcements */
+.toast-container[aria-live] {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+}
+
+/* Table update announcements */
+.table-announcer[aria-live] {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ===== LOADING STATE ACCESSIBILITY ===== */
+
+[aria-busy="true"] {
+  position: relative;
+}
+
+[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: wait;
+}
+
+/* ===== DISABLED STATE CLARITY ===== */
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(30%);
+}
+
+/* ===== SEMANTIC HTML ENHANCEMENTS ===== */
+
+/* Ensure semantic table elements are properly styled */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th {
+  text-align: left;
+  font-weight: 600;
+}
+
+/* ===== RESPONSIVE FOCUS INDICATORS ===== */
+
+@media (max-width: 768px) {
+  /* Larger touch targets for mobile */
+  button,
+  a,
+  input,
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Larger focus indicators for mobile */
+  *:focus-visible {
+    outline-width: 4px;
+  }
+}

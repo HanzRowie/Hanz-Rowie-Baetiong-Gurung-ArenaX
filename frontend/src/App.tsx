@@ -6,10 +6,15 @@ import { authService } from './services/authService';
 import { loginSuccess, setLoading } from './store/authSlice';
 import type { RootState, AppDispatch } from './store';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from './utils/constants';
+import { useKeyboardNavigationDetection } from './hooks/useKeyboardNavigation';
+import './styles/admin-accessibility.css';
 
 function App() {
   const dispatch = useDispatch<AppDispatch>();
   const { user, isLoading } = useSelector((state: RootState) => state.auth);
+
+  // Initialize keyboard navigation detection for accessibility
+  useKeyboardNavigationDetection();
 
   useEffect(() => {
     const initializeAuth = async () => {

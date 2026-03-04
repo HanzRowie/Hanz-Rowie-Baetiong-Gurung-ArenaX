@@ -218,7 +218,7 @@ export default function RegisterPage() {
                   required
                   disabled={isLoading}
                 >
-                  {Object.values(UserRole).map((role) => (
+                  {Object.values(UserRole).filter(role => role !== UserRole.ADMIN).map((role) => (
                     <option key={role} value={role}>
                       {role.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
                     </option>

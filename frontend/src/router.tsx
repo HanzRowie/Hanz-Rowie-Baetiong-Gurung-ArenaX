@@ -48,8 +48,12 @@ import MyStatsPage from './pages/MyStatsPage';
 import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import PaymentCallbackPage from './pages/PaymentCallbackPage';
+import AccountPendingApprovalPage from './pages/AccountPendingApprovalPage';
+import AccountStatusPage from './pages/AccountStatusPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
+import AdminLayout from './components/admin/AdminLayout';
+import UserManagementPage from './pages/admin/UserManagementPage';
 
 // Router configuration
 export const router = createBrowserRouter([
@@ -78,8 +82,35 @@ export const router = createBrowserRouter([
     element: <ResetPasswordPage />,
   },
   {
+    path: '/account-pending-approval',
+    element: <AccountPendingApprovalPage />,
+  },
+  {
+    path: '/account-status',
+    element: <AccountStatusPage />,
+  },
+  {
     path: '/payment/success',
     element: <PaymentCallbackPage />,
+  },
+  // Admin routes with role-based access control
+  {
+    path: '/admin',
+    element: (
+      <ProtectedRoute>
+        <AdminLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        path: '',
+        element: <UserManagementPage />, // Default admin page is user management
+      },
+      {
+        path: 'users',
+        element: <UserManagementPage />,
+      },
+    ],
   },
   {
     path: '/',

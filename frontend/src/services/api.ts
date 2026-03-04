@@ -148,9 +148,20 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 403 Forbidden - show error message
+    // Handle 403 Forbidden - check if it's an approval status issue
     if (error.response.status === 403) {
       const responseData = error.response?.data as any;
+      
+      // Check if this is an approval status error
+      if (responseData?.approval_status && 
+          (responseData.approval_status === 'PENDING' || responseData.approval_status === 'REJECTED')) {
+        // Redirect to account status page
+        if (globalThis.location.pathname !== '/account-status') {
+          globalThis.location.href = '/account-status';
+        }
+        throw error;
+      }
+      
       const apiError: ApiError = {
         message: responseData?.error || responseData?.message || 'You do not have permission to access this resource',
         code: 'FORBIDDEN',

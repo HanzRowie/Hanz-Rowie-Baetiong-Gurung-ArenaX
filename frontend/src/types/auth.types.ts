@@ -8,6 +8,7 @@ export const UserRole = {
   ORGANIZER: 'ORGANIZER',
   REFEREE: 'REFEREE',
   VENUE_OWNER: 'VENUE_OWNER',
+  ADMIN: 'ADMIN',
 } as const;
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -75,6 +76,8 @@ export interface User {
   role: UserRole;
   profile_picture: string | null;
   is_verified: boolean;
+  approval_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejection_reason?: string;
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
   country?: string;
   location?: string;

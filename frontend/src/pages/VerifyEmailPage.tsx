@@ -91,11 +91,28 @@ export default function VerifyEmailPage() {
 
         {/* Success Message */}
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 text-green-700">
-            <CheckCircle className="h-6 w-6" />
-            <div>
-              <p className="font-semibold">Email verified successfully!</p>
-              <p className="text-sm">Redirecting to login...</p>
+          <div className="mb-6 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 text-green-700">
+              <CheckCircle className="h-6 w-6" />
+              <div>
+                <p className="font-semibold">Email verified successfully!</p>
+              </div>
+            </div>
+            
+            {/* Approval Workflow Message */}
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="font-semibold text-blue-900 mb-2">Awaiting Admin Approval</h3>
+              <div className="text-sm text-blue-800 space-y-2">
+                <p>
+                  Your account is currently pending administrator review. This process typically takes 24-48 hours.
+                </p>
+                <p>
+                  You will receive an email notification once your account has been approved. Please check your email regularly.
+                </p>
+                <p className="text-xs text-blue-700 mt-3">
+                  Redirecting to login...
+                </p>
+              </div>
             </div>
           </div>
         )}
