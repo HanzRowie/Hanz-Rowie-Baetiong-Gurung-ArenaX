@@ -34,11 +34,31 @@ const MessageList: React.FC<MessageListProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessagesLengthRef = useRef(messages.length);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages (only when new messages are added)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    console.log('[MessageList] useEffect triggered');
+    console.log('[MessageList] Current messages.length:', messages.length);
+    console.log('[MessageList] Previous messages.length:', prevMessagesLengthRef.current);
+    
+    // Only scroll if messages were added (not on initial load or when scrolling up)
+    if (messages.length > prevMessagesLengthRef.current) {
+      console.log('[MessageList] New messages detected, scrolling to bottom');
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        if (messagesEndRef.current) {
+          console.log('[MessageList] Scrolling to element:', messagesEndRef.current);
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          console.warn('[MessageList] messagesEndRef.current is null');
+        }
+      });
+    } else {
+      console.log('[MessageList] No new messages, skipping scroll');
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages.length]);
 
   // Handle infinite scroll
   const handleScroll = () => {

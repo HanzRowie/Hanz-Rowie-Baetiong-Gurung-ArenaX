@@ -44,6 +44,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<PrivateMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -67,23 +68,53 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     };
   }, [otherUser.id]);
 
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    console.log('[ChatInterface] useEffect triggered - messages.length changed to:', messages.length);
+    console.log('[ChatInterface] Current messages:', messages.map(m => ({ id: m.id, content: m.content.substring(0, 20) })));
+    
+    // Use setTimeout to ensure DOM has updated
+    const timer = setTimeout(() => {
+      scrollToBottom();
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [messages.length]);
+
   const loadMessages = async () => {
     try {
+      console.log('[ChatInterface] Loading messages for user:', otherUser.id);
       const response = await chatService.getMessagesForConversation(otherUser.id);
+      console.log('[ChatInterface] Loaded messages count:', response.messages.length);
       setMessages(response.messages);
-      scrollToBottom();
+      // Scroll will happen automatically via useEffect
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('[ChatInterface] Failed to load messages:', error);
     }
   };
 
   const connectToChat = () => {
-    chatService.connectToPrivateChat(otherUser.id);
+    console.log('[ChatInterface] Connecting to chat with user:', otherUser.id);
+    const connected = chatService.connectToPrivateChat(otherUser.id);
+    console.log('[ChatInterface] Initial connection attempt result:', connected);
+    
+    // Set up connection callback
+    chatService.onConnection((status) => {
+      console.log('[ChatInterface] Connection status changed:', status);
+      setIsConnected(status);
+    });
+    
     chatService.onPrivateMessage((message) => {
-      setMessages(prev => [...prev, message]);
-      scrollToBottom();
+      console.log('[ChatInterface] Received message via WebSocket:', message);
+      setMessages(prev => {
+        const updated = [...prev, message];
+        console.log('[ChatInterface] Messages updated after WebSocket receive, new count:', updated.length);
+        return updated;
+      });
+      // Scroll will happen automatically via useEffect
     });
     chatService.onStatusUpdate((messageId, status) => {
+      console.log('[ChatInterface] Status update for message:', messageId, 'new status:', status);
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, status: status as any, read: status === 'READ' } : m));
     });
   };
@@ -116,27 +147,62 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [messages]);
 
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    console.log('[ChatInterface] scrollToBottom called, messages count:', messages.length);
+    if (messagesEndRef.current) {
+      console.log('[ChatInterface] Scrolling to bottom element:', messagesEndRef.current);
+      // Force immediate scroll without smooth behavior to test
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+      console.log('[ChatInterface] Scroll completed');
+    } else {
+      console.warn('[ChatInterface] messagesEndRef.current is null, cannot scroll');
+    }
   };
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
     const messageContent = newMessage.trim();
+    console.log('[ChatInterface] sendMessage called with:', messageContent);
+    console.log('[ChatInterface] Current messages count before send:', messages.length);
+    console.log('[ChatInterface] WebSocket connected:', isConnected);
+    console.log('[ChatInterface] chatService.isConnected():', chatService.isConnected());
     setNewMessage('');
 
     try {
-      if (chatService.isConnected()) {
-        chatService.sendMessage(messageContent);
+      // Always try WebSocket first if available
+      const wsConnected = chatService.isConnected();
+      console.log('[ChatInterface] Checking WebSocket status:', wsConnected);
+      
+      if (wsConnected) {
+        console.log('[ChatInterface] Sending via WebSocket');
+        const sent = chatService.sendMessage(messageContent);
+        console.log('[ChatInterface] WebSocket send result:', sent);
+        
+        if (!sent) {
+          // WebSocket send failed, fall back to REST
+          console.log('[ChatInterface] WebSocket send failed, falling back to REST');
+          const message = await chatService.sendPrivateMessage(otherUser.id, messageContent);
+          console.log('[ChatInterface] Message sent via REST, adding to state:', message);
+          setMessages(prev => {
+            const updated = [...prev, message];
+            console.log('[ChatInterface] Messages updated, new count:', updated.length);
+            return updated;
+          });
+        }
+        // If WebSocket send succeeded, message will arrive via onPrivateMessage callback
       } else {
+        console.log('[ChatInterface] WebSocket not connected, sending via REST API');
         const message = await chatService.sendPrivateMessage(otherUser.id, messageContent);
-        setMessages(prev => [...prev, message]);
-        scrollToBottom();
+        console.log('[ChatInterface] Message sent via REST, adding to state:', message);
+        setMessages(prev => {
+          const updated = [...prev, message];
+          console.log('[ChatInterface] Messages updated, new count:', updated.length);
+          return updated;
+        });
+        // Scroll will happen automatically via useEffect
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error('[ChatInterface] Failed to send message:', error);
       setNewMessage(messageContent);
     }
   };

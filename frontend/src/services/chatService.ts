@@ -119,16 +119,19 @@ class ChatService {
   }
 
   private handleWebSocketMessage(data: any): void {
+    console.log('[chatService] Received WebSocket message:', data);
     const currentUser = store.getState().auth.user;
 
     switch (data.type) {
       case 'message':
         // New message received from another user
+        console.log('[chatService] Handling "message" type');
         if (data.message) {
           const message = {
             ...data.message,
             is_from_me: data.message.sender?.id === currentUser?.id
           };
+          console.log('[chatService] Calling onPrivateMessageCallback with message:', message);
           this.onPrivateMessageCallback?.(message);
           this.onMessageCallback?.(message);
 
@@ -141,11 +144,13 @@ class ChatService {
 
       case 'message_sent':
         // Confirmation that our message was sent successfully
+        console.log('[chatService] Handling "message_sent" type');
         if (data.message) {
           const message = {
             ...data.message,
             is_from_me: true
           };
+          console.log('[chatService] Calling onPrivateMessageCallback with sent message:', message);
           this.onPrivateMessageCallback?.(message);
           this.onMessageCallback?.(message);
         }
@@ -279,26 +284,32 @@ class ChatService {
 
   // Send a message
   sendMessage(content: string): boolean {
+    console.log('[chatService] sendMessage called with content:', content);
+    console.log('[chatService] WebSocket state:', this.ws?.readyState);
+    console.log('[chatService] Current conversation ID:', this.currentConversationId);
+    
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.error('WebSocket not connected');
+      console.error('[chatService] WebSocket not connected');
       return false;
     }
 
     if (!this.currentConversationId) {
-      console.error('No conversation ID set');
+      console.error('[chatService] No conversation ID set');
       return false;
     }
 
     try {
-      this.ws.send(JSON.stringify({
+      const messageData = {
         type: 'chat_message',
         receiver_id: this.currentConversationId,
         content: content.trim(),
         message_type: 'TEXT'
-      }));
+      };
+      console.log('[chatService] Sending message via WebSocket:', messageData);
+      this.ws.send(JSON.stringify(messageData));
       return true;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('[chatService] Error sending message:', error);
       return false;
     }
   }

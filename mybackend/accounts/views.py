@@ -1872,6 +1872,17 @@ def send_join_request(request, user_id):
             status='pending'
         )
         
+        # Create notification for the recipient
+        from notifications.utils import send_notification
+        send_notification(
+            user=to_user,
+            notification_type='CONNECTION_REQUEST',
+            title='New Connection Request',
+            message=f'{from_user.full_name} wants to connect with you',
+            related_id=from_user.id,
+            action_url=f'/connections'  # Navigate to connections page
+        )
+        
         return Response({
             'message': 'Connection request sent successfully',
             'request': {
@@ -1904,8 +1915,30 @@ def respond_join_request(request, request_id):
              
         if action == 'accept':
             join_request.status = 'accepted'
+            
+            # Create notification for the sender
+            from notifications.utils import send_notification
+            send_notification(
+                user=join_request.from_player,
+                notification_type='CONNECTION_ACCEPTED',
+                title='Connection Request Accepted',
+                message=f'{user.full_name} accepted your connection request',
+                related_id=user.id,
+                action_url=f'/connections'  # Navigate to connections page
+            )
         else:
             join_request.status = 'declined'
+            
+            # Optionally notify sender of rejection (you can remove this if you don't want to notify on rejection)
+            from notifications.utils import send_notification
+            send_notification(
+                user=join_request.from_player,
+                notification_type='CONNECTION_REJECTED',
+                title='Connection Request Declined',
+                message=f'{user.full_name} declined your connection request',
+                related_id=user.id,
+                action_url=f'/connections'
+            )
             
         join_request.save()
         

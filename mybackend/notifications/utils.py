@@ -6,7 +6,7 @@ from accounts.models import Notification
 
 logger = logging.getLogger(__name__)
 
-def send_notification(user, notification_type, title, message, related_id=None, tournament=None, action_url=None):
+def send_notification(user, notification_type, title, message, related_id=None, tournament=None, action_url=None, priority='MEDIUM'):
     """
     Create a notification in the database and broadcast it via WebSocket.
     
@@ -18,6 +18,7 @@ def send_notification(user, notification_type, title, message, related_id=None, 
         related_id: UUID (optional)
         tournament: Tournament instance (optional)
         action_url: String (optional)
+        priority: String (optional, default='MEDIUM')
     """
     try:
         # 1. Create notification in database
@@ -27,7 +28,9 @@ def send_notification(user, notification_type, title, message, related_id=None, 
             title=title,
             message=message,
             related_id=related_id,
-            tournament=tournament
+            tournament=tournament,
+            action_url=action_url,
+            priority=priority
         )
         
         # 2. Broadcast via channel_layer.group_send
@@ -49,8 +52,8 @@ def send_notification(user, notification_type, title, message, related_id=None, 
                             'message': notification.message,
                             'is_read': notification.read,
                             'created_at': notification.created_at.isoformat(),
-                            'priority': 'MEDIUM',
-                            'action_url': action_url or '/notifications',
+                            'priority': notification.priority,
+                            'action_url': notification.action_url or '/notifications',
                             'related_id': str(related_id) if related_id else None,
                             'tournament_id': str(tournament.id) if tournament else None
                         }
@@ -82,7 +85,7 @@ def send_notification(user, notification_type, title, message, related_id=None, 
         logger.error(traceback.format_exc())
         return None
 
-async def async_send_notification(user, notification_type, title, message, related_id=None, tournament=None, action_url=None):
+async def async_send_notification(user, notification_type, title, message, related_id=None, tournament=None, action_url=None, priority='MEDIUM'):
     """
     Async version of send_notification for use in Consumers.
     """
@@ -97,7 +100,9 @@ async def async_send_notification(user, notification_type, title, message, relat
                 title=title,
                 message=message,
                 related_id=related_id,
-                tournament=tournament
+                tournament=tournament,
+                action_url=action_url,
+                priority=priority
             )
             
         notification = await database_sync_to_async(create_notification)()
@@ -121,8 +126,8 @@ async def async_send_notification(user, notification_type, title, message, relat
                             'message': notification.message,
                             'is_read': notification.read,
                             'created_at': notification.created_at.isoformat(),
-                            'priority': 'MEDIUM',
-                            'action_url': action_url or '/notifications',
+                            'priority': notification.priority,
+                            'action_url': notification.action_url or '/notifications',
                             'related_id': str(related_id) if related_id else None,
                             'tournament_id': str(tournament.id) if tournament else None
                         }

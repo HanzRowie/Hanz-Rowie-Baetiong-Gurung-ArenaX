@@ -322,7 +322,7 @@ def book_venue(request, venue_id):
             title='New Booking Request',
             message=f'{request.user.full_name} has requested to book {venue.name} on {booking.date}.',
             related_id=booking.id,
-            action_url=f'/venue-owner/bookings'
+            action_url=f'/venue-bookings'
         )
         
         # Notify player that request was received
@@ -332,7 +332,7 @@ def book_venue(request, venue_id):
             title='Booking Request Submitted',
             message=f'Your booking request for {venue.name} on {booking.date} has been submitted.',
             related_id=booking.id,
-            action_url=f'/player/bookings'
+            action_url=f'/bookings'
         )
 
         return Response({

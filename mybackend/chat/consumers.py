@@ -1163,7 +1163,7 @@ class GroupChatConsumer(AsyncWebsocketConsumer):
                     title=f'New message in {team.name}',
                     message=f'{sender.full_name or sender.username}: {preview}',
                     related_id=team.id,
-                    action_url=f'/teams/{team.id}/chat'
+                    action_url=f'/teams/{team.id}'
                 )
 
     @database_sync_to_async

@@ -170,6 +170,10 @@ export const router = createBrowserRouter([
         path: 'player-connections',
         element: <PlayerConnectionsPage />,
       },
+      {
+        path: 'connections',
+        element: <PlayerConnectionsPage />,
+      },
       // Team routes
       {
         path: 'teams',

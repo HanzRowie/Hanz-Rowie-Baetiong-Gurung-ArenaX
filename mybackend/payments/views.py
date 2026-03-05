@@ -154,7 +154,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                             message=f'{payment.user.full_name} has paid the entry fee for {payment.tournament.title}.',
                             tournament=payment.tournament,
                             related_id=registration.id,
-                            action_url=f'/organizer/tournaments/{payment.tournament.id}/participants'
+                            action_url=f'/tournaments/{payment.tournament.id}'
                         )
                 except TournamentRegistration.DoesNotExist:
                     pass
@@ -178,7 +178,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                             message=f'Team "{team_registration.team.name}" has paid the entry fee for {payment.tournament.title}.',
                             tournament=payment.tournament,
                             related_id=team_registration.id,
-                            action_url=f'/organizer/tournaments/{payment.tournament.id}/participants'
+                            action_url=f'/tournaments/{payment.tournament.id}'
                         )
                 except TeamTournamentRegistration.DoesNotExist:
                     pass

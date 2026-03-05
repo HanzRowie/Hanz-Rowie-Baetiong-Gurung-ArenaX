@@ -256,7 +256,7 @@ The Arena X Team
             notification_type='ACCOUNT_REJECTED',
             title='Account Registration Not Approved',
             message=f'Your account registration was not approved. Reason: {rejection_reason}',
-            action_url='/approval-status'
+            action_url='/account-status'
         )
         
         # Send rejection email
@@ -525,7 +525,7 @@ The Arena X Team
                 notification_type='ACCOUNT_REJECTED',
                 title='Account Registration Not Approved',
                 message=f'Your account registration was not approved. Reason: {rejection_reason}',
-                action_url='/approval-status'
+                action_url='/account-status'
             )
             
             rejected_count += 1

@@ -319,7 +319,7 @@ class RefereePaymentService(PaymentService):
             title='Payment Released',
             message=f'Payment for your match on {referee_booking.match_date} has been released to your wallet.',
             related_id=referee_booking.id,
-            action_url='/wallet'
+            action_url='/referee/wallet'
         )
         
         return True

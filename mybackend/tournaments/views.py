@@ -80,7 +80,7 @@ class TournamentViewSet(viewsets.ModelViewSet):
                         title='Tournament Updated',
                         message=f'The tournament "{tournament.title}" has been updated. Check the latest details!',
                         tournament=tournament,
-                        action_url=f'/player/tournaments/{tournament.id}'
+                        action_url=f'/tournaments/{tournament.id}'
                     )
             
             # Notify teams
@@ -97,7 +97,7 @@ class TournamentViewSet(viewsets.ModelViewSet):
                         title='Tournament Updated',
                         message=f'The tournament "{tournament.title}" has been updated. Check the latest details!',
                         tournament=tournament,
-                        action_url=f'/team/tournaments/{tournament.id}'
+                        action_url=f'/tournaments/{tournament.id}'
                     )
         
         return response
@@ -167,7 +167,7 @@ class TournamentViewSet(viewsets.ModelViewSet):
                     title='Tournament Schedule Generated',
                     message=f'The schedule for {tournament.title} is now available. Check your team\'s scheduled matches!',
                     tournament=tournament,
-                    action_url=f'/team/tournaments/{tournament.id}/schedule'
+                    action_url=f'/tournaments/{tournament.id}'
                 )
 
             return Response({
@@ -366,7 +366,7 @@ def register_for_tournament(request, tournament_id):
             message=f'{user.full_name} has registered for {tournament.title}.',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+            action_url=f'/tournaments/{tournament.id}'
         )
 
         return Response({
@@ -515,7 +515,7 @@ def register_with_payment(request, tournament_id):
                 message=f'{user.full_name} has registered for {tournament.title}.',
                 tournament=tournament,
                 related_id=registration.id,
-                action_url=f'/organizer/tournaments/{tournament.id}/participants'
+                action_url=f'/tournaments/{tournament.id}'
             )
             
             return Response({
@@ -564,7 +564,7 @@ def withdraw_from_tournament(request, tournament_id):
             title='Player Withdrawn',
             message=f'{user.full_name} has withdrawn from {tournament.title}.',
             tournament=tournament,
-            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+            action_url=f'/tournaments/{tournament.id}'
         )
 
         return Response({'message': 'Successfully withdrawn from tournament'}, status=status.HTTP_200_OK)
@@ -1004,7 +1004,7 @@ def update_match_result(request, tournament_id, match_id):
                             title='Match Result Updated',
                             message=f'Your match in {tournament.title} ended with score {match.player1_score}-{match.player2_score}. You {"won!" if is_winner else "lost."}',
                             tournament=tournament,
-                            action_url=f'/player/tournaments/{tournament.id}/brackets'
+                            action_url=f'/tournaments/{tournament.id}'
                         )
             else:
                 # TEAM
@@ -1318,7 +1318,7 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
                             title='Match Result Submitted',
                             message=f'Your team "{team.name}" match in {tournament.title} ended with score {home_score}-{away_score}. Your team {outcome}',
                             tournament=tournament,
-                            action_url=f'/team/tournaments/{tournament.id}/schedule'
+                            action_url=f'/tournaments/{tournament.id}'
                         )
         except Exception as e:
             print(f"Error sending match result notifications: {str(e)}")
@@ -1732,7 +1732,7 @@ def accept_tournament_participant(request, tournament_id, participant_id):
             message=f'Your registration for {tournament.title} has been approved.',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/player/tournaments/{tournament.id}'
+            action_url=f'/tournaments/{tournament.id}'
         )
         
         return Response({
@@ -1777,7 +1777,7 @@ def reject_tournament_participant(request, tournament_id, participant_id):
             message=f'Your registration for {tournament.title} has been rejected. Reason: {registration.notes}',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/player/tournaments'
+            action_url=f'/tournaments'
         )
         
         return Response({
@@ -1844,7 +1844,7 @@ def bulk_accept_participants(request, tournament_id):
                 title='Tournament Registration Approved',
                 message=f'Your registration for {tournament.title} has been approved. Get ready for the game!',
                 tournament=tournament,
-                action_url=f'/player/tournaments/{tournament.id}'
+                action_url=f'/tournaments/{tournament.id}'
             )
         
         return Response({
@@ -1895,7 +1895,7 @@ def bulk_reject_participants(request, tournament_id):
                 title='Tournament Registration Rejected',
                 message=f'Your registration for {tournament.title} has been rejected. Reason: {rejection_reason}',
                 tournament=tournament,
-                action_url=f'/player/tournaments'
+                action_url=f'/tournaments'
             )
         
         return Response({
@@ -2084,7 +2084,7 @@ def register_team_for_tournament(request, tournament_id):
             message=f'Team "{team.name}" has registered for {tournament.title}.',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/organizer/tournaments/{tournament.id}/participants'
+            action_url=f'/tournaments/{tournament.id}'
         )
 
         return Response({
@@ -2311,7 +2311,7 @@ def register_team_with_payment(request, tournament_id):
                 message=f'Team "{team.name}" has registered for {tournament.title}.',
                 tournament=tournament,
                 related_id=registration.id,
-                action_url=f'/organizer/tournaments/{tournament.id}/participants'
+                action_url=f'/tournaments/{tournament.id}'
             )
             
             return Response({
@@ -2526,7 +2526,7 @@ def generate_tournament_bracket(request, tournament_id):
                     title='Tournament Bracket Generated',
                     message=f'The bracket for {tournament.title} is now available. Check your scheduled matches!',
                     tournament=tournament,
-                    action_url=f'/player/tournaments/{tournament.id}/bracket'
+                    action_url=f'/tournaments/{tournament.id}'
                 )
         else:
             # TEAM
@@ -2538,7 +2538,7 @@ def generate_tournament_bracket(request, tournament_id):
                     title='Tournament Bracket Generated',
                     message=f'The bracket for {tournament.title} is now available. Check your team\'s scheduled matches!',
                     tournament=tournament,
-                    action_url=f'/team/tournaments/{tournament.id}/bracket'
+                    action_url=f'/tournaments/{tournament.id}'
                 )
 
         return Response({
@@ -2808,7 +2808,7 @@ def accept_team_participant(request, tournament_id, registration_id):
             message=f'Your team "{registration.team.name}" registration for {tournament.title} has been approved.',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/team/tournaments/{tournament.id}'
+            action_url=f'/tournaments/{tournament.id}'
         )
         
         # Record activity history
@@ -2868,7 +2868,7 @@ def reject_team_participant(request, tournament_id, registration_id):
             message=f'Your team "{registration.team.name}" registration for {tournament.title} has been rejected. Reason: {rejection_reason}',
             tournament=tournament,
             related_id=registration.id,
-            action_url=f'/team/tournaments'
+            action_url=f'/tournaments'
         )
         
         # Record activity history

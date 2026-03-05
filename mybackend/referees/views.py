@@ -152,7 +152,7 @@ def respond_to_booking_request(request, booking_id):
         title=f'Referee Booking {status_text.capitalize()}',
         message=f'Referee {request.user.full_name} has {status_text} your booking request for the match on {booking.match_date}.',
         related_id=booking.id,
-        action_url=f'/organizer/referee-bookings'
+        action_url=f'/bookings'
     )
 
     serializer = RefereeBookingSerializer(booking)
@@ -193,7 +193,7 @@ def request_referee_booking(request, referee_id, match_id):
         title='New Match Request',
         message=f'Organizer {request.user.full_name} has requested you to referee a match on {booking.match_date}.',
         related_id=booking.id,
-        action_url=f'/referee/requests'
+        action_url=f'/referee/bookings'
     )
 
     serializer = RefereeBookingSerializer(booking)
@@ -458,7 +458,7 @@ def assign_referee_to_tournament(request, tournament_id):
         message=f'You have been requested to referee the tournament "{tournament.title}" on {tournament_date}.',
         tournament=tournament,
         related_id=booking.id,
-        action_url=f'/referee/requests'
+        action_url=f'/referee/bookings'
     )
     
     serializer = RefereeBookingSerializer(booking)

@@ -244,11 +244,20 @@ class Notification(models.Model):
         ('GENERAL', 'General Notification'),
     )
 
+    PRIORITY_CHOICES = (
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+        ('URGENT', 'Urgent'),
+    )
+
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
     notification_type = models.CharField(max_length=30, choices=NOTIFICATION_TYPES, default='GENERAL')
     title = models.CharField(max_length=200)
     message = models.TextField()
     read = models.BooleanField(default=False)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='MEDIUM')
+    action_url = models.CharField(max_length=500, null=True, blank=True)  # URL to navigate when clicked
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Optional references to related objects
