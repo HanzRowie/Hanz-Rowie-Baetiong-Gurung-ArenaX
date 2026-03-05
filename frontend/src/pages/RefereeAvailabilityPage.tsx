@@ -72,7 +72,9 @@ const RefereeAvailabilityPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/referees/availability/');
-      setAvailabilities(response.data);
+      // Handle both paginated and non-paginated responses
+      const data = response.data.results || response.data;
+      setAvailabilities(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch availabilities');
     } finally {

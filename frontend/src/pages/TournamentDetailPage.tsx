@@ -124,6 +124,7 @@ export default function TournamentDetailPage() {
 
     try {
       const response = await api.get(`/api/tournaments/${tournamentId}/referees/`);
+      // This endpoint returns a plain array, not paginated
       setReferees(Array.isArray(response.data) ? response.data : []);
     } catch (err: any) {
       console.error('Error fetching referees:', err);

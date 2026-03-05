@@ -1625,8 +1625,14 @@ def tournament_referees(request, tournament_id):
     """Get referee assignments for a tournament"""
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
-    # Check if user is the organizer
-    if request.user != tournament.organizer:
+    # Allow organizers and referees to view referee assignments
+    # Organizers can see all assignments for their tournaments
+    # Referees can see assignments for any tournament (to see who else is assigned)
+    if request.user.role not in ['ORGANIZER', 'REFEREE']:
+        return Response({'error': 'Only organizers and referees can view referee assignments'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # If organizer, check ownership
+    if request.user.role == 'ORGANIZER' and request.user != tournament.organizer:
         return Response({'error': 'Only tournament organizers can view referee assignments'}, status=status.HTTP_403_FORBIDDEN)
     
     referee_bookings = RefereeBooking.objects.filter(tournament=tournament).select_related('referee')

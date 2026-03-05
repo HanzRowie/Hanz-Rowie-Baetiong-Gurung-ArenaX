@@ -78,7 +78,9 @@ const RefereeManagementPage: React.FC = () => {
     try {
       setLoading(true);
       const response = await api.get('/api/referees/bookings/');
-      setBookings(response.data);
+      // Handle both paginated and non-paginated responses
+      const data = response.data.results || response.data;
+      setBookings(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch bookings');
     } finally {

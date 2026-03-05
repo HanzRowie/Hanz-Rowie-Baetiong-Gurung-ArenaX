@@ -27,10 +27,11 @@ class RefereeProfileViewSet(viewsets.ModelViewSet):
         return RefereeProfile.objects.filter(user=self.request.user)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def referee_dashboard(request):
     """Get comprehensive dashboard data for referees"""
-    user = request.user
+    from accounts.models import CustomUser
+    user = CustomUser.objects.get(id=request.user_id)
 
     if user.role != 'REFEREE':
         return Response({'error': 'Only referees can access this dashboard'}, status=status.HTTP_403_FORBIDDEN)
@@ -128,29 +129,34 @@ class RefereeBookingViewSet(viewsets.ModelViewSet):
         return RefereeBooking.objects.none()
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def respond_to_booking_request(request, booking_id):
     """Referee responds to booking request"""
-    booking = get_object_or_404(RefereeBooking, id=booking_id, referee=request.user)
+    from accounts.models import CustomUser
+    
+    # Get the authenticated user
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    booking = get_object_or_404(RefereeBooking, id=booking_id, referee=user)
 
     if booking.status != 'REQUESTED':
         return Response({'error': 'This booking request has already been responded to'}, status=status.HTTP_400_BAD_REQUEST)
 
-    response = request.data.get('response')  # 'accept' or 'decline'
-    if response not in ['accept', 'decline']:
+    response_type = request.data.get('response')  # 'accept' or 'decline'
+    if response_type not in ['accept', 'decline']:
         return Response({'error': 'Invalid response. Must be "accept" or "decline"'}, status=status.HTTP_400_BAD_REQUEST)
 
-    booking.status = 'ACCEPTED' if response == 'accept' else 'DECLINED'
+    booking.status = 'ACCEPTED' if response_type == 'accept' else 'DECLINED'
     booking.responded_at = datetime.now()
     booking.save()
 
     # Notify organizer
-    status_text = 'accepted' if response == 'accept' else 'declined'
+    status_text = 'accepted' if response_type == 'accept' else 'declined'
     send_notification(
         user=booking.requested_by,
         notification_type='GENERAL',
         title=f'Referee Booking {status_text.capitalize()}',
-        message=f'Referee {request.user.full_name} has {status_text} your booking request for the match on {booking.match_date}.',
+        message=f'Referee {user.full_name} has {status_text} your booking request for the match on {booking.match_date}.',
         related_id=booking.id,
         action_url=f'/bookings'
     )
@@ -159,12 +165,15 @@ def respond_to_booking_request(request, booking_id):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def request_referee_booking(request, referee_id, match_id):
     """Organizer requests referee for a match"""
     from tournaments.models import Match, Tournament
+    from accounts.models import CustomUser
+    
+    user = CustomUser.objects.get(id=request.user_id)
 
-    if request.user.role != 'ORGANIZER':
+    if user.role != 'ORGANIZER':
         return Response({'error': 'Only organizers can request referees'}, status=status.HTTP_403_FORBIDDEN)
 
     referee = get_object_or_404(CustomUser, id=referee_id, role='REFEREE')
@@ -180,7 +189,7 @@ def request_referee_booking(request, referee_id, match_id):
         referee=referee,
         match=match,
         tournament=match.tournament,
-        requested_by=request.user,
+        requested_by=user,
         match_date=datetime.combine(match.scheduled_time.date(), match.scheduled_time.time()) if match.scheduled_time else datetime.now(),
         fee=request.data.get('fee', 0),
         notes=request.data.get('notes', '')
@@ -191,7 +200,7 @@ def request_referee_booking(request, referee_id, match_id):
         user=referee,
         notification_type='REFEREE_ASSIGNED',
         title='New Match Request',
-        message=f'Organizer {request.user.full_name} has requested you to referee a match on {booking.match_date}.',
+        message=f'Organizer {user.full_name} has requested you to referee a match on {booking.match_date}.',
         related_id=booking.id,
         action_url=f'/referee/bookings'
     )
@@ -251,15 +260,18 @@ class RefereeMatchReportViewSet(viewsets.ModelViewSet):
         serializer.save(referee=self.request.user, tournament=match.tournament)
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def available_referees_for_tournament(request, tournament_id):
     """Get available referees for a specific tournament (post-creation)"""
     from tournaments.models import Tournament
+    from accounts.models import CustomUser
     
-    if request.user.role != 'ORGANIZER':
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role != 'ORGANIZER':
         return Response({'error': 'Only organizers can access this endpoint'}, status=status.HTTP_403_FORBIDDEN)
     
-    tournament = get_object_or_404(Tournament, id=tournament_id, organizer=request.user)
+    tournament = get_object_or_404(Tournament, id=tournament_id, organizer=user)
     
     # Get tournament date and time
     tournament_date = tournament.date
@@ -368,15 +380,18 @@ def available_referees_for_tournament(request, tournament_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def assign_referee_to_tournament(request, tournament_id):
     """Assign a referee to a tournament"""
     from tournaments.models import Tournament, Match
+    from accounts.models import CustomUser
     
-    if request.user.role != 'ORGANIZER':
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role != 'ORGANIZER':
         return Response({'error': 'Only organizers can assign referees'}, status=status.HTTP_403_FORBIDDEN)
     
-    tournament = get_object_or_404(Tournament, id=tournament_id, organizer=request.user)
+    tournament = get_object_or_404(Tournament, id=tournament_id, organizer=user)
     referee_id = request.data.get('referee_id')
     notes = request.data.get('notes', '')
     fee = request.data.get('fee', 0)
@@ -443,7 +458,7 @@ def assign_referee_to_tournament(request, tournament_id):
         referee=referee,
         match=match,
         tournament=tournament,
-        requested_by=request.user,
+        requested_by=user,
         match_date=datetime.combine(tournament_date, tournament_start),
         fee=fee,
         notes=notes,
@@ -466,10 +481,14 @@ def assign_referee_to_tournament(request, tournament_id):
 
 # Find available referees (for organizers)
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@jwt_required
 def find_available_referees(request):
     """Find referees available on a specific date"""
-    if request.user.role != 'ORGANIZER':
+    from accounts.models import CustomUser
+    
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role != 'ORGANIZER':
         return Response({'error': 'Only organizers can access this endpoint'}, status=status.HTTP_403_FORBIDDEN)
         
     date_param = request.GET.get('date')
