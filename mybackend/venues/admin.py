@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Venue, VenueAvailability, VenueBooking
+from .models import Venue, VenueAvailability, VenueBooking, VenueAuditLog
 
 @admin.register(Venue)
 class VenueAdmin(admin.ModelAdmin):
@@ -70,3 +70,40 @@ class VenueBookingAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('venue', 'user')
+
+
+@admin.register(VenueAuditLog)
+class VenueAuditLogAdmin(admin.ModelAdmin):
+    list_display = ('administrator', 'action_type', 'venue', 'previous_status', 'new_status', 'timestamp')
+    list_filter = ('action_type', 'timestamp', 'administrator')
+    search_fields = ('administrator__full_name', 'administrator__email', 'venue__name', 'reason')
+    readonly_fields = ('id', 'administrator', 'action_type', 'venue', 'venue_ids', 'previous_status', 'new_status', 'reason', 'metadata', 'timestamp')
+    ordering = ('-timestamp',)
+    date_hierarchy = 'timestamp'
+
+    fieldsets = (
+        ('Action Details', {
+            'fields': ('id', 'administrator', 'action_type', 'timestamp')
+        }),
+        ('Venue Information', {
+            'fields': ('venue', 'venue_ids')
+        }),
+        ('Status Changes', {
+            'fields': ('previous_status', 'new_status', 'reason')
+        }),
+        ('Additional Context', {
+            'fields': ('metadata',),
+            'classes': ('collapse',)
+        })
+    )
+
+    def has_add_permission(self, request):
+        # Audit logs should not be manually created
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # Audit logs should not be deleted
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('administrator', 'venue')

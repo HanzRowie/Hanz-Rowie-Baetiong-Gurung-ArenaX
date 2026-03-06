@@ -11,6 +11,7 @@ import uuid
 
 from .models import Tournament, TournamentRegistration, Match
 from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer
+from .permissions import ApprovalStatusPermission, filter_tournaments_by_approval_status
 from referees.models import RefereeBooking
 from referees.serializers import RefereeBookingSerializer
 from payments.services import VenuePaymentService
@@ -20,18 +21,22 @@ from notifications.utils import send_notification
 class TournamentViewSet(viewsets.ModelViewSet):
     queryset = Tournament.objects.all().order_by('-created_at')
     serializer_class = TournamentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ApprovalStatusPermission]
 
     def get_queryset(self):
         user = self.request.user
         
-        # Role-based filtering
+        # Get base queryset
+        queryset = Tournament.objects.all()
+        
+        # Apply approval status filtering
+        queryset = filter_tournaments_by_approval_status(queryset, user)
+        
+        # Role-based filtering (for organizers to see their own tournaments)
         if user.role == 'ORGANIZER':
-            # Organizers only see their own tournamentss
-            queryset = Tournament.objects.filter(organizer=user)
-        else:
-            # Players, referees, and venue owners see all tournaments
-            queryset = Tournament.objects.all()
+            # Organizers see their own tournaments (all statuses) + approved tournaments
+            # This is already handled by filter_tournaments_by_approval_status
+            pass
         
         # Apply additional filters
         sport_type = self.request.query_params.get('sport_type', None)

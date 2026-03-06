@@ -135,3 +135,190 @@ class AdminDashboardConsumer(AsyncJsonWebsocketConsumer):
         })
         
         logger.info(f"Broadcasted user rejection: {event['user_name']} ({event['user_id']}) by {event['rejected_by']}")
+    
+    async def tournament_submitted(self, event):
+        """
+        Broadcast new tournament submission to all connected admins.
+        
+        Requirements:
+        - 7.1: Send WebSocket update when tournament is created with PENDING status
+        - 7.5: Include resource_type, resource_id, new_status, timestamp
+        """
+        await self.send_json({
+            'type': 'tournament_submitted',
+            'resource_type': 'tournament',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'timestamp': event['timestamp'],
+            'tournament_title': event.get('tournament_title', ''),
+            'organizer_name': event.get('organizer_name', ''),
+            'sport_type': event.get('sport_type', '')
+        })
+        
+        logger.info(f"Broadcasted tournament submission: {event.get('tournament_title')} ({event['resource_id']})")
+    
+    async def venue_submitted(self, event):
+        """
+        Broadcast new venue submission to all connected admins.
+        
+        Requirements:
+        - 7.2: Send WebSocket update when venue is created with PENDING status
+        - 7.5: Include resource_type, resource_id, new_status, timestamp
+        """
+        await self.send_json({
+            'type': 'venue_submitted',
+            'resource_type': 'venue',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'timestamp': event['timestamp'],
+            'venue_name': event.get('venue_name', ''),
+            'owner_name': event.get('owner_name', ''),
+            'sport_type': event.get('sport_type', '')
+        })
+        
+        logger.info(f"Broadcasted venue submission: {event.get('venue_name')} ({event['resource_id']})")
+    
+    async def tournament_status_changed(self, event):
+        """
+        Broadcast tournament status change to organizer.
+        
+        Requirements:
+        - 7.3: Send WebSocket update to organizer when tournament approval status changes
+        - 7.5: Include new_status, approval_date, rejection_reason (if applicable)
+        """
+        await self.send_json({
+            'type': 'tournament_status_changed',
+            'resource_type': 'tournament',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'approval_date': event.get('approval_date'),
+            'rejection_reason': event.get('rejection_reason', ''),
+            'approval_notes': event.get('approval_notes', ''),
+            'tournament_title': event.get('tournament_title', '')
+        })
+        
+        logger.info(f"Broadcasted tournament status change: {event['resource_id']} -> {event['new_status']}")
+    
+    async def venue_status_changed(self, event):
+        """
+        Broadcast venue status change to venue owner.
+        
+        Requirements:
+        - 7.4: Send WebSocket update to venue owner when venue approval status changes
+        - 7.5: Include new_status, approval_date, rejection_reason (if applicable)
+        """
+        await self.send_json({
+            'type': 'venue_status_changed',
+            'resource_type': 'venue',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'approval_date': event.get('approval_date'),
+            'rejection_reason': event.get('rejection_reason', ''),
+            'approval_notes': event.get('approval_notes', ''),
+            'venue_name': event.get('venue_name', '')
+        })
+        
+        logger.info(f"Broadcasted venue status change: {event['resource_id']} -> {event['new_status']}")
+
+
+
+class UserNotificationConsumer(AsyncJsonWebsocketConsumer):
+    """
+    WebSocket consumer for organizers and venue owners to receive approval status updates.
+    
+    Requirements:
+    - 7.3: Send tournament status changes to organizers
+    - 7.4: Send venue status changes to venue owners
+    """
+    
+    async def connect(self):
+        """
+        Accept connection for authenticated users (organizers and venue owners).
+        
+        Requirements:
+        - 7.3, 7.4: Establish WebSocket connection for status updates
+        """
+        user = self.scope.get('user')
+        
+        # Verify authentication
+        if not user or not user.is_authenticated:
+            logger.warning("Unauthenticated user attempted to connect to user notifications")
+            await self.close()
+            return
+        
+        self.user = user
+        
+        # Join user-specific group for receiving status updates
+        self.group_name = f'user_{user.id}'
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        
+        # Send connection confirmation
+        await self.send_json({
+            'type': 'connection_established',
+            'message': 'Connected to notification updates',
+            'user_id': str(self.user.id),
+            'user_name': self.user.full_name
+        })
+        
+        logger.info(f"User {self.user.id} ({self.user.full_name}) connected to notification updates")
+    
+    async def disconnect(self, close_code):
+        """
+        Leave the user-specific group on disconnect.
+        """
+        if hasattr(self, 'user') and self.user and self.user.is_authenticated:
+            logger.info(f"User {self.user.id} ({self.user.full_name}) disconnected from notification updates")
+        
+        # Leave user-specific group
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+    
+    async def tournament_status_changed(self, event):
+        """
+        Send tournament status change to organizer.
+        
+        Requirements:
+        - 7.3: Send WebSocket update to organizer when tournament approval status changes
+        - 7.5: Include new_status, approval_date, rejection_reason (if applicable)
+        """
+        await self.send_json({
+            'type': 'tournament_status_changed',
+            'resource_type': 'tournament',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'approval_date': event.get('approval_date'),
+            'rejection_reason': event.get('rejection_reason', ''),
+            'approval_notes': event.get('approval_notes', ''),
+            'tournament_title': event.get('tournament_title', '')
+        })
+        
+        logger.info(f"Sent tournament status change to user {self.user.id}: {event['resource_id']} -> {event['new_status']}")
+    
+    async def venue_status_changed(self, event):
+        """
+        Send venue status change to venue owner.
+        
+        Requirements:
+        - 7.4: Send WebSocket update to venue owner when venue approval status changes
+        - 7.5: Include new_status, approval_date, rejection_reason (if applicable)
+        """
+        await self.send_json({
+            'type': 'venue_status_changed',
+            'resource_type': 'venue',
+            'resource_id': event['resource_id'],
+            'new_status': event['new_status'],
+            'approval_date': event.get('approval_date'),
+            'rejection_reason': event.get('rejection_reason', ''),
+            'approval_notes': event.get('approval_notes', ''),
+            'venue_name': event.get('venue_name', '')
+        })
+        
+        logger.info(f"Sent venue status change to user {self.user.id}: {event['resource_id']} -> {event['new_status']}")

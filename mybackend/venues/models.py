@@ -31,6 +31,70 @@ class Venue(models.Model):
     # Operating days (JSON field to store which days venue is open)
     # 1=Monday, 2=Tuesday, ..., 7=Sunday
     operating_days = models.JSONField(default=list)  # e.g., [1, 2, 3, 4, 5, 6, 7] for all days
+    
+    # Approval Workflow Fields
+    APPROVAL_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CONDITIONAL_APPROVAL', 'Conditional Approval'),
+    )
+    
+    approval_status = models.CharField(
+        max_length=25,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+        help_text='Current approval status of the venue'
+    )
+    
+    approval_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when the venue was approved or rejected'
+    )
+    
+    approved_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_venues',
+        help_text='Administrator who approved or rejected this venue'
+    )
+    
+    rejection_reason = models.TextField(
+        blank=True,
+        help_text='Explanation provided when venue is rejected'
+    )
+    
+    approval_notes = models.TextField(
+        blank=True,
+        help_text='Optional notes from admin during approval'
+    )
+    
+    verification_documents = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='JSON storage of document references with type and URL'
+    )
+    
+    # Timestamp fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    requested_documents = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of documents requested for conditional approval'
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['approval_status', 'id']),
+            models.Index(fields=['sport_type', 'approval_status']),
+            models.Index(fields=['owner', 'approval_status']),
+        ]
 
     def __str__(self):
         return f"{self.name} - {self.location}"
@@ -215,3 +279,88 @@ class VenueBooking(models.Model):
 
     def __str__(self):
         return f"{self.user.full_name} - {self.venue.name} ({self.date})"
+
+
+# VenueAuditLog
+import uuid
+
+class VenueAuditLog(models.Model):
+    """
+    Tracks all administrative actions on venues for accountability.
+    Retention period: 12 months minimum.
+    """
+    
+    ACTION_CHOICES = (
+        ('APPROVE', 'Approve Venue'),
+        ('REJECT', 'Reject Venue'),
+        ('CONDITIONAL_APPROVE', 'Conditional Approval'),
+        ('BULK_APPROVE', 'Bulk Approve Venues'),
+        ('BULK_REJECT', 'Bulk Reject Venues'),
+        ('VIEW_DOCUMENT', 'View Verification Document'),
+        ('REQUEST_DOCUMENTS', 'Request Additional Documents'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    administrator = models.ForeignKey(
+        CustomUser,
+        on_delete=models.PROTECT,
+        related_name='venue_admin_actions',
+        limit_choices_to={'role': 'ADMIN'}
+    )
+    
+    action_type = models.CharField(
+        max_length=25,
+        choices=ACTION_CHOICES,
+        db_index=True
+    )
+    
+    venue = models.ForeignKey(
+        Venue,
+        on_delete=models.PROTECT,
+        related_name='audit_logs',
+        null=True,
+        blank=True
+    )
+    
+    venue_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='For bulk operations, list of affected venue IDs'
+    )
+    
+    previous_status = models.CharField(
+        max_length=25,
+        blank=True,
+        help_text='Status before this action'
+    )
+    
+    new_status = models.CharField(
+        max_length=25,
+        blank=True,
+        help_text='Status after this action'
+    )
+    
+    reason = models.TextField(
+        blank=True,
+        help_text='Reason provided for rejection or conditional approval'
+    )
+    
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional context (IP address, user agent, validation results)'
+    )
+    
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['administrator', 'timestamp']),
+            models.Index(fields=['action_type', 'timestamp']),
+            models.Index(fields=['venue', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.administrator.full_name} - {self.action_type} - {self.timestamp}"

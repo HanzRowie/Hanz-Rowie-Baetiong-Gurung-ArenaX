@@ -1,11 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .admin_views import AdminVenueViewSet
 
 router = DefaultRouter()
 router.register(r'venues', views.VenueViewSet)
 router.register(r'availabilities', views.VenueAvailabilityViewSet)
 router.register(r'bookings', views.VenueBookingViewSet)
+router.register(r'admin/venues', AdminVenueViewSet, basename='admin-venue')
 
 # URL patterns for venues app
 urlpatterns = [

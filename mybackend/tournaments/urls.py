@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from . import futsal_scoring_views
+from .admin_views import AdminTournamentViewSet
 
 router = DefaultRouter()
 router.register(r'tournaments', views.TournamentViewSet)
@@ -9,6 +10,7 @@ router.register(r'registrations', views.TournamentRegistrationViewSet)
 router.register(r'matches', views.MatchViewSet)
 router.register(r'referee-bookings', views.RefereeBookingViewSet)
 router.register(r'player-stats', views.PlayerStatsViewSet, basename='player-stats')
+router.register(r'admin/tournaments', AdminTournamentViewSet, basename='admin-tournament')
 
 # URL patterns for tournaments app
 urlpatterns = [

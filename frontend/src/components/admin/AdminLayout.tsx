@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
-import { Menu, X } from 'lucide-react';
 import AdminSidebar from './AdminSidebar';
+import BottomNav from './BottomNav';
 
 /**
  * AdminLayout component provides the layout structure for admin pages.
@@ -15,7 +15,7 @@ import AdminSidebar from './AdminSidebar';
 export default function AdminLayout() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
 
   // Role-based access control - redirect non-admins
   useEffect(() => {
@@ -25,18 +25,6 @@ export default function AdminLayout() {
     }
   }, [user, navigate]);
 
-  // Close sidebar when clicking outside on mobile
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setIsSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Don't render anything if user is not an admin
   if (!user || user.role !== UserRole.ADMIN) {
     return null;
@@ -44,8 +32,8 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex">
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      {/* Mobile Header - Only visible on mobile */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
             <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -57,43 +45,29 @@ export default function AdminLayout() {
             <p className="text-xs text-gray-500">Admin</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
-        >
-          {isSidebarOpen ? (
-            <X className="h-6 w-6 text-gray-600" />
-          ) : (
-            <Menu className="h-6 w-6 text-gray-600" />
-          )}
-        </button>
       </div>
 
-      {/* Mobile Overlay */}
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Admin Sidebar */}
-      <AdminSidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
+      {/* Admin Sidebar - Always visible on desktop, no mobile toggle */}
+      <AdminSidebar
+        isOpen={false}
+        onClose={() => {}}
+        onCollapseChange={setIsSidebarCollapsed}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:ml-64 pt-16 lg:pt-0">
+      <div className={`flex-1 flex flex-col pt-16 lg:pt-0 transition-all duration-300 ${
+        isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+      }`}>
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
           <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* Bottom Navigation - Mobile Only */}
+      <BottomNav />
     </div>
   );
 }

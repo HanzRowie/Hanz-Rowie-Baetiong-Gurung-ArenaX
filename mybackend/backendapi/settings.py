@@ -42,6 +42,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "accounts.middleware.ApprovalStatusMiddleware",  # Admin approval workflow middleware
+    "tournaments.security_logging.SecurityLoggingMiddleware",  # Security logging for admin endpoints
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "teams.error_handlers.TeamErrorMiddleware",  # Team error handling middleware
@@ -137,6 +138,7 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     "DEFAULT_THROTTLE_RATES": {
         "admin_api": "100/min",  # Admin Control System rate limit (Requirement 18.7)
+        "admin_approval": "100/hour",  # Tournament/Venue approval rate limit (Requirement 19.1)
     },
 }
 
@@ -225,6 +227,10 @@ LOGGING = {
             'format': '{asctime} - {levelname} - [{name}] - {message}',
             'style': '{',
         },
+        'security': {
+            'format': '{asctime} - {levelname} - [SECURITY] - {message}',
+            'style': '{',
+        },
     },
     'filters': {
         'require_debug_true': {
@@ -267,6 +273,14 @@ LOGGING = {
             'formatter': 'verbose',
             'filters': ['team_operations_filter'],
         },
+        'security_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'backupCount': 10,
+            'formatter': 'security',
+        },
     },
     'loggers': {
         'django': {
@@ -290,6 +304,11 @@ LOGGING = {
         },
         'teams.monitoring': {
             'handlers': ['console', 'team_operations_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'security': {
+            'handlers': ['console', 'security_file'],
             'level': 'INFO',
             'propagate': False,
         },

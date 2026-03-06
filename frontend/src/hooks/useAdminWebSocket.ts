@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { useQueryClient } from '@tanstack/react-query';
 import { websocketService } from '@/services/websocketService';
 import type { RootState } from '@/store';
 import type { 
@@ -7,7 +8,11 @@ import type {
   WebSocketStatus,
   NewUserRegistrationMessage,
   UserApprovedMessage,
-  UserRejectedMessage
+  UserRejectedMessage,
+  TournamentSubmittedMessage,
+  VenueSubmittedMessage,
+  TournamentStatusChangedMessage,
+  VenueStatusChangedMessage
 } from '@/types/admin.types';
 
 /**
@@ -17,6 +22,10 @@ interface AdminWebSocketHandlers {
   onNewUserRegistration?: (message: NewUserRegistrationMessage) => void;
   onUserApproved?: (message: UserApprovedMessage) => void;
   onUserRejected?: (message: UserRejectedMessage) => void;
+  onTournamentSubmitted?: (message: TournamentSubmittedMessage) => void;
+  onVenueSubmitted?: (message: VenueSubmittedMessage) => void;
+  onTournamentStatusChanged?: (message: TournamentStatusChangedMessage) => void;
+  onVenueStatusChanged?: (message: VenueStatusChangedMessage) => void;
   onConnectionError?: () => void;
 }
 
@@ -38,6 +47,10 @@ interface UseAdminWebSocketReturn {
  * - 12.3: Real-time dashboard updates
  * - 12.6: Connection status indicator
  * - 12.7: Automatic reconnection handling
+ * - 7.1: Real-time tournament submission notifications
+ * - 7.2: Real-time venue submission notifications
+ * - 7.3: Real-time tournament status change notifications
+ * - 7.4: Real-time venue status change notifications
  * 
  * Features:
  * - Automatic connection for ADMIN users
@@ -45,6 +58,7 @@ interface UseAdminWebSocketReturn {
  * - Automatic reconnection with exponential backoff
  * - Connection status tracking
  * - Message parsing and type-safe event handlers
+ * - React Query cache invalidation on events
  * 
  * @param handlers - Optional event handlers for WebSocket messages
  * @returns WebSocket connection state and controls
@@ -56,6 +70,9 @@ export function useAdminWebSocket(handlers?: AdminWebSocketHandlers): UseAdminWe
   // Get user from Redux store
   const user = useSelector((state: RootState) => state.auth.user);
   const accessToken = useSelector((state: RootState) => state.auth.accessToken);
+  
+  // Get React Query client for cache invalidation
+  const queryClient = useQueryClient();
   
   // Store handlers in ref to avoid reconnection on handler changes
   const handlersRef = useRef<AdminWebSocketHandlers | undefined>(handlers);
@@ -98,20 +115,59 @@ export function useAdminWebSocket(handlers?: AdminWebSocketHandlers): UseAdminWe
 
       case 'new_user_registration':
         handlersRef.current?.onNewUserRegistration?.(message);
+        // Invalidate user stats and list queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         break;
 
       case 'user_approved':
         handlersRef.current?.onUserApproved?.(message);
+        // Invalidate user stats and list queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         break;
 
       case 'user_rejected':
         handlersRef.current?.onUserRejected?.(message);
+        // Invalidate user stats and list queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        break;
+
+      case 'tournament_submitted':
+        handlersRef.current?.onTournamentSubmitted?.(message);
+        // Invalidate tournament stats and list queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'tournaments', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'tournaments'] });
+        break;
+
+      case 'venue_submitted':
+        handlersRef.current?.onVenueSubmitted?.(message);
+        // Invalidate venue stats and list queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'venues', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'venues'] });
+        break;
+
+      case 'tournament_status_changed':
+        handlersRef.current?.onTournamentStatusChanged?.(message);
+        // Invalidate tournament stats, list, and detail queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'tournaments', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'tournaments'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'tournaments', message.resource_id] });
+        break;
+
+      case 'venue_status_changed':
+        handlersRef.current?.onVenueStatusChanged?.(message);
+        // Invalidate venue stats, list, and detail queries
+        queryClient.invalidateQueries({ queryKey: ['admin', 'venues', 'stats'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'venues'] });
+        queryClient.invalidateQueries({ queryKey: ['admin', 'venues', message.resource_id] });
         break;
 
       default:
         console.warn('Unknown admin WebSocket message type:', message);
     }
-  }, []);
+  }, [queryClient]);
 
   // Connect to WebSocket when user is ADMIN
   useEffect(() => {

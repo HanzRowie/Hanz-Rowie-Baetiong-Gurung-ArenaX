@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Tournament, TournamentRegistration, Match, RefereeBooking, PlayerMatchStats
+from .models import Tournament, TournamentRegistration, Match, RefereeBooking, PlayerMatchStats, TournamentAuditLog
 
 
 @admin.register(Tournament)
@@ -43,3 +43,21 @@ class PlayerMatchStatsAdmin(admin.ModelAdmin):
     list_filter = ('created_at', 'goals', 'assists')
     ordering = ('-created_at',)
     readonly_fields = ('created_at', 'updated_at')
+
+
+
+@admin.register(TournamentAuditLog)
+class TournamentAuditLogAdmin(admin.ModelAdmin):
+    list_display = ('administrator', 'action_type', 'tournament', 'previous_status', 'new_status', 'timestamp')
+    search_fields = ('administrator__full_name', 'tournament__title', 'action_type')
+    list_filter = ('action_type', 'timestamp', 'previous_status', 'new_status')
+    ordering = ('-timestamp',)
+    readonly_fields = ('id', 'timestamp')
+    
+    def has_add_permission(self, request):
+        # Audit logs should only be created programmatically
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        # Audit logs should be immutable
+        return False

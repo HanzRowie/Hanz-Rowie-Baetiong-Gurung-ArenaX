@@ -61,6 +61,67 @@ class Tournament(models.Model):
     tournament_image = models.ImageField(upload_to='tournament_images/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Approval Workflow Fields
+    APPROVAL_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('CONDITIONAL_APPROVAL', 'Conditional Approval'),
+    )
+    
+    approval_status = models.CharField(
+        max_length=25,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+        help_text='Current approval status of the tournament'
+    )
+    
+    approval_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when the tournament was approved or rejected'
+    )
+    
+    approved_by = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_tournaments',
+        help_text='Administrator who approved or rejected this tournament'
+    )
+    
+    rejection_reason = models.TextField(
+        blank=True,
+        help_text='Explanation provided when tournament is rejected'
+    )
+    
+    approval_notes = models.TextField(
+        blank=True,
+        help_text='Optional notes from admin during approval'
+    )
+    
+    verification_documents = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='JSON storage of document references with type and URL'
+    )
+    
+    requested_documents = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of documents requested for conditional approval'
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['approval_status', 'created_at']),
+            models.Index(fields=['sport_type', 'approval_status']),
+            models.Index(fields=['organizer', 'approval_status']),
+            models.Index(fields=['date', 'approval_status']),
+        ]
 
     def __str__(self):
         return f"{self.title} - {self.sport_type}"
@@ -368,3 +429,86 @@ class PlayerMatchStats(models.Model):
                     })
         
         super().clean()
+
+
+# Tournament Audit Log
+class TournamentAuditLog(models.Model):
+    """
+    Tracks all administrative actions on tournaments for accountability.
+    Retention period: 12 months minimum.
+    """
+    
+    ACTION_CHOICES = (
+        ('APPROVE', 'Approve Tournament'),
+        ('REJECT', 'Reject Tournament'),
+        ('CONDITIONAL_APPROVE', 'Conditional Approval'),
+        ('BULK_APPROVE', 'Bulk Approve Tournaments'),
+        ('BULK_REJECT', 'Bulk Reject Tournaments'),
+        ('VIEW_DOCUMENT', 'View Verification Document'),
+        ('REQUEST_DOCUMENTS', 'Request Additional Documents'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    administrator = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.PROTECT,
+        related_name='tournament_admin_actions',
+        limit_choices_to={'role': 'ADMIN'}
+    )
+    
+    action_type = models.CharField(
+        max_length=25,
+        choices=ACTION_CHOICES,
+        db_index=True
+    )
+    
+    tournament = models.ForeignKey(
+        Tournament,
+        on_delete=models.PROTECT,
+        related_name='audit_logs',
+        null=True,
+        blank=True
+    )
+    
+    tournament_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='For bulk operations, list of affected tournament IDs'
+    )
+    
+    previous_status = models.CharField(
+        max_length=25,
+        blank=True,
+        help_text='Status before this action'
+    )
+    
+    new_status = models.CharField(
+        max_length=25,
+        blank=True,
+        help_text='Status after this action'
+    )
+    
+    reason = models.TextField(
+        blank=True,
+        help_text='Reason provided for rejection or conditional approval'
+    )
+    
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional context (IP address, user agent, validation results)'
+    )
+    
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['administrator', 'timestamp']),
+            models.Index(fields=['action_type', 'timestamp']),
+            models.Index(fields=['tournament', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.administrator.full_name} - {self.action_type} - {self.timestamp}"

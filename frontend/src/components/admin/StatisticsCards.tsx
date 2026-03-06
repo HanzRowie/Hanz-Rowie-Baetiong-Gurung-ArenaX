@@ -38,22 +38,22 @@ const StatCard: React.FC<StatCardProps> = ({
   isLoading
 }) => {
   return (
-    <div className={`${bgColorClass} rounded-lg shadow-md p-6 transition-all hover:shadow-lg`}>
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-          {isLoading ? (
-            <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
-          ) : (
-            <p className={`text-3xl font-bold ${colorClass}`}>
-              {value === undefined ? '0' : value.toLocaleString()}
-            </p>
-          )}
-        </div>
-        <div className={`${colorClass} opacity-80`}>
-          {icon}
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 transition-all hover:shadow-md">
+      <div className="flex items-center justify-between mb-3">
+        <div className={`p-2.5 ${bgColorClass} rounded-lg`}>
+          <div className={`${colorClass}`}>
+            {icon}
+          </div>
         </div>
       </div>
+      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      {isLoading ? (
+        <div className="h-8 w-20 bg-gray-200 animate-pulse rounded"></div>
+      ) : (
+        <p className="text-3xl font-bold text-gray-900">
+          {value === undefined ? '0' : value.toLocaleString()}
+        </p>
+      )}
     </div>
   );
 };
@@ -72,7 +72,7 @@ const TotalUsersCard: React.FC<{ count: number | undefined; isLoading?: boolean 
       value={count}
       icon={
         <svg 
-          className="w-12 h-12" 
+          className="w-8 h-8" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -106,7 +106,7 @@ const PendingApprovalsCard: React.FC<{ count: number | undefined; isLoading?: bo
       value={count}
       icon={
         <svg 
-          className="w-12 h-12" 
+          className="w-8 h-8" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -140,7 +140,7 @@ const ApprovedTodayCard: React.FC<{ count: number | undefined; isLoading?: boole
       value={count}
       icon={
         <svg 
-          className="w-12 h-12" 
+          className="w-8 h-8" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"
@@ -174,7 +174,7 @@ const RejectedUsersCard: React.FC<{ count: number | undefined; isLoading?: boole
       value={count}
       icon={
         <svg 
-          className="w-12 h-12" 
+          className="w-8 h-8" 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24"

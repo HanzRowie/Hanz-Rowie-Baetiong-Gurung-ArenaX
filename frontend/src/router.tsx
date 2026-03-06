@@ -54,6 +54,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 import AdminLayout from './components/admin/AdminLayout';
 import UserManagementPage from './pages/admin/UserManagementPage';
+import TournamentManagementPage from './pages/admin/TournamentManagementPage';
+import AdminVenueManagementPage from './pages/admin/VenueManagementPage';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 
 // Router configuration
 export const router = createBrowserRouter([
@@ -104,11 +107,23 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '',
-        element: <UserManagementPage />, // Default admin page is user management
+        element: <AdminDashboardPage />, // Default admin page is dashboard
+      },
+      {
+        path: 'dashboard',
+        element: <AdminDashboardPage />,
       },
       {
         path: 'users',
         element: <UserManagementPage />,
+      },
+      {
+        path: 'tournaments',
+        element: <TournamentManagementPage />,
+      },
+      {
+        path: 'venues',
+        element: <AdminVenueManagementPage />,
       },
     ],
   },

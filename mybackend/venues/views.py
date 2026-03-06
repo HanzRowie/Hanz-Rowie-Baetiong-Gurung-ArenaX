@@ -10,13 +10,14 @@ from django.utils.decorators import method_decorator
 
 from .models import Venue, VenueBooking, VenueAvailability
 from .serializers import VenueSerializer, VenueBookingSerializer, VenueAvailabilitySerializer
+from .permissions import ApprovalStatusPermission, filter_venues_by_approval_status
 from accounts.decorators import jwt_required
 from notifications.utils import send_notification
 
 class VenueViewSet(viewsets.ModelViewSet):
     queryset = Venue.objects.all()
     serializer_class = VenueSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ApprovalStatusPermission]
 
     def perform_create(self, serializer):
         """Set the owner to the current user for venue owners"""
@@ -42,7 +43,11 @@ class VenueViewSet(viewsets.ModelViewSet):
             raise
 
     def get_queryset(self):
+        # Get base queryset
         queryset = Venue.objects.all()
+        
+        # Apply approval status filtering
+        queryset = filter_venues_by_approval_status(queryset, self.request.user)
         
         # Handle various filter parameters
         location = self.request.query_params.get('location', None)
@@ -52,9 +57,6 @@ class VenueViewSet(viewsets.ModelViewSet):
         price_min = self.request.query_params.get('price_min', None)
         price_max = self.request.query_params.get('price_max', None)
         search = self.request.query_params.get('search', None)
-
-        # The main /venues/ endpoint should show ALL venues for everyone
-        # Venue owners have a separate /my-venues/ endpoint for their own venues
 
         if location:
             queryset = queryset.filter(location__icontains=location)
@@ -649,8 +651,10 @@ def available_venues_for_tournament(request):
         start_time_obj = datetime.strptime(start_time, '%H:%M').time()
         end_time_obj = datetime.strptime(end_time, '%H:%M').time()
         
-        # Get all venues
+        # Get all venues and filter by approval status
+        from venues.permissions import filter_venues_by_approval_status
         venues = Venue.objects.all()
+        venues = filter_venues_by_approval_status(venues, request.user)
         
         # Filter by sport type if provided
         if sport_type:

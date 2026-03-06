@@ -15,3 +15,5 @@ export { TeamService } from './teamService';
 export { toastService } from './toastService';
 export { default as paymentService } from './paymentService';
 export { adminService, AdminServiceError } from './adminService';
+export { adminTournamentService, AdminTournamentServiceError } from './adminTournamentService';
+export { adminVenueService, AdminVenueServiceError } from './adminVenueService';

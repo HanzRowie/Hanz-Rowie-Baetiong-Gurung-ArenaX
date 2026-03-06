@@ -194,16 +194,16 @@ export const UserTable: React.FC<UserTableProps> = ({
     !allPendingSelected;
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
       {/* Mobile: Horizontal scroll wrapper */}
-      <div className="overflow-x-auto -mx-4 sm:mx-0">
+      <div className="overflow-x-auto">
         <div className="inline-block min-w-full align-middle">
           <div className="overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   {/* Select All Checkbox */}
-                  <th scope="col" className="px-3 sm:px-6 py-3 text-left">
+                  <th scope="col" className="px-6 py-3 text-left">
                     <input
                       type="checkbox"
                       checked={allPendingSelected}
@@ -211,90 +211,88 @@ export const UserTable: React.FC<UserTableProps> = ({
                         if (input) input.indeterminate = somePendingSelected;
                       }}
                       onChange={handleSelectAll}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                       aria-label="Select all pending users"
                     />
                   </th>
 
                   {/* Name Column - Sortable */}
-                  <th scope="col" className="px-3 sm:px-6 py-3 text-left">
+                  <th scope="col" className="px-6 py-3 text-left">
                     <button
                       onClick={() => handleSort('full_name')}
-                      className="group inline-flex items-center gap-1 sm:gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700"
+                      className="group inline-flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-gray-900"
                       aria-label="Sort by name"
                     >
-                      <span className="hidden sm:inline">Name</span>
-                      <span className="sm:hidden">Name</span>
+                      NAME
                       {renderSortIcon('full_name')}
                     </button>
                   </th>
 
                   {/* Email Column - Sortable */}
-                  <th scope="col" className="px-3 sm:px-6 py-3 text-left">
+                  <th scope="col" className="px-6 py-3 text-left">
                     <button
                       onClick={() => handleSort('email')}
-                      className="group inline-flex items-center gap-1 sm:gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700"
+                      className="group inline-flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-gray-900"
                       aria-label="Sort by email"
                     >
-                      Email
+                      EMAIL
                       {renderSortIcon('email')}
                     </button>
                   </th>
 
-                  {/* Role Column - Hidden on mobile */}
-                  <th scope="col" className="hidden md:table-cell px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
+                  {/* Role Column */}
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    ROLE
                   </th>
 
-                  {/* Registration Date Column - Sortable, Hidden on small mobile */}
-                  <th scope="col" className="hidden sm:table-cell px-3 sm:px-6 py-3 text-left">
+                  {/* Registration Date Column - Sortable */}
+                  <th scope="col" className="px-6 py-3 text-left">
                     <button
                       onClick={() => handleSort('created_at')}
-                      className="group inline-flex items-center gap-1 sm:gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700"
+                      className="group inline-flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-gray-900"
                       aria-label="Sort by registration date"
                     >
-                      <span className="hidden lg:inline">Registration Date</span>
-                      <span className="lg:hidden">Reg. Date</span>
+                      REG. DATE
                       {renderSortIcon('created_at')}
                     </button>
                   </th>
 
                   {/* Status Column - Sortable */}
-                  <th scope="col" className="px-3 sm:px-6 py-3 text-left">
+                  <th scope="col" className="px-6 py-3 text-left">
                     <button
                       onClick={() => handleSort('approval_status')}
-                      className="group inline-flex items-center gap-1 sm:gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700"
+                      className="group inline-flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-gray-900"
                       aria-label="Sort by status"
                     >
-                      Status
+                      STATUS
                       {renderSortIcon('approval_status')}
                     </button>
                   </th>
 
                   {/* Actions Column */}
-                  <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    ACTIONS
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white divide-y divide-gray-100">
                 {isLoading && (
                   <tr>
-                    <td colSpan={7} className="px-3 sm:px-6 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       <div className="flex justify-center items-center">
-                        <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        <span className="ml-3 text-sm sm:text-base">Loading users...</span>
+                        <span className="ml-3">Loading users...</span>
                       </div>
                     </td>
                   </tr>
                 )}
                 {!isLoading && sortedUsers.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-3 sm:px-6 py-12 text-center text-gray-500 text-sm sm:text-base">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       No users found
                     </td>
                   </tr>
@@ -311,83 +309,98 @@ export const UserTable: React.FC<UserTableProps> = ({
                         onClick={(e) => handleRowClick(user, e)}
                         onKeyDown={(e) => handleRowKeyDown(user, e)}
                         tabIndex={0}
-                        className="hover:bg-gray-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+                        className="hover:bg-gray-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-purple-500"
                         aria-label={`View details for ${user.full_name}`}
                       >
                         {/* Checkbox */}
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           {isPending && (
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={(e) => handleUserSelect(user.id, e.target.checked)}
                               onClick={(e) => e.stopPropagation()}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                               aria-label={`Select ${user.full_name}`}
                             />
                           )}
                         </td>
 
                         {/* Name */}
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-[120px] sm:max-w-none">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
                             {user.full_name}
                           </div>
                         </td>
 
                         {/* Email */}
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-500 truncate max-w-[150px] sm:max-w-none">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600">
                             {user.email}
                           </div>
                         </td>
 
-                        {/* Role - Hidden on mobile */}
-                        <td className="hidden md:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900">
+                        {/* Role */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
                             {ROLE_LABELS[user.role] || user.role}
                           </div>
                         </td>
 
-                        {/* Registration Date - Hidden on small mobile */}
-                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-500">
+                        {/* Registration Date */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600">
                             {formatDate(user.created_at)}
                           </div>
                         </td>
 
                         {/* Status */}
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <StatusBadge status={user.approval_status} />
                         </td>
 
                         {/* Actions */}
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right text-xs sm:text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           {isPending && (
-                            <div className="flex justify-end gap-1 sm:gap-2">
+                            <div className="flex justify-end gap-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onApprove(user.id);
                                 }}
-                                className="inline-flex items-center px-2 sm:px-3 py-1 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                 aria-label={`Approve ${user.full_name}`}
+                                title="Approve"
                               >
-                                <span className="hidden sm:inline">Approve</span>
-                                <span className="sm:hidden">✓</span>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
                               </button>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onReject(user.id);
                                 }}
-                                className="inline-flex items-center px-2 sm:px-3 py-1 border border-transparent text-xs sm:text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 aria-label={`Reject ${user.full_name}`}
+                                title="Reject"
                               >
-                                <span className="hidden sm:inline">Reject</span>
-                                <span className="sm:hidden">✕</span>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                               </button>
                             </div>
+                          )}
+                          {!isPending && (
+                            <button
+                              className="p-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-colors"
+                              aria-label="More options"
+                              title="More options"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                              </svg>
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -401,10 +414,12 @@ export const UserTable: React.FC<UserTableProps> = ({
         </div>
       </div>
       
-      {/* Mobile scroll hint */}
+      {/* Pagination info */}
       {!isLoading && sortedUsers.length > 0 && (
-        <div className="sm:hidden px-4 py-2 bg-gray-50 border-t border-gray-200 text-center">
-          <p className="text-xs text-gray-500">← Scroll horizontally to see more →</p>
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+          <p className="text-sm text-gray-600">
+            SHOWING 1 TO 6 OF {sortedUsers.length} ENTRIES
+          </p>
         </div>
       )}
     </div>

@@ -128,7 +128,11 @@ export type WebSocketMessageType =
   | 'connection_established'
   | 'new_user_registration'
   | 'user_approved'
-  | 'user_rejected';
+  | 'user_rejected'
+  | 'tournament_submitted'
+  | 'venue_submitted'
+  | 'tournament_status_changed'
+  | 'venue_status_changed';
 
 /**
  * Base WebSocket message interface
@@ -182,13 +186,77 @@ export interface UserRejectedMessage extends WebSocketMessage {
 }
 
 /**
+ * Tournament submitted WebSocket message
+ * Requirement 7.1: Real-time tournament submission notifications
+ */
+export interface TournamentSubmittedMessage extends WebSocketMessage {
+  type: 'tournament_submitted';
+  resource_type: 'tournament';
+  resource_id: string;
+  tournament_name: string;
+  organizer_name: string;
+  sport_type: string;
+  new_status: 'PENDING';
+  timestamp: string;
+}
+
+/**
+ * Venue submitted WebSocket message
+ * Requirement 7.2: Real-time venue submission notifications
+ */
+export interface VenueSubmittedMessage extends WebSocketMessage {
+  type: 'venue_submitted';
+  resource_type: 'venue';
+  resource_id: string;
+  venue_name: string;
+  owner_name: string;
+  sport_type: string;
+  new_status: 'PENDING';
+  timestamp: string;
+}
+
+/**
+ * Tournament status changed WebSocket message
+ * Requirement 7.3: Real-time tournament approval/rejection updates
+ */
+export interface TournamentStatusChangedMessage extends WebSocketMessage {
+  type: 'tournament_status_changed';
+  resource_type: 'tournament';
+  resource_id: string;
+  tournament_name: string;
+  new_status: 'APPROVED' | 'REJECTED' | 'CONDITIONAL_APPROVAL';
+  approval_date?: string;
+  rejection_reason?: string;
+  timestamp: string;
+}
+
+/**
+ * Venue status changed WebSocket message
+ * Requirement 7.4: Real-time venue approval/rejection updates
+ */
+export interface VenueStatusChangedMessage extends WebSocketMessage {
+  type: 'venue_status_changed';
+  resource_type: 'venue';
+  resource_id: string;
+  venue_name: string;
+  new_status: 'APPROVED' | 'REJECTED' | 'CONDITIONAL_APPROVAL';
+  approval_date?: string;
+  rejection_reason?: string;
+  timestamp: string;
+}
+
+/**
  * Union type for all WebSocket messages
  */
 export type AdminWebSocketMessage = 
   | ConnectionEstablishedMessage
   | NewUserRegistrationMessage
   | UserApprovedMessage
-  | UserRejectedMessage;
+  | UserRejectedMessage
+  | TournamentSubmittedMessage
+  | VenueSubmittedMessage
+  | TournamentStatusChangedMessage
+  | VenueStatusChangedMessage;
 
 /**
  * Approval request payload

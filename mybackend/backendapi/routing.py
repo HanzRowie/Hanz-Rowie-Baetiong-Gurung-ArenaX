@@ -1,11 +1,13 @@
 from django.urls import re_path
 from chat.consumers import ChatConsumer, DirectChatConsumer, GroupChatConsumer
 from notifications.consumers import NotificationConsumer
-from accounts.consumers import AdminDashboardConsumer
+from accounts.consumers import AdminDashboardConsumer, UserNotificationConsumer
 
 websocket_urlpatterns = [
     # Admin dashboard real-time updates
     re_path(r'ws/admin/dashboard/$', AdminDashboardConsumer.as_asgi()),
+    # User notification updates (for organizers and venue owners)
+    re_path(r'ws/user/notifications/$', UserNotificationConsumer.as_asgi()),
     # New cross-role direct messaging (no user_id in path - uses token auth)
     re_path(r'ws/chat/direct/$', DirectChatConsumer.as_asgi()),
     # Team group chat

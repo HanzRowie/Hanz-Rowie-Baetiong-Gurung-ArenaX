@@ -368,17 +368,17 @@ export default function UserManagementPage() {
       </div>
 
       {/* Header */}
-      <header id="main-content">
+      <header id="main-content" className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-            <p className="text-gray-600 mt-1">
-              Manage user registrations and approvals
+            <p className="text-gray-500 mt-1">
+              Efficiently manage registration requests and user statuses.
             </p>
           </div>
 
           {/* WebSocket Connection Status */}
-          <div className="flex items-center gap-2" role="status" aria-live="polite">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full" role="status" aria-live="polite">
             <div
               className={`w-2 h-2 rounded-full ${
                 connectionStatus === 'connected'
@@ -391,13 +391,13 @@ export default function UserManagementPage() {
               }`}
               aria-hidden="true"
             />
-            <span className="text-sm text-gray-600">
+            <span className="text-sm font-medium text-green-700">
               {connectionStatus === 'connected'
-                ? 'Live updates active'
+                ? 'Live Updates Active'
                 : connectionStatus === 'connecting'
                 ? 'Connecting...'
                 : connectionStatus === 'error'
-                ? 'Connection error'
+                ? 'Connection Error'
                 : 'Disconnected'}
             </span>
           </div>

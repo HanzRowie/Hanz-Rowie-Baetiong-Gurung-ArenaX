@@ -241,6 +241,11 @@ class Notification(models.Model):
         ('NEW_GROUP_MESSAGE', 'New Group Message'),
         ('ACCOUNT_APPROVED', 'Account Approved'),
         ('ACCOUNT_REJECTED', 'Account Rejected'),
+        ('TOURNAMENT_APPROVED', 'Tournament Approved'),
+        ('TOURNAMENT_REJECTED', 'Tournament Rejected'),
+        ('VENUE_APPROVED', 'Venue Approved'),
+        ('VENUE_REJECTED', 'Venue Rejected'),
+        ('DOCUMENTS_REQUESTED', 'Documents Requested'),
         ('GENERAL', 'General Notification'),
     )
 
