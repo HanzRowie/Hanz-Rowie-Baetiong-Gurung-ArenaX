@@ -13,10 +13,11 @@
  * - 16.1-16.7: Enhanced UI features
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminVenueService, AdminVenueServiceError } from '@/services/adminVenueService';
 import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
+import { useToast } from '@/hooks/useToast';
 import type {
   VenueFilters,
   VenueListItem,
@@ -41,7 +42,7 @@ import {
   BulkRejectionDialog,
   BulkOperationSummaryDialog,
 } from '@/components/admin/BulkConfirmationDialogs';
-import { Toast, type ToastMessage } from '@/components/admin/Toast';
+import { ToastContainer } from '@/components/admin/ToastContainer';
 
 /**
  * Query keys for React Query
@@ -74,7 +75,12 @@ export default function VenueManagementPage() {
   const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<AdminVenue | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  
+  // Toast management with deduplication
+  const { toasts, showToast, dismissToast } = useToast();
+  
+  // Track pending mutations to prevent duplicate toasts
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
 
   // Dialog states
   const [approvalDialog, setApprovalDialog] = useState<{ isOpen: boolean; venue: AdminVenue | null }>({
@@ -97,15 +103,7 @@ export default function VenueManagementPage() {
     result: { successful: 0, failed: 0, total: 0 },
   });
 
-  // ===== TOAST MANAGEMENT =====
-  const showToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
-    const id = `toast-${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-  }, []);
 
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
 
   // ===== WEBSOCKET INTEGRATION =====
   // Real-time updates for venue submissions and status changes
@@ -190,7 +188,10 @@ export default function VenueManagementPage() {
 
   // ===== MUTATIONS: APPROVE VENUE =====
   const approveMutation = useMutation({
-    mutationFn: (venueId: string) => adminVenueService.approveVenue(venueId),
+    mutationFn: (venueId: string) => {
+      pendingMutationsRef.current.add(`approve-${venueId}`);
+      return adminVenueService.approveVenue(venueId);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.venues(filters) });
@@ -202,19 +203,27 @@ export default function VenueManagementPage() {
       // Show success toast
       showToast('success', 'Venue Approved', `${data.name} has been approved successfully.`);
 
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`approve-${data.id}`);
+      }, 2000);
+
       // Close dialogs
       setApprovalDialog({ isOpen: false, venue: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminVenueServiceError) => {
+    onError: (error: AdminVenueServiceError, venueId) => {
+      pendingMutationsRef.current.delete(`approve-${venueId}`);
       showToast('error', 'Approval Failed', error.message || 'Failed to approve venue.');
     },
   });
 
   // ===== MUTATIONS: REJECT VENUE =====
   const rejectMutation = useMutation({
-    mutationFn: ({ venueId, reason }: { venueId: string; reason: string }) =>
-      adminVenueService.rejectVenue(venueId, reason),
+    mutationFn: ({ venueId, reason }: { venueId: string; reason: string }) => {
+      pendingMutationsRef.current.add(`reject-${venueId}`);
+      return adminVenueService.rejectVenue(venueId, reason);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.venues(filters) });
@@ -226,11 +235,17 @@ export default function VenueManagementPage() {
       // Show success toast
       showToast('success', 'Venue Rejected', `${data.name} has been rejected.`);
 
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`reject-${data.id}`);
+      }, 2000);
+
       // Close dialogs
       setRejectionDialog({ isOpen: false, venue: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminVenueServiceError) => {
+    onError: (error: AdminVenueServiceError, { venueId }) => {
+      pendingMutationsRef.current.delete(`reject-${venueId}`);
       showToast('error', 'Rejection Failed', error.message || 'Failed to reject venue.');
     },
   });
@@ -529,18 +544,8 @@ export default function VenueManagementPage() {
         }
       />
 
-      {/* Toast Notifications - ARIA Live Region */}
-      <div
-        className="fixed top-4 right-4 z-50 space-y-2"
-        role="region"
-        aria-label="Notifications"
-        aria-live="polite"
-        aria-atomic="false"
-      >
-        {toasts.map((toast) => (
-          <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
-        ))}
-      </div>
+      {/* Toast Notifications Container */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

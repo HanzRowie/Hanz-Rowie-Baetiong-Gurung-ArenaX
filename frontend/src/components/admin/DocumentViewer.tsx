@@ -45,10 +45,21 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   }
 
   // Determine document type from URL
-  const fileExtension = documentUrl.split('.').pop()?.toLowerCase();
-  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '');
-  const isPdf = fileExtension === 'pdf';
+  // Strip query parameters before getting extension
+  const urlPath = documentUrl.split('?')[0];
+  const fileExtension = urlPath.split('.').pop()?.toLowerCase();
 
+  // Alternative: Check if it's one of our API endpoints that serves documents
+  const isApiDocument = urlPath.includes('/certification-document/') ||
+    urlPath.includes('/business-document/') ||
+    urlPath.includes('/document/');
+
+  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension || '') ||
+    (!fileExtension && isApiDocument && !imageError);
+  const isPdf = fileExtension === 'pdf' ||
+    (!fileExtension && isApiDocument && imageError);
+
+  // If it's an image and hasn't errored yet, or we're trying it as an image
   // Handle image zoom
   const handleZoomIn = () => setImageZoom(prev => Math.min(prev + 0.25, 3));
   const handleZoomOut = () => setImageZoom(prev => Math.max(prev - 0.25, 0.5));

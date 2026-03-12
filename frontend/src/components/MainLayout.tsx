@@ -71,6 +71,14 @@ export default function MainLayout() {
                 >
                   <Menu className="h-5 w-5" />
                 </button>
+                {/* Logo on mobile when sidebar is closed */}
+                <div className="lg:hidden flex items-center gap-2">
+                  <img 
+                    src="/images/Logo.jpg" 
+                    alt="ArenaX Logo" 
+                    className="w-8 h-8 object-contain rounded-lg"
+                  />
+                </div>
                 <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
               </div>
               

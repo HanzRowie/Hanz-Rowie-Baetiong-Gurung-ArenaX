@@ -68,6 +68,18 @@ class CustomUser(AbstractUser):
     business_name = models.CharField(max_length=255, blank=True)
     business_registration = models.CharField(max_length=100, blank=True)
     business_contact = models.CharField(max_length=100, blank=True)
+    business_document = models.FileField(
+        upload_to='business_documents/%Y/%m/',
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text='Business registration or license document for venue owners'
+    )
+    venue_images = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of venue image URLs (1-3 images required for venue owners)'
+    )
 
     # Approval Workflow Fields
     APPROVAL_STATUS_CHOICES = (
@@ -110,7 +122,15 @@ class CustomUser(AbstractUser):
         null=True,
         blank=True,
         max_length=500,
-        help_text='Identity or business registration document'
+        help_text='Identity or business registration document (deprecated - use role-specific fields)'
+    )
+    
+    certification_document = models.FileField(
+        upload_to='certifications/%Y/%m/',
+        null=True,
+        blank=True,
+        max_length=500,
+        help_text='Certification document for organizers and referees'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

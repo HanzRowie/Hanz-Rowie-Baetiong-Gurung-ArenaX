@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, User, Lock, Phone, Mail, AlertCircle, ChevronDown } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { Eye, EyeOff, User, Lock, Phone, Mail, AlertCircle, ChevronDown, Upload, X, FileText, Image as ImageIcon } from 'lucide-react';
+import { useState, type FormEvent, type ChangeEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole, type UserRole as UserRoleType } from '@/types/auth.types';
 
@@ -17,7 +17,65 @@ export default function RegisterPage() {
     confirmPassword: '',
   });
 
+  // Document upload states
+  const [venueImages, setVenueImages] = useState<File[]>([]);
+  const [businessDocument, setBusinessDocument] = useState<File | null>(null);
+  const [certificationDocument, setCertificationDocument] = useState<File | null>(null);
+  const [venueImagePreviews, setVenueImagePreviews] = useState<string[]>([]);
+
   const { register, isLoading, error } = useAuth();
+
+  // Handle venue image upload
+  const handleVenueImagesChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    
+    if (files.length + venueImages.length > 3) {
+      alert('Maximum 3 venue images allowed');
+      return;
+    }
+
+    setVenueImages(prev => [...prev, ...files]);
+    
+    // Create previews
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setVenueImagePreviews(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Remove venue image
+  const removeVenueImage = (index: number) => {
+    setVenueImages(prev => prev.filter((_, i) => i !== index));
+    setVenueImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handle business document upload
+  const handleBusinessDocumentChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBusinessDocument(file);
+    }
+  };
+
+  // Handle certification document upload
+  const handleCertificationDocumentChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCertificationDocument(file);
+    }
+  };
+
+  // Reset document fields when role changes
+  const handleRoleChange = (role: UserRoleType) => {
+    setSelectedRole(role);
+    setVenueImages([]);
+    setVenueImagePreviews([]);
+    setBusinessDocument(null);
+    setCertificationDocument(null);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -27,14 +85,52 @@ export default function RegisterPage() {
       return;
     }
 
+    // Validate role-specific documents
+    if (selectedRole === UserRole.VENUE_OWNER) {
+      if (venueImages.length < 1) {
+        alert('Please upload at least 1 venue image');
+        return;
+      }
+      if (!businessDocument) {
+        alert('Please upload your business document');
+        return;
+      }
+    }
+
+    if (selectedRole === UserRole.ORGANIZER || selectedRole === UserRole.REFEREE) {
+      if (!certificationDocument) {
+        alert('Please upload your certification document');
+        return;
+      }
+    }
+
     try {
-      const result = await register({
-        email: formData.email,
-        full_name: formData.full_name,
-        phone_number: formData.phone_number,
-        password: formData.password,
-        role: selectedRole,
-      });
+      // Create FormData for file upload
+      const registrationData = new FormData();
+      registrationData.append('email', formData.email);
+      registrationData.append('full_name', formData.full_name);
+      registrationData.append('phone_number', formData.phone_number);
+      registrationData.append('password', formData.password);
+      registrationData.append('role', selectedRole);
+
+      // Add venue images
+      if (selectedRole === UserRole.VENUE_OWNER) {
+        venueImages.forEach((image) => {
+          registrationData.append('venue_images', image);
+        });
+        if (businessDocument) {
+          registrationData.append('business_document', businessDocument);
+        }
+      }
+
+      // Add certification document
+      if (selectedRole === UserRole.ORGANIZER || selectedRole === UserRole.REFEREE) {
+        if (certificationDocument) {
+          registrationData.append('certification_document', certificationDocument);
+        }
+      }
+
+      const result = await register(registrationData);
       
       if (result?.success && result.otp) {
         // Show OTP in development mode
@@ -213,7 +309,7 @@ export default function RegisterPage() {
                 <select
                   id="role"
                   value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as UserRoleType)}
+                  onChange={(e) => handleRoleChange(e.target.value as UserRoleType)}
                   className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   required
                   disabled={isLoading}
@@ -227,6 +323,172 @@ export default function RegisterPage() {
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
               </div>
             </div>
+
+            {/* Venue Owner Document Upload */}
+            {selectedRole === UserRole.VENUE_OWNER && (
+              <>
+                {/* Venue Images Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Venue Images <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500 ml-2">(1-3 images required)</span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-400 transition-colors">
+                    <input
+                      type="file"
+                      id="venue-images"
+                      accept="image/*"
+                      multiple
+                      onChange={handleVenueImagesChange}
+                      className="hidden"
+                      disabled={isLoading || venueImages.length >= 3}
+                    />
+                    <label
+                      htmlFor="venue-images"
+                      className={`flex flex-col items-center justify-center cursor-pointer ${
+                        venueImages.length >= 3 ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <ImageIcon className="h-8 w-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-600">
+                        {venueImages.length >= 3 ? 'Maximum images uploaded' : 'Click to upload venue images'}
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        {venueImages.length}/3 images uploaded
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {/* Image Previews */}
+                  {venueImagePreviews.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-3">
+                      {venueImagePreviews.map((preview, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={preview}
+                            alt={`Venue ${index + 1}`}
+                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeVenueImage(index)}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            disabled={isLoading}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Business Document Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Business Document <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500 ml-2">(Registration/License)</span>
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-400 transition-colors">
+                    <input
+                      type="file"
+                      id="business-document"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={handleBusinessDocumentChange}
+                      className="hidden"
+                      disabled={isLoading}
+                    />
+                    <label
+                      htmlFor="business-document"
+                      className="flex flex-col items-center justify-center cursor-pointer"
+                    >
+                      <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                      <span className="text-sm text-gray-600">
+                        {businessDocument ? businessDocument.name : 'Click to upload business document'}
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        PDF, DOC, or Image files
+                      </span>
+                    </label>
+                  </div>
+                  {businessDocument && (
+                    <div className="mt-2 flex items-center justify-between bg-purple-50 p-2 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-purple-600" />
+                        <span className="text-sm text-gray-700">{businessDocument.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBusinessDocument(null)}
+                        className="text-red-500 hover:text-red-700"
+                        disabled={isLoading}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Organizer/Referee Certification Upload */}
+            {(selectedRole === UserRole.ORGANIZER || selectedRole === UserRole.REFEREE) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Certification Document <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">
+                    ({selectedRole === UserRole.ORGANIZER ? 'Organizer' : 'Referee'} Certification)
+                  </span>
+                </label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-400 transition-colors">
+                  <input
+                    type="file"
+                    id="certification-document"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    onChange={handleCertificationDocumentChange}
+                    className="hidden"
+                    disabled={isLoading}
+                  />
+                  <label
+                    htmlFor="certification-document"
+                    className="flex flex-col items-center justify-center cursor-pointer"
+                  >
+                    <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-600">
+                      {certificationDocument ? certificationDocument.name : 'Click to upload certification'}
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      PDF, DOC, or Image files
+                    </span>
+                  </label>
+                </div>
+                {certificationDocument && (
+                  <div className="mt-2 flex items-center justify-between bg-purple-50 p-2 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm text-gray-700">{certificationDocument.name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCertificationDocument(null)}
+                      className="text-red-500 hover:text-red-700"
+                      disabled={isLoading}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Player Info Message */}
+            {selectedRole === UserRole.PLAYER && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> Your account will need to be approved by an administrator before you can access the platform.
+                </p>
+              </div>
+            )}
 
             {/* Register Button */}
             <button

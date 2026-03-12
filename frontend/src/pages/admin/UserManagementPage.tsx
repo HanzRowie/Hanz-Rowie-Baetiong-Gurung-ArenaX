@@ -10,10 +10,12 @@
  * - 4.1, 5.1, 15.7, 15.8: Mutation handlers
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { adminService, AdminServiceError } from '@/services/adminService';
 import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
+import { useToast } from '@/hooks/useToast';
 import type {
   UserFilters,
   UserListItem,
@@ -21,6 +23,7 @@ import type {
   NewUserRegistrationMessage,
   UserApprovedMessage,
   UserRejectedMessage,
+  UserRole,
 } from '@/types/admin.types';
 
 // Component imports
@@ -37,7 +40,7 @@ import {
   BulkRejectionDialog,
   BulkOperationSummaryDialog,
 } from '@/components/admin/BulkConfirmationDialogs';
-import { Toast, type ToastMessage } from '@/components/admin/Toast';
+import { ToastContainer } from '@/components/admin/ToastContainer';
 
 /**
  * Query keys for React Query
@@ -48,29 +51,39 @@ const QUERY_KEYS = {
   stats: ['admin', 'stats'],
 };
 
-/**
- * UserManagementPage Component
- * 
- * Main admin page for user management with:
- * - Statistics dashboard
- * - Filtering and search
- * - User table with sorting and pagination
- * - Bulk operations
- * - Real-time WebSocket updates
- * - Approval/rejection workflows
- */
 export default function UserManagementPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const initialRole = useMemo(() => {
+    // Priority 1: Search params
+    const roleParam = searchParams.get('role') as UserRole;
+    if (roleParam) return roleParam;
+
+    // Priority 2: Path name
+    if (location.pathname.endsWith('/referees')) return 'REFEREE' as UserRole;
+    if (location.pathname.endsWith('/organizers')) return 'ORGANIZER' as UserRole;
+    if (location.pathname.endsWith('/venues') && location.pathname.includes('/admin/')) return 'VENUE_OWNER' as UserRole;
+
+    return undefined;
+  }, [searchParams, location.pathname]);
 
   // ===== STATE MANAGEMENT =====
   const [filters, setFilters] = useState<UserFilters>({
     page: 1,
     page_size: 25,
+    role: initialRole,
   });
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  
+  // Toast management with deduplication
+  const { toasts, showToast, dismissToast } = useToast();
+  
+  // Track pending mutations to prevent duplicate toasts
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
 
   // Dialog states
   const [approvalDialog, setApprovalDialog] = useState<{ isOpen: boolean; user: AdminUser | null }>({
@@ -93,21 +106,12 @@ export default function UserManagementPage() {
     result: { successful: 0, failed: 0, total: 0 },
   });
 
-  // ===== TOAST MANAGEMENT =====
-  const showToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
-    const id = `toast-${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-  }, []);
 
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
 
   // ===== REACT QUERY: USER LIST =====
   const {
     data: usersData,
     isLoading: isLoadingUsers,
-    error: usersError,
   } = useQuery({
     queryKey: QUERY_KEYS.users(filters),
     queryFn: () => adminService.getUsers(filters),
@@ -142,7 +146,10 @@ export default function UserManagementPage() {
 
   // ===== MUTATIONS: APPROVE USER =====
   const approveMutation = useMutation({
-    mutationFn: (userId: string) => adminService.approveUser(userId),
+    mutationFn: (userId: string) => {
+      pendingMutationsRef.current.add(`approve-${userId}`);
+      return adminService.approveUser(userId);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users(filters) });
@@ -151,22 +158,30 @@ export default function UserManagementPage() {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.userDetail(data.id) });
       }
 
-      // Show success toast
+      // Show success toast (only from mutation, not WebSocket)
       showToast('success', 'User Approved', `${data.full_name} has been approved successfully.`);
+
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`approve-${data.id}`);
+      }, 2000);
 
       // Close dialogs
       setApprovalDialog({ isOpen: false, user: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminServiceError) => {
+    onError: (error: AdminServiceError, userId) => {
+      pendingMutationsRef.current.delete(`approve-${userId}`);
       showToast('error', 'Approval Failed', error.message || 'Failed to approve user.');
     },
   });
 
   // ===== MUTATIONS: REJECT USER =====
   const rejectMutation = useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
-      adminService.rejectUser(userId, reason),
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) => {
+      pendingMutationsRef.current.add(`reject-${userId}`);
+      return adminService.rejectUser(userId, reason);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users(filters) });
@@ -175,14 +190,20 @@ export default function UserManagementPage() {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.userDetail(data.id) });
       }
 
-      // Show success toast
+      // Show success toast (only from mutation, not WebSocket)
       showToast('success', 'User Rejected', `${data.full_name} has been rejected.`);
+
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`reject-${data.id}`);
+      }, 2000);
 
       // Close dialogs
       setRejectionDialog({ isOpen: false, user: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminServiceError) => {
+    onError: (error: AdminServiceError, { userId }) => {
+      pendingMutationsRef.current.delete(`reject-${userId}`);
       showToast('error', 'Rejection Failed', error.message || 'Failed to reject user.');
     },
   });
@@ -247,7 +268,7 @@ export default function UserManagementPage() {
   });
 
   // ===== WEBSOCKET: REAL-TIME UPDATES =====
-  const { connectionStatus, isConnected } = useAdminWebSocket({
+  const { connectionStatus } = useAdminWebSocket({
     onNewUserRegistration: (message: NewUserRegistrationMessage) => {
       // Invalidate queries to fetch new data
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users(filters) });
@@ -261,11 +282,18 @@ export default function UserManagementPage() {
       );
     },
     onUserApproved: (message: UserApprovedMessage) => {
+      // Skip toast if this was triggered by our own mutation
+      const mutationKey = `approve-${message.user_id}`;
+      if (pendingMutationsRef.current.has(mutationKey)) {
+        console.log('Skipping duplicate toast for own approval action');
+        return;
+      }
+
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users(filters) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stats });
 
-      // Show toast notification
+      // Show toast notification only for other admins' actions
       showToast(
         'success',
         'User Approved',
@@ -273,11 +301,18 @@ export default function UserManagementPage() {
       );
     },
     onUserRejected: (message: UserRejectedMessage) => {
+      // Skip toast if this was triggered by our own mutation
+      const mutationKey = `reject-${message.user_id}`;
+      if (pendingMutationsRef.current.has(mutationKey)) {
+        console.log('Skipping duplicate toast for own rejection action');
+        return;
+      }
+
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.users(filters) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.stats });
 
-      // Show toast notification
+      // Show toast notification only for other admins' actions
       showToast(
         'warning',
         'User Rejected',
@@ -380,25 +415,24 @@ export default function UserManagementPage() {
           {/* WebSocket Connection Status */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full" role="status" aria-live="polite">
             <div
-              className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected'
-                  ? 'bg-green-500'
-                  : connectionStatus === 'connecting'
+              className={`w-2 h-2 rounded-full ${connectionStatus === 'connected'
+                ? 'bg-green-500'
+                : connectionStatus === 'connecting'
                   ? 'bg-yellow-500 animate-pulse'
                   : connectionStatus === 'error'
-                  ? 'bg-red-500'
-                  : 'bg-gray-400'
-              }`}
+                    ? 'bg-red-500'
+                    : 'bg-gray-400'
+                }`}
               aria-hidden="true"
             />
             <span className="text-sm font-medium text-green-700">
               {connectionStatus === 'connected'
                 ? 'Live Updates Active'
                 : connectionStatus === 'connecting'
-                ? 'Connecting...'
-                : connectionStatus === 'error'
-                ? 'Connection Error'
-                : 'Disconnected'}
+                  ? 'Connecting...'
+                  : connectionStatus === 'error'
+                    ? 'Connection Error'
+                    : 'Disconnected'}
             </span>
           </div>
         </div>
@@ -459,13 +493,13 @@ export default function UserManagementPage() {
           setIsDetailModalOpen(false);
           setSelectedUser(null);
         }}
-        onApprove={(userId) => {
+        onApprove={(_userId) => {
           const user = userDetailData || selectedUser;
           if (user) {
             setApprovalDialog({ isOpen: true, user });
           }
         }}
-        onReject={(userId) => {
+        onReject={(_userId) => {
           const user = userDetailData || selectedUser;
           if (user) {
             setRejectionDialog({ isOpen: true, user });
@@ -532,18 +566,8 @@ export default function UserManagementPage() {
         }
       />
 
-      {/* Toast Notifications - ARIA Live Region */}
-      <div
-        className="fixed top-4 right-4 z-50 space-y-2"
-        role="region"
-        aria-label="Notifications"
-        aria-live="polite"
-        aria-atomic="false"
-      >
-        {toasts.map((toast) => (
-          <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
-        ))}
-      </div>
+      {/* Toast Notifications Container */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

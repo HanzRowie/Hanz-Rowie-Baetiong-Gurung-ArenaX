@@ -1,20 +1,30 @@
-import React from 'react';
-import type { AdminUser } from '../../types/admin.types';
+/**
+ * GenericApprovalDialog - Reusable approval confirmation dialog
+ * Works for users, tournaments, and venues
+ */
 
-interface ApprovalConfirmationDialogProps {
-  user: AdminUser;
+import React from 'react';
+
+interface GenericApprovalDialogProps {
   isOpen: boolean;
   isLoading: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  title: string;
+  message: string;
+  itemName: string;
+  itemEmail?: string;
 }
 
-export const ApprovalConfirmationDialog: React.FC<ApprovalConfirmationDialogProps> = ({
-  user,
+export const GenericApprovalDialog: React.FC<GenericApprovalDialogProps> = ({
   isOpen,
   isLoading,
   onConfirm,
   onCancel,
+  title,
+  message,
+  itemName,
+  itemEmail,
 }) => {
   if (!isOpen) return null;
 
@@ -34,23 +44,25 @@ export const ApprovalConfirmationDialog: React.FC<ApprovalConfirmationDialogProp
           id="approval-dialog-title"
           className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4"
         >
-          Approve User Registration
+          {title}
         </h2>
 
         <div className="mb-4 sm:mb-6">
           <p className="text-sm sm:text-base text-gray-700 mb-3 sm:mb-4">
-            Are you sure you want to approve this user?
+            {message}
           </p>
           
           <div className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2">
             <div>
               <span className="text-xs sm:text-sm font-medium text-gray-600">Name:</span>
-              <p className="text-sm sm:text-base text-gray-900 break-words">{user.full_name}</p>
+              <p className="text-sm sm:text-base text-gray-900 break-words">{itemName}</p>
             </div>
-            <div>
-              <span className="text-xs sm:text-sm font-medium text-gray-600">Email:</span>
-              <p className="text-sm sm:text-base text-gray-900 break-all">{user.email}</p>
-            </div>
+            {itemEmail && (
+              <div>
+                <span className="text-xs sm:text-sm font-medium text-gray-600">Email:</span>
+                <p className="text-sm sm:text-base text-gray-900 break-all">{itemEmail}</p>
+              </div>
+            )}
           </div>
         </div>
 

@@ -503,7 +503,7 @@ export default function AdminDashboardPage() {
 
       {/* Toast Notifications */}
       <div
-        className="fixed top-4 right-4 z-50 space-y-2"
+        className="toast-container fixed top-4 right-4 z-50 space-y-2"
         role="region"
         aria-label="Notifications"
         aria-live="polite"

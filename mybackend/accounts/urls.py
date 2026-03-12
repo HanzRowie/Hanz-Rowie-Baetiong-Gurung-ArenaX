@@ -4,15 +4,8 @@ from . import views
 from . import player_statistics_views
 from .admin_views import AdminUserViewSet
 
-# Router for admin viewsets
-router = DefaultRouter()
-router.register(r'admin/users', AdminUserViewSet, basename='admin-users')
-
 # URL patterns for accounts app
 urlpatterns = [
-    # Admin Control System API (viewset-based)
-    path('', include(router.urls)),
-    
     # Existing patterns
     path('auth/register/', views.register, name='register'),
     path('auth/login/', views.login, name='login'),
@@ -50,11 +43,6 @@ urlpatterns = [
     path('dashboard/monthly-stats/', views.dashboard_monthly_stats, name='dashboard_monthly_stats'),
     path('dashboard/next-tournament/', views.dashboard_next_tournament, name='dashboard_next_tournament'),
     path('dashboard/profile/', views.dashboard_profile, name='dashboard_profile'),
-    
-    # Admin endpoints
-    path('admin/users/', views.admin_get_all_users, name='admin_get_all_users'),
-    path('admin/users/<uuid:user_id>/', views.admin_get_user_details, name='admin_get_user_details'),
-    path('admin/dashboard/', views.admin_dashboard_stats, name='admin_dashboard_stats'),
     
     # Player statistics and rankings endpoints
     path('players/stats/', views.get_player_stats, name='get_player_stats'),

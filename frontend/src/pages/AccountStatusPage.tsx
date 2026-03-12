@@ -95,6 +95,16 @@ const AccountStatusPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
+        {/* Logo */}
+        <div className="flex items-center justify-center mb-6">
+          <img 
+            src="/images/Logo.jpg" 
+            alt="ArenaX Logo" 
+            className="h-10 w-10 object-contain rounded-lg mr-3"
+          />
+          <span className="text-2xl font-bold text-gray-900">ArenaX</span>
+        </div>
+
         {/* Status Card */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Header with colored bar */}

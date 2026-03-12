@@ -13,10 +13,11 @@
  * - 16.1-16.7: Enhanced UI features
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminTournamentService, AdminTournamentServiceError } from '@/services/adminTournamentService';
 import { useAdminWebSocket } from '@/hooks/useAdminWebSocket';
+import { useToast } from '@/hooks/useToast';
 import type {
   TournamentFilters,
   TournamentListItem,
@@ -31,16 +32,17 @@ import type {
 import { TournamentStatisticsCards } from '@/components/admin/TournamentStatisticsCards';
 import { TournamentFilterBar } from '@/components/admin/TournamentFilterBar';
 import { TournamentTable } from '@/components/admin/TournamentTable';
+import { TournamentDetailModal } from '@/components/admin/TournamentDetailModal';
 import { Pagination } from '@/components/admin/Pagination';
 import { BulkActionsToolbar } from '@/components/admin/BulkActionsToolbar';
-import { ApprovalConfirmationDialog } from '@/components/admin/ApprovalConfirmationDialog';
-import { RejectionDialog } from '@/components/admin/RejectionDialog';
+import { GenericApprovalDialog } from '@/components/admin/GenericApprovalDialog';
+import { GenericRejectionDialog } from '@/components/admin/GenericRejectionDialog';
 import {
   BulkApprovalDialog,
   BulkRejectionDialog,
   BulkOperationSummaryDialog,
 } from '@/components/admin/BulkConfirmationDialogs';
-import { Toast, type ToastMessage } from '@/components/admin/Toast';
+import { ToastContainer } from '@/components/admin/ToastContainer';
 
 /**
  * Query keys for React Query
@@ -73,7 +75,12 @@ export default function TournamentManagementPage() {
   const [selectedTournamentIds, setSelectedTournamentIds] = useState<string[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<AdminTournament | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  
+  // Toast management with deduplication
+  const { toasts, showToast, dismissToast } = useToast();
+  
+  // Track pending mutations to prevent duplicate toasts
+  const pendingMutationsRef = useRef<Set<string>>(new Set());
 
   // Dialog states
   const [approvalDialog, setApprovalDialog] = useState<{ isOpen: boolean; tournament: AdminTournament | null }>({
@@ -96,19 +103,11 @@ export default function TournamentManagementPage() {
     result: { successful: 0, failed: 0, total: 0 },
   });
 
-  // ===== TOAST MANAGEMENT =====
-  const showToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
-    const id = `toast-${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, type, title, message }]);
-  }, []);
 
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
 
   // ===== WEBSOCKET INTEGRATION =====
   // Real-time updates for tournament submissions and status changes
-  const { connectionStatus } = useAdminWebSocket({
+  useAdminWebSocket({
     onTournamentSubmitted: useCallback((message: TournamentSubmittedMessage) => {
       console.log('Tournament submitted:', message);
       
@@ -155,7 +154,6 @@ export default function TournamentManagementPage() {
   const {
     data: tournamentsData,
     isLoading: isLoadingTournaments,
-    error: tournamentsError,
   } = useQuery({
     queryKey: QUERY_KEYS.tournaments(filters),
     queryFn: () => adminTournamentService.getTournaments(filters),
@@ -176,21 +174,15 @@ export default function TournamentManagementPage() {
     retry: 2,
   });
 
-  // ===== REACT QUERY: TOURNAMENT DETAIL =====
-  const {
-    data: tournamentDetailData,
-    isLoading: isLoadingDetail,
-  } = useQuery({
-    queryKey: selectedTournament ? QUERY_KEYS.tournamentDetail(selectedTournament.id) : ['admin', 'tournament', 'none'],
-    queryFn: () => selectedTournament ? adminTournamentService.getTournamentById(selectedTournament.id) : Promise.resolve(null),
-    enabled: !!selectedTournament && isDetailModalOpen,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
-  });
+  // Note: Tournament detail modal not yet implemented
+  // Will be added in future task
 
   // ===== MUTATIONS: APPROVE TOURNAMENT =====
   const approveMutation = useMutation({
-    mutationFn: (tournamentId: string) => adminTournamentService.approveTournament(tournamentId),
+    mutationFn: (tournamentId: string) => {
+      pendingMutationsRef.current.add(`approve-${tournamentId}`);
+      return adminTournamentService.approveTournament(tournamentId);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tournaments(filters) });
@@ -202,19 +194,27 @@ export default function TournamentManagementPage() {
       // Show success toast
       showToast('success', 'Tournament Approved', `${data.title} has been approved successfully.`);
 
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`approve-${data.id}`);
+      }, 2000);
+
       // Close dialogs
       setApprovalDialog({ isOpen: false, tournament: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminTournamentServiceError) => {
+    onError: (error: AdminTournamentServiceError, tournamentId) => {
+      pendingMutationsRef.current.delete(`approve-${tournamentId}`);
       showToast('error', 'Approval Failed', error.message || 'Failed to approve tournament.');
     },
   });
 
   // ===== MUTATIONS: REJECT TOURNAMENT =====
   const rejectMutation = useMutation({
-    mutationFn: ({ tournamentId, reason }: { tournamentId: string; reason: string }) =>
-      adminTournamentService.rejectTournament(tournamentId, reason),
+    mutationFn: ({ tournamentId, reason }: { tournamentId: string; reason: string }) => {
+      pendingMutationsRef.current.add(`reject-${tournamentId}`);
+      return adminTournamentService.rejectTournament(tournamentId, reason);
+    },
     onSuccess: (data) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.tournaments(filters) });
@@ -226,11 +226,17 @@ export default function TournamentManagementPage() {
       // Show success toast
       showToast('success', 'Tournament Rejected', `${data.title} has been rejected.`);
 
+      // Remove from pending mutations after a delay
+      setTimeout(() => {
+        pendingMutationsRef.current.delete(`reject-${data.id}`);
+      }, 2000);
+
       // Close dialogs
       setRejectionDialog({ isOpen: false, tournament: null });
       setIsDetailModalOpen(false);
     },
-    onError: (error: AdminTournamentServiceError) => {
+    onError: (error: AdminTournamentServiceError, { tournamentId }) => {
+      pendingMutationsRef.current.delete(`reject-${tournamentId}`);
       showToast('error', 'Rejection Failed', error.message || 'Failed to reject tournament.');
     },
   });
@@ -311,21 +317,21 @@ export default function TournamentManagementPage() {
   }, []);
 
   const handleTournamentClick = useCallback((tournament: TournamentListItem) => {
-    setSelectedTournament(tournament as AdminTournament);
+    setSelectedTournament(tournament as unknown as AdminTournament);
     setIsDetailModalOpen(true);
   }, []);
 
   const handleApprove = useCallback((tournamentId: string) => {
     const tournament = tournamentsData?.results.find((t) => t.id === tournamentId);
     if (tournament) {
-      setApprovalDialog({ isOpen: true, tournament: tournament as AdminTournament });
+      setApprovalDialog({ isOpen: true, tournament: tournament as unknown as AdminTournament });
     }
   }, [tournamentsData]);
 
   const handleReject = useCallback((tournamentId: string) => {
     const tournament = tournamentsData?.results.find((t) => t.id === tournamentId);
     if (tournament) {
-      setRejectionDialog({ isOpen: true, tournament: tournament as AdminTournament });
+      setRejectionDialog({ isOpen: true, tournament: tournament as unknown as AdminTournament });
     }
   }, [tournamentsData]);
 
@@ -431,27 +437,63 @@ export default function TournamentManagementPage() {
         isLoading={bulkApproveMutation.isPending || bulkRejectMutation.isPending}
       />
 
+      {/* Tournament Detail Modal */}
+      <TournamentDetailModal
+        tournament={selectedTournament}
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedTournament(null);
+        }}
+        onApprove={(tournamentId) => {
+          // Close modal first, then show confirmation dialog
+          setIsDetailModalOpen(false);
+          const tournament = selectedTournament;
+          if (tournament) {
+            setApprovalDialog({ isOpen: true, tournament });
+          }
+        }}
+        onReject={(tournamentId, reason) => {
+          // Close modal first, then show rejection dialog
+          setIsDetailModalOpen(false);
+          const tournament = selectedTournament;
+          if (tournament) {
+            setRejectionDialog({ isOpen: true, tournament });
+          }
+        }}
+        onConditionalApprove={(tournamentId, requestedDocuments) => {
+          // TODO: Implement conditional approval for tournaments
+          showToast('info', 'Feature Coming Soon', 'Conditional approval for tournaments will be available soon.');
+          console.log('Conditional approval:', tournamentId, requestedDocuments);
+        }}
+        isLoading={approveMutation.isPending || rejectMutation.isPending}
+      />
+
       {/* Approval Confirmation Dialog */}
       {approvalDialog.tournament && (
-        <ApprovalConfirmationDialog
-          user={approvalDialog.tournament as any} // Reusing user dialog for now
+        <GenericApprovalDialog
           isOpen={approvalDialog.isOpen}
           isLoading={approveMutation.isPending}
           onConfirm={() => approveMutation.mutate(approvalDialog.tournament!.id)}
           onCancel={() => setApprovalDialog({ isOpen: false, tournament: null })}
+          title="Approve Tournament"
+          message="Are you sure you want to approve this tournament?"
+          itemName={approvalDialog.tournament.title}
         />
       )}
 
       {/* Rejection Dialog */}
       {rejectionDialog.tournament && (
-        <RejectionDialog
-          user={rejectionDialog.tournament as any} // Reusing user dialog for now
+        <GenericRejectionDialog
           isOpen={rejectionDialog.isOpen}
           isLoading={rejectMutation.isPending}
           onConfirm={(reason) =>
             rejectMutation.mutate({ tournamentId: rejectionDialog.tournament!.id, reason })
           }
           onCancel={() => setRejectionDialog({ isOpen: false, tournament: null })}
+          title="Reject Tournament"
+          message="Please provide a reason for rejecting this tournament."
+          itemName={rejectionDialog.tournament.title}
         />
       )}
 
@@ -489,18 +531,8 @@ export default function TournamentManagementPage() {
         }
       />
 
-      {/* Toast Notifications - ARIA Live Region */}
-      <div
-        className="fixed top-4 right-4 z-50 space-y-2"
-        role="region"
-        aria-label="Notifications"
-        aria-live="polite"
-        aria-atomic="false"
-      >
-        {toasts.map((toast) => (
-          <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
-        ))}
-      </div>
+      {/* Toast Notifications Container */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

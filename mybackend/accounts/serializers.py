@@ -46,6 +46,9 @@ class AdminUserListSerializer(serializers.ModelSerializer):
     Used in admin dashboard for displaying paginated user lists.
     """
     verification_document_url = serializers.SerializerMethodField()
+    business_document_url = serializers.SerializerMethodField()
+    certification_document_url = serializers.SerializerMethodField()
+    venue_images_urls = serializers.SerializerMethodField()
     
     class Meta:
         model = CustomUser
@@ -56,7 +59,10 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             'role',
             'approval_status',
             'created_at',
-            'verification_document_url'
+            'verification_document_url',
+            'business_document_url',
+            'certification_document_url',
+            'venue_images_urls'
         ]
         read_only_fields = fields
     
@@ -79,6 +85,50 @@ class AdminUserListSerializer(serializers.ModelSerializer):
                 f'/api/admin/users/{obj.id}/document/?token={token}'
             )
         return None
+    
+    def get_business_document_url(self, obj):
+        """Generate signed URL for business document (venue owners)"""
+        if not obj.business_document:
+            return None
+        
+        signer = TimestampSigner()
+        token = signer.sign(str(obj.id))
+        
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(
+                f'/api/admin/users/{obj.id}/business-document/?token={token}'
+            )
+        return None
+    
+    def get_certification_document_url(self, obj):
+        """Generate signed URL for certification document (organizers/referees)"""
+        if not obj.certification_document:
+            return None
+        
+        signer = TimestampSigner()
+        token = signer.sign(str(obj.id))
+        
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(
+                f'/api/admin/users/{obj.id}/certification-document/?token={token}'
+            )
+        return None
+    
+    def get_venue_images_urls(self, obj):
+        """Return list of venue image URLs"""
+        if not obj.venue_images:
+            return []
+        
+        request = self.context.get('request')
+        if request and isinstance(obj.venue_images, list):
+            # If venue_images contains relative paths, convert to absolute URLs
+            return [
+                request.build_absolute_uri(img) if not img.startswith('http') else img
+                for img in obj.venue_images
+            ]
+        return obj.venue_images or []
 
 
 class AdminUserDetailSerializer(serializers.ModelSerializer):
@@ -87,6 +137,9 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
     Used when viewing individual user details in admin dashboard.
     """
     verification_document_url = serializers.SerializerMethodField()
+    business_document_url = serializers.SerializerMethodField()
+    certification_document_url = serializers.SerializerMethodField()
+    venue_images_urls = serializers.SerializerMethodField()
     approved_by_name = serializers.CharField(
         source='approved_by.full_name',
         read_only=True,
@@ -107,6 +160,9 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
             'approved_by_name',
             'rejection_reason',
             'verification_document_url',
+            'business_document_url',
+            'certification_document_url',
+            'venue_images_urls',
             'bio',
             'date_of_birth',
             'location',
@@ -138,6 +194,50 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
             )
         return None
     
+    def get_business_document_url(self, obj):
+        """Generate signed URL for business document (venue owners)"""
+        if not obj.business_document:
+            return None
+        
+        signer = TimestampSigner()
+        token = signer.sign(str(obj.id))
+        
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(
+                f'/api/admin/users/{obj.id}/business-document/?token={token}'
+            )
+        return None
+    
+    def get_certification_document_url(self, obj):
+        """Generate signed URL for certification document (organizers/referees)"""
+        if not obj.certification_document:
+            return None
+        
+        signer = TimestampSigner()
+        token = signer.sign(str(obj.id))
+        
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(
+                f'/api/admin/users/{obj.id}/certification-document/?token={token}'
+            )
+        return None
+    
+    def get_venue_images_urls(self, obj):
+        """Return list of venue image URLs"""
+        if not obj.venue_images:
+            return []
+        
+        request = self.context.get('request')
+        if request and isinstance(obj.venue_images, list):
+            # If venue_images contains relative paths, convert to absolute URLs
+            return [
+                request.build_absolute_uri(img) if not img.startswith('http') else img
+                for img in obj.venue_images
+            ]
+        return obj.venue_images or []
+    
     def get_recent_audit_logs(self, obj):
         """
         Get last 10 audit log entries for this user.
@@ -145,3 +245,128 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
         """
         logs = obj.audit_logs.all()[:10]
         return AuditLogSerializer(logs, many=True).data
+
+
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for user registration with role-based document validation.
+    Handles file uploads for venue images and documents.
+    """
+    password = serializers.CharField(write_only=True, min_length=8)
+    venue_images = serializers.ListField(
+        child=serializers.ImageField(),
+        required=False,
+        allow_empty=True,
+        max_length=3,
+        help_text='1-3 venue images required for venue owners'
+    )
+    business_document = serializers.FileField(required=False, allow_null=True)
+    certification_document = serializers.FileField(required=False, allow_null=True)
+    
+    class Meta:
+        model = CustomUser
+        fields = [
+            'email',
+            'username',
+            'full_name',
+            'password',
+            'phone_number',
+            'role',
+            'business_name',
+            'business_registration',
+            'business_contact',
+            'business_document',
+            'venue_images',
+            'certification_document'
+        ]
+        extra_kwargs = {
+            'username': {'required': False},
+            'business_name': {'required': False},
+            'business_registration': {'required': False},
+            'business_contact': {'required': False},
+        }
+    
+    def validate(self, data):
+        """Role-based validation for documents"""
+        role = data.get('role', 'PLAYER')
+        
+        # Prevent ADMIN role registration
+        if role == 'ADMIN':
+            raise serializers.ValidationError({
+                'role': 'Cannot register as admin. Admin accounts must be created by system administrators.'
+            })
+        
+        # Venue Owner validation
+        if role == 'VENUE_OWNER':
+            venue_images = data.get('venue_images', [])
+            business_document = data.get('business_document')
+            
+            if not business_document:
+                raise serializers.ValidationError({
+                    'business_document': 'Business document is required for venue owners.'
+                })
+            
+            if not venue_images or len(venue_images) < 1:
+                raise serializers.ValidationError({
+                    'venue_images': 'At least 1 venue image is required for venue owners.'
+                })
+            
+            if len(venue_images) > 3:
+                raise serializers.ValidationError({
+                    'venue_images': 'Maximum 3 venue images allowed.'
+                })
+        
+        # Organizer validation
+        if role == 'ORGANIZER':
+            certification_document = data.get('certification_document')
+            if not certification_document:
+                raise serializers.ValidationError({
+                    'certification_document': 'Certification document is required for organizers.'
+                })
+        
+        # Referee validation
+        if role == 'REFEREE':
+            certification_document = data.get('certification_document')
+            if not certification_document:
+                raise serializers.ValidationError({
+                    'certification_document': 'Certification document is required for referees.'
+                })
+        
+        return data
+    
+    def create(self, validated_data):
+        """Create user with proper password hashing and file handling"""
+        # Extract venue images for separate handling
+        venue_images_files = validated_data.pop('venue_images', [])
+        password = validated_data.pop('password')
+        
+        # Use email as username if not provided
+        if 'username' not in validated_data or not validated_data['username']:
+            validated_data['username'] = validated_data['email']
+        
+        # Create user
+        user = CustomUser.objects.create_user(
+            password=password,
+            **validated_data
+        )
+        
+        # Handle venue images upload
+        if venue_images_files:
+            from django.core.files.storage import default_storage
+            import os
+            
+            venue_image_urls = []
+            for idx, image_file in enumerate(venue_images_files):
+                # Generate unique filename
+                ext = os.path.splitext(image_file.name)[1]
+                filename = f'venue_images/{user.id}/image_{idx}{ext}'
+                
+                # Save file
+                path = default_storage.save(filename, image_file)
+                venue_image_urls.append(path)
+            
+            user.venue_images = venue_image_urls
+            user.save(update_fields=['venue_images'])
+        
+        return user

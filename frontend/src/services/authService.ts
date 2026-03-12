@@ -25,9 +25,18 @@ class AuthService {
   /**
    * Register a new user account
    * Requirements: 1.1 - Create new user account with unverified status
+   * Supports both JSON and FormData for document uploads
    */
-  async register(data: RegisterRequest): Promise<RegisterResponse> {
-    const response = await api.post<RegisterResponse>(API_ENDPOINTS.AUTH.REGISTER, data);
+  async register(data: RegisterRequest | FormData): Promise<RegisterResponse> {
+    const config = data instanceof FormData 
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : {};
+    
+    const response = await api.post<RegisterResponse>(
+      API_ENDPOINTS.AUTH.REGISTER, 
+      data,
+      config
+    );
     return response.data;
   }
 

@@ -4,59 +4,59 @@ import {
   LoginPage,
   RegisterPage,
   VerifyEmailPage,
+  AccountPendingApprovalPage,
   DashboardPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   CreateTournamentPage,
   EditTournamentPage,
+  TournamentsPage,
+  TournamentDetailPage,
   MyTournamentsPage,
   MatchScoringPage,
+  ProfilePage,
+  AccountSettingsPage,
+  ChatsPage,
+  NotificationsPage,
+  PlayerFinderPage,
+  PlayerConnectionsPage,
+  PlayersPage,
+  TeamsPage,
+  TeamDetailsPage,
+  EditTeamPage,
+  TeamAnalyticsPage,
+  MyStatsPage,
+  PlayerStatisticsPage,
   RefereeAvailabilityPage,
-  RefereeBookingsPage,
   RefereeSchedulePage,
-  VenueListPage,
+  RefereeSelectionPage,
+  RefereeDashboardPage,
   VenueManagementPage,
   VenueBookingsPage,
   CreateVenuePage,
   EditVenuePage,
   VenueDetailsPage,
-  NotificationsPage,
+  VenueSearchPage,
+  BookingsPage,
   GlobalSearchPage,
-  WalletPage
+  WalletPage,
 } from './pages';
-import TournamentsPage from './pages/TournamentsPage';
-import TournamentDetailPage from './pages/TournamentDetailPage';
-import RefereeSelectionPage from './pages/RefereeSelectionPage';
-import RefereeDashboardPage from './pages/RefereeDashboardPage';
-import RefereeManagementPage from './pages/RefereeManagementPage';
-import RefereeRatingsPage from './pages/RefereeRatingsPage';
-import ProfilePage from './pages/ProfilePage';
-import PlayersPage from './pages/PlayersPage';
-import ChatsPage from './pages/ChatsPage';
-import PlayerFinderPage from './pages/PlayerFinderPage';
-import PlayerConnectionsPage from './pages/PlayerConnectionsPage';
-import AccountSettingsPage from './pages/AccountSettingsPage';
-import VenueBookingPage from './pages/VenueBookingPage';
-import VenuesPage from './pages/VenuesPage';
-import VenueSearchPage from './pages/VenueSearchPage';
-import BookingsPage from './pages/BookingsPage';
-import TeamsPage from './pages/TeamsPage';
-import TeamDetailsPage from './pages/TeamDetailsPage';
-import EditTeamPage from './pages/EditTeamPage';
-import TeamAnalyticsPage from './pages/TeamAnalyticsPage';
-import MyStatsPage from './pages/MyStatsPage';
-import PlayerStatisticsPage from './pages/PlayerStatisticsPage';
-import PaymentHistoryPage from './pages/PaymentHistoryPage';
-import PaymentCallbackPage from './pages/PaymentCallbackPage';
-import AccountPendingApprovalPage from './pages/AccountPendingApprovalPage';
+
+
 import AccountStatusPage from './pages/AccountStatusPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import MainLayout from './components/MainLayout';
-import AdminLayout from './components/admin/AdminLayout';
-import UserManagementPage from './pages/admin/UserManagementPage';
+import PaymentCallbackPage from './pages/PaymentCallbackPage';
+import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import RefereeRatingsPage from './pages/RefereeRatingsPage';
+import VenueBookingPage from './pages/VenueBookingPage';
+
+
 import TournamentManagementPage from './pages/admin/TournamentManagementPage';
 import AdminVenueManagementPage from './pages/admin/VenueManagementPage';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import UserManagementPage from './pages/admin/UserManagementPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import MainLayout from './components/MainLayout';
+import AdminLayout from './components/admin/AdminLayout';
 
 // Router configuration
 export const router = createBrowserRouter([
@@ -116,6 +116,10 @@ export const router = createBrowserRouter([
       {
         path: 'users',
         element: <UserManagementPage />,
+      },
+      {
+        path: 'referees',
+        element: <UserManagementPage />, // Use UserManagementPage for referees too
       },
       {
         path: 'tournaments',
@@ -226,7 +230,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'referee/management',
-        element: <RefereeManagementPage />,
+        element: <UserManagementPage />,
       },
       {
         path: 'referee/availability',
@@ -234,7 +238,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'referee/bookings',
-        element: <RefereeManagementPage />, // Redirect to management page
+        element: <UserManagementPage />,
       },
       {
         path: 'referee/ratings',

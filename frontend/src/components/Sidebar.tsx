@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3, ChevronLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -268,9 +268,11 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
             {!isCollapsed && (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">A</span>
-                  </div>
+                  <img 
+                    src="/images/Logo.jpg" 
+                    alt="ArenaX Logo" 
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-lg flex-shrink-0"
+                  />
                   <span className="text-xl font-bold text-gray-900">ArenaX</span>
                 </div>
                 {/* Collapse button - Desktop only, inline with logo */}
@@ -286,10 +288,14 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
             {isCollapsed && (
               <button
                 onClick={onToggleCollapse}
-                className="hidden lg:flex w-8 h-8 bg-purple-600 rounded-lg items-center justify-center hover:bg-purple-700 transition-colors"
+                className="hidden lg:flex w-10 h-10 rounded-lg items-center justify-center hover:bg-gray-100 transition-colors overflow-hidden"
                 title="Expand sidebar"
               >
-                <ChevronRight className="h-4 w-4 text-white" />
+                <img 
+                  src="/images/Logo.jpg" 
+                  alt="ArenaX Logo" 
+                  className="w-8 h-8 object-contain"
+                />
               </button>
             )}
             <button

@@ -234,13 +234,91 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               </div>
             </section>
 
-            {/* Verification Document (Requirement 9.3) */}
+            {/* Documents Section (Requirement 9.3) */}
             <section className="mb-4 sm:mb-6">
-              <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2 sm:mb-3">Verification Document</h4>
-              <DocumentViewer
-                documentUrl={user.verification_document_url}
-                documentName="User Verification Document"
-              />
+              <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2 sm:mb-3">Documents</h4>
+              
+              {/* Venue Owner Documents */}
+              {user.role === 'VENUE_OWNER' && (
+                <div className="space-y-4">
+                  {/* Venue Images */}
+                  {user.venue_images_urls && user.venue_images_urls.length > 0 && (
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                        Venue Images ({user.venue_images_urls.length})
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {user.venue_images_urls.map((imageUrl, index) => (
+                          <a
+                            key={index}
+                            href={imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block relative group"
+                          >
+                            <img
+                              src={imageUrl}
+                              alt={`Venue ${index + 1}`}
+                              className="w-full h-32 object-cover rounded-lg border border-gray-200 group-hover:border-blue-500 transition-colors"
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-lg transition-opacity flex items-center justify-center">
+                              <span className="text-white opacity-0 group-hover:opacity-100 text-sm font-medium">
+                                View Full Size
+                              </span>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Business Document */}
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                      Business Document
+                    </label>
+                    <DocumentViewer
+                      documentUrl={user.business_document_url}
+                      documentName="Business Registration/License"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Organizer/Referee Certification */}
+              {(user.role === 'ORGANIZER' || user.role === 'REFEREE') && (
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    Certification Document
+                  </label>
+                  <DocumentViewer
+                    documentUrl={user.certification_document_url}
+                    documentName={`${user.role === 'ORGANIZER' ? 'Organizer' : 'Referee'} Certification`}
+                  />
+                </div>
+              )}
+              
+              {/* Player - No documents required */}
+              {user.role === 'PLAYER' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs sm:text-sm text-blue-700">
+                    No documents required for player accounts.
+                  </p>
+                </div>
+              )}
+              
+              {/* Legacy verification document (if exists) */}
+              {user.verification_document_url && (
+                <div className="mt-4">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    Legacy Verification Document
+                  </label>
+                  <DocumentViewer
+                    documentUrl={user.verification_document_url}
+                    documentName="User Verification Document"
+                  />
+                </div>
+              )}
             </section>
 
             {/* Recent Audit Logs */}

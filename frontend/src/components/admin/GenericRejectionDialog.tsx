@@ -1,20 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import type { AdminUser } from '../../types/admin.types';
+/**
+ * GenericRejectionDialog - Reusable rejection dialog
+ * Works for users, tournaments, and venues
+ */
 
-interface RejectionDialogProps {
-  user: AdminUser;
+import React, { useState, useEffect } from 'react';
+
+interface GenericRejectionDialogProps {
   isOpen: boolean;
   isLoading: boolean;
   onConfirm: (reason: string) => void;
   onCancel: () => void;
+  title: string;
+  message: string;
+  itemName: string;
+  itemEmail?: string;
 }
 
-export const RejectionDialog: React.FC<RejectionDialogProps> = ({
-  user,
+export const GenericRejectionDialog: React.FC<GenericRejectionDialogProps> = ({
   isOpen,
   isLoading,
   onConfirm,
   onCancel,
+  title,
+  message,
+  itemName,
+  itemEmail,
 }) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [error, setError] = useState('');
@@ -66,23 +76,25 @@ export const RejectionDialog: React.FC<RejectionDialogProps> = ({
           id="rejection-dialog-title"
           className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4"
         >
-          Reject User Registration
+          {title}
         </h2>
 
         <div className="mb-4 sm:mb-6">
           <p className="text-sm sm:text-base text-gray-700 mb-3 sm:mb-4">
-            Please provide a reason for rejecting this user's registration.
+            {message}
           </p>
           
           <div className="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-2 mb-3 sm:mb-4">
             <div>
               <span className="text-xs sm:text-sm font-medium text-gray-600">Name:</span>
-              <p className="text-sm sm:text-base text-gray-900 break-words">{user.full_name}</p>
+              <p className="text-sm sm:text-base text-gray-900 break-words">{itemName}</p>
             </div>
-            <div>
-              <span className="text-xs sm:text-sm font-medium text-gray-600">Email:</span>
-              <p className="text-sm sm:text-base text-gray-900 break-all">{user.email}</p>
-            </div>
+            {itemEmail && (
+              <div>
+                <span className="text-xs sm:text-sm font-medium text-gray-600">Email:</span>
+                <p className="text-sm sm:text-base text-gray-900 break-all">{itemEmail}</p>
+              </div>
+            )}
           </div>
 
           <div>

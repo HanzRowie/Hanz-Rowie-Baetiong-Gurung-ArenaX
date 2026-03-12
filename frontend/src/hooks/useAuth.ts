@@ -42,15 +42,18 @@ export const useAuth = () => {
     }
   };
 
-  const register = async (data: RegisterRequest) => {
+  const register = async (data: RegisterRequest | FormData) => {
     try {
       dispatch(setLoading(true));
       const response = await authService.register(data);
       
       dispatch(setLoading(false));
       
+      // Extract email from data
+      const email = data instanceof FormData ? data.get('email') as string : data.email;
+      
       // Redirect to email verification page
-      navigate(ROUTES.VERIFY_EMAIL, { state: { email: data.email } });
+      navigate(ROUTES.VERIFY_EMAIL, { state: { email } });
       
       return { success: true, message: 'Registration successful! Please verify your email.', otp: response.otp };
     } catch (error: unknown) {

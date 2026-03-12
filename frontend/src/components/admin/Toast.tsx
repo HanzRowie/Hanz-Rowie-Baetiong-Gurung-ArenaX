@@ -131,22 +131,30 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
 
   return (
     <div
-      className={`${getBackgroundColor()} rounded-lg shadow-lg p-4 mb-4 max-w-md w-full animate-slide-in`}
+      className={`${getBackgroundColor()} rounded-lg shadow-xl border-2 ${
+        type === 'success' ? 'border-green-200' :
+        type === 'error' ? 'border-red-200' :
+        type === 'warning' ? 'border-yellow-200' :
+        'border-blue-200'
+      } p-4 max-w-md w-full transform transition-all duration-300 ease-in-out`}
       role="alert"
       aria-live="assertive"
       aria-atomic="true"
+      style={{
+        animation: 'slideInRight 0.3s ease-out'
+      }}
     >
       <div className="flex items-start">
         <div className="flex-shrink-0">{getIcon()}</div>
         <div className="ml-3 flex-1">
-          <p className={`text-sm font-medium ${getTextColor()}`}>{title}</p>
-          <p className={`mt-1 text-sm ${getTextColor()}`}>{message}</p>
+          <p className={`text-sm font-semibold ${getTextColor()}`}>{title}</p>
+          <p className={`mt-1 text-sm ${getTextColor()} opacity-90`}>{message}</p>
         </div>
         <div className="ml-4 flex-shrink-0 flex">
           <button
             type="button"
             onClick={() => onDismiss(id)}
-            className={`inline-flex rounded-md ${getBackgroundColor()} ${getTextColor()} hover:opacity-75 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-green-50 focus:ring-green-600`}
+            className={`inline-flex rounded-md ${getBackgroundColor()} ${getTextColor()} hover:opacity-75 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-green-50 focus:ring-green-600 transition-opacity`}
             aria-label="Dismiss notification"
           >
             <span className="sr-only">Close</span>
@@ -169,3 +177,22 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
     </div>
   );
 };
+
+// Add keyframe animation styles
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+`;
+if (!document.head.querySelector('style[data-toast-animations]')) {
+  style.setAttribute('data-toast-animations', 'true');
+  document.head.appendChild(style);
+}

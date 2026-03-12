@@ -40,6 +40,9 @@ export interface AdminUser {
   approved_by_name?: string;
   rejection_reason?: string;
   verification_document_url?: string;
+  business_document_url?: string;
+  certification_document_url?: string;
+  venue_images_urls?: string[];
   bio?: string;
   date_of_birth?: string;
   location?: string;
@@ -63,6 +66,9 @@ export interface UserListItem {
   approval_status: ApprovalStatus;
   created_at: string;
   verification_document_url?: string;
+  business_document_url?: string;
+  certification_document_url?: string;
+  venue_images_urls?: string[];
 }
 
 /**

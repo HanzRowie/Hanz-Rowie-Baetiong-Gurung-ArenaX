@@ -25,43 +25,43 @@ from .player_statistics import PlayerStatisticsService
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
 def register(request):
-    """User registration with email verification"""
+    """User registration with email verification and document upload"""
     try:
-        data = request.data
-        print(f"Register request data: {data}")  # Debug logging
-
-        email = data.get('email')
-        username = data.get('username') or email  # Use email as username if not provided
-        full_name = data.get('full_name')
-        password = data.get('password')
-        role = data.get('role', 'PLAYER')
-        phone_number = data.get('phone_number', '')  # Get phone number from registration
-
-        if not all([email, full_name, password]):
-            return Response({'error': 'Email, full name, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Prevent ADMIN role registration - admins can only be created via database/management command
-        if role == 'ADMIN':
-            return Response({'error': 'Cannot register as admin. Admin accounts must be created by system administrators.'}, status=status.HTTP_403_FORBIDDEN)
-
+        from .serializers import UserRegistrationSerializer
+        
+        print(f"Register request data: {request.data}")  # Debug logging
+        print(f"Register request files: {request.FILES}")  # Debug logging
+        
+        # Prepare data for serializer
+        data = request.data.copy()
+        
+        # Handle venue images (multiple files)
+        venue_images = request.FILES.getlist('venue_images')
+        if venue_images:
+            data['venue_images'] = venue_images
+        
+        # Validate and create user using serializer
+        serializer = UserRegistrationSerializer(data=data)
+        
+        if not serializer.is_valid():
+            print(f"Validation errors: {serializer.errors}")
+            return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check for existing email/username
+        email = serializer.validated_data.get('email')
+        username = serializer.validated_data.get('username') or email
+        
         if CustomUser.objects.filter(email=email).exists():
             return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         if CustomUser.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
-
+        
         # Create user
-        print(f"Creating user with: username={username}, email={email}, full_name={full_name}, role={role}, phone={phone_number}")  # Debug logging
-        user = CustomUser.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            full_name=full_name,
-            role=role,
-            phone_number=phone_number  # Save phone number during registration
-        )
-        print(f"User created successfully: {user.id}")  # Debug logging
+        user = serializer.save()
+        print(f"User created successfully: {user.id}, role: {user.role}")  # Debug logging
 
         # Create email verification OTP
         otp = EmailVerification.objects.create(user=user)

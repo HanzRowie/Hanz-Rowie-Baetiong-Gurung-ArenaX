@@ -2,11 +2,13 @@
 Admin Control System API Views
 Provides endpoints for user management and approval workflow.
 """
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.clickjacking import xframe_options_exempt
 from datetime import timedelta
 
 from .models import CustomUser, AdminAuditLog
@@ -34,11 +36,36 @@ class AdminUserViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
     throttle_classes = [AdminRateThrottle]
     
+    def get_permissions(self):
+        """
+        Allow unauthenticated access to document endpoints if they have a valid token.
+        Standard behavior for <img> and <iframe> tags which don't send headers.
+        """
+        action = getattr(self, 'action', None)
+        if action in ['get_business_document', 'get_certification_document', 'get_verification_document']:
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
+    def get_authenticators(self):
+        """
+        Disable authentication for document endpoints to prevent 401 errors
+        when accessed via <img> or <iframe> tags.
+        Note: self.action might not be set yet when this is called.
+        """
+        action = getattr(self, 'action', None)
+        path = self.request.path if hasattr(self, 'request') else ''
+        
+        is_document_path = any(p in path for p in ['/certification-document/', '/business-document/', '/document/'])
+        
+        if action in ['get_business_document', 'get_certification_document', 'get_verification_document'] or is_document_path:
+            return []
+        return super().get_authenticators()
+
     def get_serializer_class(self):
         """
         Use different serializers for list and detail views.
         """
-        if self.action == 'retrieve':
+        if getattr(self, 'action', None) == 'retrieve':
             return AdminUserDetailSerializer
         return AdminUserListSerializer
     
@@ -565,3 +592,179 @@ The Arena X Team
             'rejected_count': rejected_count,
             'total_requested': len(user_ids)
         })
+
+    
+    @method_decorator(xframe_options_exempt)
+    @action(detail=True, methods=['get'], url_path='business-document')
+    def get_business_document(self, request, pk=None):
+        """
+        Serve business document with signed URL validation.
+        Only accessible by admin users.
+        """
+        from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+        from django.http import FileResponse, Http404
+        
+        user = self.get_object()
+        token = request.query_params.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'Token is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify signed token (valid for 1 hour)
+        signer = TimestampSigner()
+        try:
+            unsigned_value = signer.unsign(token, max_age=3600)
+            if unsigned_value != str(user.id):
+                return Response(
+                    {'error': 'Invalid token'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except (SignatureExpired, BadSignature):
+            return Response(
+                {'error': 'Token expired or invalid'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if document exists
+        if not user.business_document:
+            raise Http404('Business document not found')
+        
+        # Log document access (only if authenticated)
+        if request.user and request.user.is_authenticated:
+            AdminAuditLog.objects.create(
+                administrator=request.user,
+                action_type='VIEW_DOCUMENT',
+                target_user=user,
+                metadata={
+                    'document_type': 'business_document',
+                    'ip_address': request.META.get('REMOTE_ADDR'),
+                    'access_method': 'token_only' if not request.user.is_authenticated else 'authenticated'
+                }
+            )
+        
+        # Serve file
+        return FileResponse(
+            user.business_document.open('rb'),
+            as_attachment=False,
+            filename=user.business_document.name.split('/')[-1]
+        )
+    
+    @method_decorator(xframe_options_exempt)
+    @action(detail=True, methods=['get'], url_path='certification-document')
+    def get_certification_document(self, request, pk=None):
+        """
+        Serve certification document with signed URL validation.
+        Only accessible by admin users.
+        """
+        from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+        from django.http import FileResponse, Http404
+        
+        user = self.get_object()
+        token = request.query_params.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'Token is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify signed token (valid for 1 hour)
+        signer = TimestampSigner()
+        try:
+            unsigned_value = signer.unsign(token, max_age=3600)
+            if unsigned_value != str(user.id):
+                return Response(
+                    {'error': 'Invalid token'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except (SignatureExpired, BadSignature):
+            return Response(
+                {'error': 'Token expired or invalid'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if document exists
+        if not user.certification_document:
+            raise Http404('Certification document not found')
+        
+        # Log document access (only if authenticated)
+        if request.user and request.user.is_authenticated:
+            AdminAuditLog.objects.create(
+                administrator=request.user,
+                action_type='VIEW_DOCUMENT',
+                target_user=user,
+                metadata={
+                    'document_type': 'certification_document',
+                    'ip_address': request.META.get('REMOTE_ADDR'),
+                    'access_method': 'token_only' if not request.user.is_authenticated else 'authenticated'
+                }
+            )
+        
+        # Serve file
+        return FileResponse(
+            user.certification_document.open('rb'),
+            as_attachment=False,
+            filename=user.certification_document.name.split('/')[-1]
+        )
+    
+    @method_decorator(xframe_options_exempt)
+    @action(detail=True, methods=['get'], url_path='document')
+    def get_verification_document(self, request, pk=None):
+        """
+        Serve verification document with signed URL validation.
+        Only accessible by admin users.
+        (Legacy endpoint - kept for backward compatibility)
+        """
+        from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+        from django.http import FileResponse, Http404
+        
+        user = self.get_object()
+        token = request.query_params.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'Token is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verify signed token (valid for 1 hour)
+        signer = TimestampSigner()
+        try:
+            unsigned_value = signer.unsign(token, max_age=3600)
+            if unsigned_value != str(user.id):
+                return Response(
+                    {'error': 'Invalid token'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except (SignatureExpired, BadSignature):
+            return Response(
+                {'error': 'Token expired or invalid'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if document exists
+        if not user.verification_document:
+            raise Http404('Verification document not found')
+        
+        # Log document access (only if authenticated)
+        if request.user and request.user.is_authenticated:
+            AdminAuditLog.objects.create(
+                administrator=request.user,
+                action_type='VIEW_DOCUMENT',
+                target_user=user,
+                metadata={
+                    'document_type': 'verification_document',
+                    'ip_address': request.META.get('REMOTE_ADDR'),
+                    'access_method': 'token_only' if not request.user.is_authenticated else 'authenticated'
+                }
+            )
+        
+        # Serve file
+        return FileResponse(
+            user.verification_document.open('rb'),
+            as_attachment=False,
+            filename=user.verification_document.name.split('/')[-1]
+        )

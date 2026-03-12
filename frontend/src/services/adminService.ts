@@ -26,15 +26,24 @@ import type {
  * Error types for categorizing admin service errors
  * Requirement 20.2: Distinguish between error types
  */
-export enum AdminErrorType {
-  NETWORK = 'NETWORK',
-  PERMISSION = 'PERMISSION',
-  VALIDATION = 'VALIDATION',
-  NOT_FOUND = 'NOT_FOUND',
-  AUTHENTICATION = 'AUTHENTICATION',
-  SERVER = 'SERVER',
-  UNKNOWN = 'UNKNOWN',
-}
+export type AdminErrorType =
+  | 'NETWORK'
+  | 'PERMISSION'
+  | 'VALIDATION'
+  | 'NOT_FOUND'
+  | 'AUTHENTICATION'
+  | 'SERVER'
+  | 'UNKNOWN';
+
+export const AdminErrorTypes = {
+  NETWORK: 'NETWORK' as AdminErrorType,
+  PERMISSION: 'PERMISSION' as AdminErrorType,
+  VALIDATION: 'VALIDATION' as AdminErrorType,
+  NOT_FOUND: 'NOT_FOUND' as AdminErrorType,
+  AUTHENTICATION: 'AUTHENTICATION' as AdminErrorType,
+  SERVER: 'SERVER' as AdminErrorType,
+  UNKNOWN: 'UNKNOWN' as AdminErrorType,
+};
 
 /**
  * Custom error class for admin service operations
@@ -50,7 +59,7 @@ export class AdminServiceError extends Error {
 
   constructor(
     message: string,
-    type: AdminErrorType = AdminErrorType.UNKNOWN,
+    type: AdminErrorType = 'UNKNOWN',
     statusCode?: number,
     details?: any,
     isRetryable: boolean = false
@@ -61,11 +70,6 @@ export class AdminServiceError extends Error {
     this.statusCode = statusCode;
     this.details = details;
     this.isRetryable = isRetryable;
-    
-    // Maintains proper stack trace for where our error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, AdminServiceError);
-    }
   }
 
   /**
@@ -81,7 +85,7 @@ export class AdminServiceError extends Error {
     if (!error.response) {
       return new AdminServiceError(
         'Network error. Please check your internet connection and try again.',
-        AdminErrorType.NETWORK,
+        AdminErrorTypes.NETWORK,
         undefined,
         error,
         true // Network errors are retryable
@@ -93,7 +97,7 @@ export class AdminServiceError extends Error {
       case 400:
         return new AdminServiceError(
           errorMessage || 'Invalid request. Please check your input.',
-          AdminErrorType.VALIDATION,
+          AdminErrorTypes.VALIDATION,
           400,
           responseData,
           false
@@ -102,7 +106,7 @@ export class AdminServiceError extends Error {
       case 401:
         return new AdminServiceError(
           'Authentication required. Please log in.',
-          AdminErrorType.AUTHENTICATION,
+          AdminErrorTypes.AUTHENTICATION,
           401,
           responseData,
           false
@@ -111,7 +115,7 @@ export class AdminServiceError extends Error {
       case 403:
         return new AdminServiceError(
           errorMessage || 'You do not have permission to perform this action. Admin access required.',
-          AdminErrorType.PERMISSION,
+          AdminErrorTypes.PERMISSION,
           403,
           responseData,
           false
@@ -120,7 +124,7 @@ export class AdminServiceError extends Error {
       case 404:
         return new AdminServiceError(
           errorMessage || 'The requested resource was not found.',
-          AdminErrorType.NOT_FOUND,
+          AdminErrorTypes.NOT_FOUND,
           404,
           responseData,
           false
@@ -132,7 +136,7 @@ export class AdminServiceError extends Error {
       case 504:
         return new AdminServiceError(
           'Server error. Please try again later.',
-          AdminErrorType.SERVER,
+          AdminErrorTypes.SERVER,
           statusCode,
           responseData,
           true // Server errors are retryable
@@ -141,7 +145,7 @@ export class AdminServiceError extends Error {
       default:
         return new AdminServiceError(
           errorMessage || 'An unexpected error occurred. Please try again.',
-          AdminErrorType.UNKNOWN,
+          AdminErrorTypes.UNKNOWN,
           statusCode,
           responseData,
           true
@@ -167,7 +171,7 @@ export class AdminServiceError extends Error {
 /**
  * Base URL for admin API endpoints
  */
-const ADMIN_API_BASE = '/api/accounts/admin/users';
+const ADMIN_API_BASE = '/api/admin/users';
 
 /**
  * Admin Service
@@ -187,7 +191,7 @@ class AdminService {
   async getUsers(filters?: UserFilters): Promise<PaginatedUsers> {
     try {
       const params = new URLSearchParams();
-      
+
       // Add filters to query parameters
       if (filters?.role) {
         params.append('role', filters.role);
@@ -213,7 +217,7 @@ class AdminService {
 
       const queryString = params.toString();
       const url = queryString ? `${ADMIN_API_BASE}/?${queryString}` : `${ADMIN_API_BASE}/`;
-      
+
       const response = await api.get<PaginatedUsers>(url);
       return response.data;
     } catch (error: any) {
@@ -298,7 +302,7 @@ class AdminService {
       if (!rejectionReason || rejectionReason.trim().length < 10) {
         throw new AdminServiceError(
           'Rejection reason must be at least 10 characters.',
-          AdminErrorType.VALIDATION,
+          AdminErrorTypes.VALIDATION,
           400,
           { field: 'rejection_reason', minLength: 10 },
           false
@@ -317,12 +321,12 @@ class AdminService {
       return response.data;
     } catch (error: any) {
       console.error('AdminService.rejectUser error:', error);
-      
+
       // Re-throw AdminServiceError instances
       if (error instanceof AdminServiceError) {
         throw error;
       }
-      
+
       throw AdminServiceError.fromAxiosError(error);
     }
   }
@@ -343,7 +347,7 @@ class AdminService {
       if (!userIds || userIds.length === 0) {
         throw new AdminServiceError(
           'At least one user must be selected for bulk approval.',
-          AdminErrorType.VALIDATION,
+          AdminErrorTypes.VALIDATION,
           400,
           { field: 'user_ids', minLength: 1 },
           false
@@ -361,12 +365,12 @@ class AdminService {
       return response.data;
     } catch (error: any) {
       console.error('AdminService.bulkApprove error:', error);
-      
+
       // Re-throw AdminServiceError instances
       if (error instanceof AdminServiceError) {
         throw error;
       }
-      
+
       throw AdminServiceError.fromAxiosError(error);
     }
   }
@@ -388,7 +392,7 @@ class AdminService {
       if (!userIds || userIds.length === 0) {
         throw new AdminServiceError(
           'At least one user must be selected for bulk rejection.',
-          AdminErrorType.VALIDATION,
+          AdminErrorTypes.VALIDATION,
           400,
           { field: 'user_ids', minLength: 1 },
           false
@@ -398,7 +402,7 @@ class AdminService {
       if (!rejectionReason || rejectionReason.trim().length < 10) {
         throw new AdminServiceError(
           'Rejection reason must be at least 10 characters.',
-          AdminErrorType.VALIDATION,
+          AdminErrorTypes.VALIDATION,
           400,
           { field: 'rejection_reason', minLength: 10 },
           false
@@ -417,12 +421,12 @@ class AdminService {
       return response.data;
     } catch (error: any) {
       console.error('AdminService.bulkReject error:', error);
-      
+
       // Re-throw AdminServiceError instances
       if (error instanceof AdminServiceError) {
         throw error;
       }
-      
+
       throw AdminServiceError.fromAxiosError(error);
     }
   }
