@@ -28,6 +28,8 @@ import {
   MyStatsPage,
   PlayerStatisticsPage,
   RefereeAvailabilityPage,
+  RefereeBookingsPage,
+  RefereeManagementPage,
   RefereeSchedulePage,
   RefereeSelectionPage,
   RefereeDashboardPage,
@@ -230,7 +232,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'referee/management',
-        element: <UserManagementPage />,
+        element: <RefereeManagementPage />,
       },
       {
         path: 'referee/availability',
@@ -238,7 +240,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'referee/bookings',
-        element: <UserManagementPage />,
+        element: <RefereeBookingsPage />,
       },
       {
         path: 'referee/ratings',
