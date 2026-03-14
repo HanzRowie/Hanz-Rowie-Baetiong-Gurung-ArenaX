@@ -20,6 +20,8 @@ urlpatterns = [
     # Include URLs from all apps
     path('api/accounts/', include('accounts.urls')),
     path('api/admin/', include('accounts.admin_urls')),
+    path('api/admin/', include('venues.admin_urls')),
+    path('api/admin/', include('tournaments.admin_urls')),
     path('api/tournaments/', include('tournaments.urls')),
     path('api/chat/', include('chat.urls')),
     path('api/notifications/', include('notifications.urls')),

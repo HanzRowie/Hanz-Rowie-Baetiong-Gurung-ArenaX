@@ -235,12 +235,16 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({
                     <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">{venue.name}</p>
                   </div>
                   <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-500">Sport Type</label>
-                    <p className="mt-1 text-xs sm:text-sm text-gray-900">{venue.sport_type}</p>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-500">Sport Types</label>
+                    <p className="mt-1 text-xs sm:text-sm text-gray-900">
+                      {Array.isArray(venue.sport_types) ? venue.sport_types.join(', ') : 'N/A'}
+                    </p>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-500">Address</label>
-                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">{venue.address}</p>
+                    <label className="block text-xs sm:text-sm font-medium text-gray-500">Location</label>
+                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">
+                      {(venue as any).location || venue.address || 'N/A'}
+                    </p>
                   </div>
                   {venue.capacity && (
                     <div>
@@ -252,21 +256,6 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({
                     <label className="block text-xs sm:text-sm font-medium text-gray-500">Submission Date</label>
                     <p className="mt-1 text-xs sm:text-sm text-gray-900">{formatDate(venue.created_at)}</p>
                   </div>
-                  {venue.amenities && venue.amenities.length > 0 && (
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs sm:text-sm font-medium text-gray-500">Amenities</label>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {venue.amenities.map((amenity, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                          >
-                            {amenity}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </section>
 
@@ -276,11 +265,15 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-500">Name</label>
-                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">{venue.owner_name}</p>
+                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">
+                      {(venue as any).owner_details?.full_name || venue.owner_name || 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-500">Email</label>
-                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-all">{venue.owner_email}</p>
+                    <p className="mt-1 text-xs sm:text-sm text-gray-900 break-all">
+                      {(venue as any).owner_details?.email || venue.owner_email || 'N/A'}
+                    </p>
                   </div>
                 </div>
               </section>
@@ -289,16 +282,25 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({
               <section className="mb-4 sm:mb-6">
                 <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2 sm:mb-3">Operating Hours</h4>
                 <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                  {venue.operating_hours && Object.keys(venue.operating_hours).length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {Object.entries(venue.operating_hours).map(([day, hours]) => (
-                        <div key={day} className="flex justify-between items-center py-1">
-                          <span className="text-xs sm:text-sm font-medium text-gray-700 capitalize">{day}</span>
+                  {(venue as any).default_opening_time && (venue as any).default_closing_time ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs sm:text-sm font-medium text-gray-700">Default Hours</span>
+                        <span className="text-xs sm:text-sm text-gray-900">
+                          {(venue as any).default_opening_time} - {(venue as any).default_closing_time}
+                        </span>
+                      </div>
+                      {(venue as any).operating_days && Array.isArray((venue as any).operating_days) && (venue as any).operating_days.length > 0 && (
+                        <div className="mt-2">
+                          <span className="text-xs sm:text-sm font-medium text-gray-700">Operating Days: </span>
                           <span className="text-xs sm:text-sm text-gray-900">
-                            {hours.is_closed ? 'Closed' : `${hours.open} - ${hours.close}`}
+                            {(venue as any).operating_days.map((day: number) => {
+                              const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                              return days[day - 1] || day;
+                            }).join(', ')}
                           </span>
                         </div>
-                      ))}
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">No operating hours specified</p>
@@ -310,28 +312,12 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({
               <section className="mb-4 sm:mb-6">
                 <h4 className="text-sm sm:text-md font-semibold text-gray-900 mb-2 sm:mb-3">Pricing Information</h4>
                 <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                  {venue.pricing ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-500">Hourly Rate</label>
-                        <p className="mt-1 text-xs sm:text-sm text-gray-900">
-                          {venue.pricing.currency} {venue.pricing.hourly_rate.toLocaleString()}
-                        </p>
-                      </div>
-                      {venue.pricing.deposit_required && (
-                        <div>
-                          <label className="block text-xs sm:text-sm font-medium text-gray-500">Deposit Required</label>
-                          <p className="mt-1 text-xs sm:text-sm text-gray-900">
-                            {venue.pricing.currency} {venue.pricing.deposit_required.toLocaleString()}
-                          </p>
-                        </div>
-                      )}
-                      {venue.pricing.cancellation_policy && (
-                        <div className="sm:col-span-2">
-                          <label className="block text-xs sm:text-sm font-medium text-gray-500">Cancellation Policy</label>
-                          <p className="mt-1 text-xs sm:text-sm text-gray-900 break-words">{venue.pricing.cancellation_policy}</p>
-                        </div>
-                      )}
+                  {(venue as any).price_per_hour ? (
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-500">Hourly Rate</label>
+                      <p className="mt-1 text-xs sm:text-sm text-gray-900">
+                        NPR {Number((venue as any).price_per_hour).toLocaleString()}
+                      </p>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">No pricing information available</p>

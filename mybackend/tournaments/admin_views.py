@@ -656,29 +656,15 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Get tournament statistics with 60-second caching.
         
-        Returns overall counts of tournaments by approval status and
-        detailed breakdown by sport_type.
+        Returns overall counts of tournaments by approval status and total count.
         
         Response Format:
         {
-            "total_pending": 5,
-            "total_approved": 20,
-            "total_rejected": 3,
-            "total_conditional_approval": 2,
-            "by_sport_type": {
-                "FUTSAL": {
-                    "pending": 3,
-                    "approved": 12,
-                    "rejected": 2,
-                    "conditional_approval": 1
-                },
-                "BADMINTON": {
-                    "pending": 2,
-                    "approved": 8,
-                    "rejected": 1,
-                    "conditional_approval": 1
-                }
-            }
+            "total": 30,
+            "pending": 5,
+            "approved": 20,
+            "rejected": 3,
+            "conditional_approval": 2
         }
         
         Requirements: 4.7, 20.5
@@ -691,46 +677,21 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
             return Response(cached_stats, status=status.HTTP_200_OK)
         
         # Calculate overall counts
-        total_pending = Tournament.objects.filter(approval_status='PENDING').count()
-        total_approved = Tournament.objects.filter(approval_status='APPROVED').count()
-        total_rejected = Tournament.objects.filter(approval_status='REJECTED').count()
-        total_conditional_approval = Tournament.objects.filter(
+        total = Tournament.objects.count()
+        pending = Tournament.objects.filter(approval_status='PENDING').count()
+        approved = Tournament.objects.filter(approval_status='APPROVED').count()
+        rejected = Tournament.objects.filter(approval_status='REJECTED').count()
+        conditional_approval = Tournament.objects.filter(
             approval_status='CONDITIONAL_APPROVAL'
         ).count()
         
-        # Calculate counts by sport_type
-        by_sport_type = {}
-        
-        # Get all sport types from the model
-        sport_types = ['FUTSAL', 'BADMINTON']
-        
-        for sport in sport_types:
-            by_sport_type[sport] = {
-                'pending': Tournament.objects.filter(
-                    sport_type=sport,
-                    approval_status='PENDING'
-                ).count(),
-                'approved': Tournament.objects.filter(
-                    sport_type=sport,
-                    approval_status='APPROVED'
-                ).count(),
-                'rejected': Tournament.objects.filter(
-                    sport_type=sport,
-                    approval_status='REJECTED'
-                ).count(),
-                'conditional_approval': Tournament.objects.filter(
-                    sport_type=sport,
-                    approval_status='CONDITIONAL_APPROVAL'
-                ).count(),
-            }
-        
         # Build response
         stats_data = {
-            'total_pending': total_pending,
-            'total_approved': total_approved,
-            'total_rejected': total_rejected,
-            'total_conditional_approval': total_conditional_approval,
-            'by_sport_type': by_sport_type,
+            'total': total,
+            'pending': pending,
+            'approved': approved,
+            'rejected': rejected,
+            'conditional_approval': conditional_approval,
         }
         
         # Cache for 60 seconds

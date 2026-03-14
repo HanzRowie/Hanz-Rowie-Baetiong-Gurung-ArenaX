@@ -155,18 +155,11 @@ export interface TournamentFilters {
  * Requirement 8.1, 4.7: Statistics display
  */
 export interface TournamentStats {
-  total_pending: number;
-  total_approved: number;
-  total_rejected: number;
-  total_conditional_approval: number;
-  by_sport_type: {
-    [sport in SportType]?: {
-      PENDING: number;
-      APPROVED: number;
-      REJECTED: number;
-      CONDITIONAL_APPROVAL: number;
-    };
-  };
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  conditional_approval: number;
 }
 
 // ============================================================================
@@ -227,11 +220,21 @@ export interface VenuePricing {
 export interface AdminVenue {
   id: string;
   name: string;
-  sport_type: SportType;
-  address: string;
+  sport_types: string[];
+  location: string;
+  latitude?: string;
+  longitude?: string;
+  address?: string; // Alias for location
   owner_id: string;
   owner_name: string;
   owner_email: string;
+  owner_details?: {
+    id: string;
+    full_name: string;
+    email: string;
+    phone_number?: string;
+    approval_status: string;
+  };
   approval_status: ApprovalStatus;
   approval_date?: string;
   approved_by_name?: string;
@@ -239,10 +242,15 @@ export interface AdminVenue {
   approval_notes?: string;
   verification_documents: VerificationDocument[];
   requested_documents: string[];
-  operating_hours: OperatingHours;
-  pricing: VenuePricing;
   capacity?: number;
-  amenities?: string[];
+  price_per_hour?: number;
+  court_size?: string;
+  facilities?: string;
+  image?: string;
+  is_active?: boolean;
+  default_opening_time?: string;
+  default_closing_time?: string;
+  operating_days?: number[];
   created_at: string;
   updated_at: string;
   validation_results?: VenueValidationResult[];
@@ -283,18 +291,11 @@ export interface VenueFilters {
  * Requirement 9.1, 5.7: Statistics display
  */
 export interface VenueStats {
-  total_pending: number;
-  total_approved: number;
-  total_rejected: number;
-  total_conditional_approval: number;
-  by_sport_type: {
-    [sport in SportType]?: {
-      PENDING: number;
-      APPROVED: number;
-      REJECTED: number;
-      CONDITIONAL_APPROVAL: number;
-    };
-  };
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  conditional_approval: number;
 }
 
 // ============================================================================

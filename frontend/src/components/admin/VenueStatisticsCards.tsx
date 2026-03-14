@@ -59,22 +59,13 @@ export const VenueStatisticsCards: React.FC<VenueStatisticsCardsProps> = ({
   // Log the stats to debug
   useEffect(() => {
     console.log('[VenueStatisticsCards] Received stats:', stats);
-    console.log('[VenueStatisticsCards] Field values:', {
-      total_pending: stats?.total_pending,
-      total_approved: stats?.total_approved,
-      total_rejected: stats?.total_rejected,
-      total_conditional_approval: stats?.total_conditional_approval
-    });
   }, [stats]);
-
-  // Calculate total venues
-  const totalVenues = (stats?.total_pending || 0) + (stats?.total_approved || 0) + (stats?.total_rejected || 0) + (stats?.total_conditional_approval || 0);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
       <StatCard
         title="Total Venues"
-        value={totalVenues}
+        value={stats?.total}
         icon={<MapPin className="w-12 h-12" />}
         colorClass="text-green-600"
         bgColorClass="bg-green-50"
@@ -82,7 +73,7 @@ export const VenueStatisticsCards: React.FC<VenueStatisticsCardsProps> = ({
       />
       <StatCard
         title="Pending Approvals"
-        value={stats?.total_pending}
+        value={stats?.pending}
         icon={<Clock className="w-12 h-12" />}
         colorClass="text-yellow-600"
         bgColorClass="bg-yellow-50"
@@ -90,7 +81,7 @@ export const VenueStatisticsCards: React.FC<VenueStatisticsCardsProps> = ({
       />
       <StatCard
         title="Approved Venues"
-        value={stats?.total_approved}
+        value={stats?.approved}
         icon={<CheckCircle className="w-12 h-12" />}
         colorClass="text-green-600"
         bgColorClass="bg-green-50"
@@ -98,7 +89,7 @@ export const VenueStatisticsCards: React.FC<VenueStatisticsCardsProps> = ({
       />
       <StatCard
         title="Rejected Venues"
-        value={stats?.total_rejected}
+        value={stats?.rejected}
         icon={<XCircle className="w-12 h-12" />}
         colorClass="text-red-600"
         bgColorClass="bg-red-50"

@@ -36,8 +36,8 @@ export default function BottomNav() {
   });
 
   const pendingUsers = userStats?.pending_approvals || 0;
-  const pendingTournaments = tournamentStats?.total_pending || 0;
-  const pendingVenues = venueStats?.total_pending || 0;
+  const pendingTournaments = tournamentStats?.pending || 0;
+  const pendingVenues = venueStats?.pending || 0;
 
   const navItems = [
     {

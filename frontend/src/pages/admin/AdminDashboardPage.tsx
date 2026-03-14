@@ -150,10 +150,10 @@ export default function AdminDashboardPage() {
   const dashboardStats: DashboardStats = {
     totalUsers: userStats?.total_users || 0,
     pendingUsers: userStats?.pending_approvals || 0,
-    totalTournaments: (tournamentStats?.total_pending || 0) + (tournamentStats?.total_approved || 0) + (tournamentStats?.total_rejected || 0) + (tournamentStats?.total_conditional_approval || 0),
-    pendingTournaments: tournamentStats?.total_pending || 0,
-    totalVenues: (venueStats?.total_pending || 0) + (venueStats?.total_approved || 0) + (venueStats?.total_rejected || 0) + (venueStats?.total_conditional_approval || 0),
-    pendingVenues: venueStats?.total_pending || 0,
+    totalTournaments: tournamentStats?.total || 0,
+    pendingTournaments: tournamentStats?.pending || 0,
+    totalVenues: venueStats?.total || 0,
+    pendingVenues: venueStats?.pending || 0,
     approvedToday: (userStats?.approved_today || 0),
     rejectedToday: (userStats?.rejected_total || 0),
   };
