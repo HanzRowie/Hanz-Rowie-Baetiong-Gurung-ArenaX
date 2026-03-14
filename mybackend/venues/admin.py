@@ -3,14 +3,14 @@ from .models import Venue, VenueAvailability, VenueBooking, VenueAuditLog
 
 @admin.register(Venue)
 class VenueAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'sport_type', 'location', 'capacity', 'price_per_hour', 'is_active')
-    list_filter = ('sport_type', 'owner', 'is_active')
+    list_display = ('name', 'owner', 'location', 'capacity', 'price_per_hour', 'is_active')
+    list_filter = ('owner', 'is_active')
     search_fields = ('name', 'location', 'owner__full_name', 'owner__email')
     ordering = ('name',)
 
     fieldsets = (
         ('Basic Information', {
-            'fields': ('name', 'owner', 'location', 'sport_type', 'court_size', 'facilities', 'is_active')
+            'fields': ('name', 'owner', 'location', 'sport_types', 'court_size', 'facilities', 'is_active')
         }),
         ('Capacity & Pricing', {
             'fields': ('capacity', 'price_per_hour')
@@ -26,7 +26,7 @@ class VenueAdmin(admin.ModelAdmin):
 @admin.register(VenueAvailability)
 class VenueAvailabilityAdmin(admin.ModelAdmin):
     list_display = ('venue', 'date', 'opening_time', 'closing_time', 'is_available')
-    list_filter = ('is_available', 'date', 'venue__sport_type')
+    list_filter = ('is_available', 'date')
     search_fields = ('venue__name', 'venue__location')
     ordering = ('date',)
     date_hierarchy = 'date'
@@ -46,7 +46,7 @@ class VenueAvailabilityAdmin(admin.ModelAdmin):
 @admin.register(VenueBooking)
 class VenueBookingAdmin(admin.ModelAdmin):
     list_display = ('user', 'venue', 'date', 'start_time', 'end_time', 'purpose', 'status', 'payment_status', 'amount')
-    list_filter = ('status', 'payment_status', 'date', 'venue__sport_type')
+    list_filter = ('status', 'payment_status', 'date')
     search_fields = ('user__full_name', 'user__email', 'venue__name', 'venue__location', 'purpose')
     readonly_fields = ('created_at',)
     ordering = ('-created_at',)

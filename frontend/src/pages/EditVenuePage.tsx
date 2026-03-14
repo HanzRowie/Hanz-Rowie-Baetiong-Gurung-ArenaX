@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { venueService } from '@/services/venueService';
 import toastService from '@/services/toastService';
+import VenueLocationPicker from '@/components/VenueLocationPicker';
 import { Building2, MapPin, DollarSign, Users, Info, Image as ImageIcon, ArrowLeft, Trash2 } from 'lucide-react';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 
@@ -16,7 +17,9 @@ export default function EditVenuePage() {
     const [formData, setFormData] = useState({
         name: '',
         location: '',
-        sport_type: 'FUTSAL',
+        latitude: null as number | null,
+        longitude: null as number | null,
+        sport_types: [] as string[],
         court_size: 'Standard',
         facilities: '',
         capacity: '',
@@ -39,7 +42,11 @@ export default function EditVenuePage() {
             setFormData({
                 name: venue.name,
                 location: venue.location,
-                sport_type: venue.sport_types && venue.sport_types.length > 0 ? venue.sport_types[0].toUpperCase() : 'FUTSAL',
+                latitude: venue.latitude || null,
+                longitude: venue.longitude || null,
+                sport_types: venue.sport_types && venue.sport_types.length > 0 
+                    ? venue.sport_types.map(s => s.toUpperCase()) 
+                    : [],
                 court_size: 'Standard', // Not in venue type? Assuming standard or fetch from description if stored there
                 facilities: venue.description || '',
                 capacity: venue.capacity.toString(),
@@ -64,6 +71,15 @@ export default function EditVenuePage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleSportTypeToggle = (sportType: string) => {
+        setFormData(prev => ({
+            ...prev,
+            sport_types: prev.sport_types.includes(sportType)
+                ? prev.sport_types.filter(s => s !== sportType)
+                : [...prev.sport_types, sportType]
+        }));
+    };
+
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setFormData(prev => ({ ...prev, image: e.target.files![0] }));
@@ -84,15 +100,23 @@ export default function EditVenuePage() {
                 return;
             }
 
+            if (formData.sport_types.length === 0) {
+                toastService.error('Please select at least one sport type');
+                setSaving(false);
+                return;
+            }
+
             // Prepare data
             const venueData = {
                 name: formData.name,
                 location: formData.location,
-                address: formData.location, // Using location as address
+                address: formData.location,
+                latitude: formData.latitude,
+                longitude: formData.longitude,
                 description: formData.facilities,
                 capacity: parseInt(formData.capacity),
                 price_per_hour: parseFloat(formData.price_per_hour),
-                sport_types: [formData.sport_type.toUpperCase()], // Ensure uppercase for backend
+                sport_types: formData.sport_types, // Already uppercase from form
                 court_size: formData.court_size,
                 images: formData.image ? [formData.image] : undefined
             };
@@ -172,32 +196,59 @@ export default function EditVenuePage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Sport Type *</label>
-                                <select
-                                    name="sport_type"
-                                    value={formData.sport_type}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                >
-                                    <option value="FUTSAL">Futsal</option>
-                                    <option value="BADMINTON">Badminton</option>
-                                </select>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Sport Types * (Select all that apply)</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.sport_types.includes('FUTSAL')}
+                                            onChange={() => handleSportTypeToggle('FUTSAL')}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Futsal</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.sport_types.includes('BADMINTON')}
+                                            onChange={() => handleSportTypeToggle('BADMINTON')}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Badminton</span>
+                                    </label>
+                                </div>
+                                {formData.sport_types.length > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Selected: {formData.sport_types.join(', ')}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    name="location"
-                                    value={formData.location}
-                                    onChange={handleChange}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    required
-                                />
-                            </div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                <MapPin className="h-5 w-5 text-indigo-600" />
+                                Venue Location *
+                            </label>
+                            <VenueLocationPicker
+                                onLocationSelect={(location) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        location: location.address,
+                                        latitude: location.latitude,
+                                        longitude: location.longitude
+                                    }));
+                                }}
+                                initialLocation={
+                                    formData.latitude && formData.longitude
+                                        ? {
+                                            address: formData.location,
+                                            latitude: formData.latitude,
+                                            longitude: formData.longitude
+                                        }
+                                        : undefined
+                                }
+                            />
                         </div>
 
                         <div>

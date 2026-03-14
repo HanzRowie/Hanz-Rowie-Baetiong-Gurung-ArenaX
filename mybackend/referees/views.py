@@ -302,9 +302,9 @@ def available_referees_for_tournament(request, tournament_id):
                 covering_slot = slot
                 break
         
-        # If no specific availability slots, assume available (referee hasn't set restrictions)
+        # If no availability slots exist, referee is NOT available (must explicitly set availability)
         if not availability_slots.exists():
-            is_available = True
+            is_available = False
         
         # Check for conflicting bookings
         if is_available:
@@ -420,8 +420,8 @@ def assign_referee_to_tournament(request, tournament_id):
                 is_available = True
                 break
     else:
-        # No specific restrictions, assume available
-        is_available = True
+        # No availability set, referee is NOT available (must explicitly set availability)
+        is_available = False
     
     if not is_available:
         return Response({'error': 'Referee is not available for this tournament time'}, status=status.HTTP_400_BAD_REQUEST)
@@ -440,18 +440,15 @@ def assign_referee_to_tournament(request, tournament_id):
         if (tournament_start < booking_end and tournament_end > booking_start):
             return Response({'error': 'Referee has conflicting bookings'}, status=status.HTTP_400_BAD_REQUEST)
     
-    # Create matches if they don't exist (basic tournament structure)
+    # Check if tournament has matches
     matches = Match.objects.filter(tournament=tournament)
     if not matches.exists():
-        # Create a basic match structure - you can enhance this based on tournament type
-        match = Match.objects.create(
-            tournament=tournament,
-            round_number=1,
-            match_number=1,
-            scheduled_time=datetime.combine(tournament_date, tournament_start)
-        )
-    else:
-        match = matches.first()  # Use first match for now
+        return Response({
+            'error': 'Tournament has no matches yet. Please generate the bracket first before assigning referees.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get the first match (or you can let organizer select specific match)
+    match = matches.first()
     
     # Create referee booking
     booking = RefereeBooking.objects.create(

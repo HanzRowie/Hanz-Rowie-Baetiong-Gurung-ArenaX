@@ -16,7 +16,9 @@ class Venue(models.Model):
     owner = models.ForeignKey(CustomUser, on_delete=models.CASCADE, limit_choices_to={'role': 'VENUE_OWNER'})
     name = models.CharField(max_length=100)
     location = models.TextField()
-    sport_type = models.CharField(max_length=10, choices=SPORT_CHOICES, default='FUTSAL')
+    latitude = models.DecimalField(max_digits=20, decimal_places=15, null=True, blank=True, help_text='Latitude coordinate of the venue location')
+    longitude = models.DecimalField(max_digits=20, decimal_places=15, null=True, blank=True, help_text='Longitude coordinate of the venue location')
+    sport_types = models.JSONField(default=list, help_text='List of supported sport types (e.g., ["FUTSAL", "BADMINTON"])')
     court_size = models.CharField(max_length=50, default='Standard')  # e.g., "Standard", "5-a-side", etc.
     facilities = models.TextField(blank=True)  # Description of facilities
     capacity = models.IntegerField()
@@ -92,7 +94,6 @@ class Venue(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['approval_status', 'id']),
-            models.Index(fields=['sport_type', 'approval_status']),
             models.Index(fields=['owner', 'approval_status']),
         ]
 

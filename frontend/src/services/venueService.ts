@@ -3,12 +3,14 @@ import type { VenueStats, Venue, VenueAvailability, VenueBooking, CreateVenueDat
 
 class VenueService {
   // Venue CRUD operations
-  async createVenue(data: CreateVenueData & { court_size?: string }): Promise<{ venue: Venue; message: string }> {
+  async createVenue(data: CreateVenueData & { court_size?: string; latitude?: number; longitude?: number }): Promise<{ venue: Venue; message: string }> {
     const formData = new FormData();
 
     // Map frontend fields to backend model fields
     formData.append('name', data.name);
     formData.append('location', data.location);
+    if (data.latitude !== undefined) formData.append('latitude', data.latitude.toString());
+    if (data.longitude !== undefined) formData.append('longitude', data.longitude.toString());
     formData.append('capacity', data.capacity.toString());
     formData.append('price_per_hour', data.price_per_hour.toString());
 
@@ -61,6 +63,8 @@ class VenueService {
 
   async updateVenue(venueId: string, data: Partial<CreateVenueData> & { 
     court_size?: string;
+    latitude?: number;
+    longitude?: number;
     is_active?: boolean;
     default_opening_time?: string;
     default_closing_time?: string;
@@ -70,6 +74,8 @@ class VenueService {
 
     if (data.name) formData.append('name', data.name);
     if (data.location) formData.append('location', data.location);
+    if (data.latitude !== undefined) formData.append('latitude', data.latitude.toString());
+    if (data.longitude !== undefined) formData.append('longitude', data.longitude.toString());
     if (data.capacity) formData.append('capacity', data.capacity.toString());
     if (data.price_per_hour) formData.append('price_per_hour', data.price_per_hour.toString());
     if (data.description !== undefined) formData.append('facilities', data.description || '');

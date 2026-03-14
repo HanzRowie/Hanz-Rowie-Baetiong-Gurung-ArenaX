@@ -34,16 +34,8 @@ def register(request):
         print(f"Register request data: {request.data}")  # Debug logging
         print(f"Register request files: {request.FILES}")  # Debug logging
         
-        # Prepare data for serializer
-        data = request.data.copy()
-        
-        # Handle venue images (multiple files)
-        venue_images = request.FILES.getlist('venue_images')
-        if venue_images:
-            data['venue_images'] = venue_images
-        
         # Validate and create user using serializer
-        serializer = UserRegistrationSerializer(data=data)
+        serializer = UserRegistrationSerializer(data=request.data)
         
         if not serializer.is_valid():
             print(f"Validation errors: {serializer.errors}")

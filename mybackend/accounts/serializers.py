@@ -251,16 +251,9 @@ class AdminUserDetailSerializer(serializers.ModelSerializer):
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """
     Serializer for user registration with role-based document validation.
-    Handles file uploads for venue images and documents.
+    Handles file uploads for official documents.
     """
     password = serializers.CharField(write_only=True, min_length=8)
-    venue_images = serializers.ListField(
-        child=serializers.ImageField(),
-        required=False,
-        allow_empty=True,
-        max_length=3,
-        help_text='1-3 venue images required for venue owners'
-    )
     business_document = serializers.FileField(required=False, allow_null=True)
     certification_document = serializers.FileField(required=False, allow_null=True)
     
@@ -277,7 +270,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'business_registration',
             'business_contact',
             'business_document',
-            'venue_images',
             'certification_document'
         ]
         extra_kwargs = {
@@ -299,22 +291,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         
         # Venue Owner validation
         if role == 'VENUE_OWNER':
-            venue_images = data.get('venue_images', [])
             business_document = data.get('business_document')
             
             if not business_document:
                 raise serializers.ValidationError({
-                    'business_document': 'Business document is required for venue owners.'
-                })
-            
-            if not venue_images or len(venue_images) < 1:
-                raise serializers.ValidationError({
-                    'venue_images': 'At least 1 venue image is required for venue owners.'
-                })
-            
-            if len(venue_images) > 3:
-                raise serializers.ValidationError({
-                    'venue_images': 'Maximum 3 venue images allowed.'
+                    'business_document': 'Business document (registration/license/certificate) is required for venue owners.'
                 })
         
         # Organizer validation
@@ -337,8 +318,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         """Create user with proper password hashing and file handling"""
-        # Extract venue images for separate handling
-        venue_images_files = validated_data.pop('venue_images', [])
         password = validated_data.pop('password')
         
         # Use email as username if not provided
@@ -350,23 +329,5 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             password=password,
             **validated_data
         )
-        
-        # Handle venue images upload
-        if venue_images_files:
-            from django.core.files.storage import default_storage
-            import os
-            
-            venue_image_urls = []
-            for idx, image_file in enumerate(venue_images_files):
-                # Generate unique filename
-                ext = os.path.splitext(image_file.name)[1]
-                filename = f'venue_images/{user.id}/image_{idx}{ext}'
-                
-                # Save file
-                path = default_storage.save(filename, image_file)
-                venue_image_urls.append(path)
-            
-            user.venue_images = venue_image_urls
-            user.save(update_fields=['venue_images'])
         
         return user

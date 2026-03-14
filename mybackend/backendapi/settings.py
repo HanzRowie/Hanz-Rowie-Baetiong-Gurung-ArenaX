@@ -106,6 +106,23 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# Password Hashers - Use faster hasher in development for better performance
+# WARNING: MD5PasswordHasher is INSECURE and should ONLY be used in development
+if DEBUG:
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.MD5PasswordHasher',  # Fast but insecure - dev only
+        'django.contrib.auth.hashers.PBKDF2PasswordHasher',  # Keep for existing passwords
+        'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    ]
+else:
+    # Production uses secure PBKDF2 (Django default)
+    PASSWORD_HASHERS = [
+        'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+        'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+        'django.contrib.auth.hashers.Argon2PasswordHasher',
+        'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    ]
+
 # Internationalization
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

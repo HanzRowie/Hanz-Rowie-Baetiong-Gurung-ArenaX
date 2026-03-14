@@ -863,7 +863,7 @@ def verify_tournament_venue_payment(request, tournament_id):
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def update_match_result(request, tournament_id, match_id):
-    """Update match result with scores and winner"""
+    """Update match result with scores and winner, or update match details like scheduled_time"""
     try:
         tournament = get_object_or_404(Tournament, id=tournament_id)
         match = get_object_or_404(Match, id=match_id, tournament=tournament)
@@ -876,6 +876,21 @@ def update_match_result(request, tournament_id, match_id):
         
         # Get the data from request
         data = request.data
+        
+        # Update scheduled_time if provided (for rescheduling matches)
+        if 'scheduled_time' in data:
+            from django.utils.dateparse import parse_datetime
+            scheduled_time = parse_datetime(data['scheduled_time'])
+            if scheduled_time:
+                match.scheduled_time = scheduled_time
+                match.save()
+                return Response({
+                    'message': 'Match rescheduled successfully',
+                    'match': {
+                        'id': str(match.id),
+                        'scheduled_time': match.scheduled_time.isoformat() if match.scheduled_time else None
+                    }
+                }, status=status.HTTP_200_OK)
         
         # Update scores based on tournament type
         if tournament.registration_type == 'TEAM':

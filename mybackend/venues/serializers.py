@@ -14,29 +14,22 @@ class BookingUserSerializer(serializers.ModelSerializer):
 class BookingVenueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Venue
-        fields = ['id', 'name', 'location', 'sport_type', 'capacity', 'price_per_hour']
+        fields = ['id', 'name', 'location', 'sport_types', 'capacity', 'price_per_hour']
 
 # Venue Serializer
 class VenueSerializer(serializers.ModelSerializer):
     owner = BookingUserSerializer(read_only=True)
-    sport_types = serializers.SerializerMethodField()
     description = serializers.CharField(source='facilities', required=False, allow_blank=True)
     amenities = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
     
     class Meta:
         model = Venue
-        fields = ['id', 'owner', 'name', 'description', 'location', 'capacity', 
-                 'price_per_hour', 'sport_types', 'sport_type', 'court_size', 
+        fields = ['id', 'owner', 'name', 'description', 'location', 'latitude', 'longitude', 
+                 'capacity', 'price_per_hour', 'sport_types', 'court_size', 
                  'facilities', 'amenities', 'rating', 'image', 'is_active',
                  'default_opening_time', 'default_closing_time', 'operating_days']
         read_only_fields = ['owner']
-    
-    def get_sport_types(self, obj):
-        """Convert single sport_type to array for frontend compatibility"""
-        if obj.sport_type:
-            return [obj.sport_type.lower()]
-        return []
     
     def get_amenities(self, obj):
         """Return mock amenities for now"""

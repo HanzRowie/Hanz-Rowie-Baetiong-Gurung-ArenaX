@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { venueService } from '@/services/venueService';
 import toastService from '@/services/toastService';
+import VenueLocationPicker from '@/components/VenueLocationPicker';
 import { Building2, MapPin, DollarSign, Users, Info, Image as ImageIcon, ArrowLeft } from 'lucide-react';
 
 export default function CreateVenuePage() {
@@ -10,7 +11,9 @@ export default function CreateVenuePage() {
     const [formData, setFormData] = useState({
         name: '',
         location: '',
-        sport_type: 'FUTSAL',
+        latitude: null as number | null,
+        longitude: null as number | null,
+        sport_types: [] as string[],
         court_size: 'Standard',
         facilities: '',
         capacity: '',
@@ -21,6 +24,15 @@ export default function CreateVenuePage() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSportTypeToggle = (sportType: string) => {
+        setFormData(prev => ({
+            ...prev,
+            sport_types: prev.sport_types.includes(sportType)
+                ? prev.sport_types.filter(s => s !== sportType)
+                : [...prev.sport_types, sportType]
+        }));
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,15 +53,23 @@ export default function CreateVenuePage() {
                 return;
             }
 
+            if (formData.sport_types.length === 0) {
+                toastService.error('Please select at least one sport type');
+                setLoading(false);
+                return;
+            }
+
             // Prepare data for service
             const venueData = {
                 name: formData.name,
                 location: formData.location,
-                address: formData.location, // Using location as address for now
+                address: formData.location,
+                latitude: formData.latitude,
+                longitude: formData.longitude,
                 description: formData.facilities,
                 capacity: parseInt(formData.capacity),
                 price_per_hour: parseFloat(formData.price_per_hour),
-                sport_types: [formData.sport_type],
+                sport_types: formData.sport_types,
                 amenities: [],
                 court_size: formData.court_size,
                 images: formData.image ? [formData.image] : undefined
@@ -105,33 +125,59 @@ export default function CreateVenuePage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Sport Type *</label>
-                                <select
-                                    name="sport_type"
-                                    value={formData.sport_type}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                >
-                                    <option value="FUTSAL">Futsal</option>
-                                    <option value="BADMINTON">Badminton</option>
-                                </select>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Sport Types * (Select all that apply)</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.sport_types.includes('FUTSAL')}
+                                            onChange={() => handleSportTypeToggle('FUTSAL')}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Futsal</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.sport_types.includes('BADMINTON')}
+                                            onChange={() => handleSportTypeToggle('BADMINTON')}
+                                            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm text-gray-700">Badminton</span>
+                                    </label>
+                                </div>
+                                {formData.sport_types.length > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Selected: {formData.sport_types.join(', ')}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    name="location"
-                                    value={formData.location}
-                                    onChange={handleChange}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                    placeholder="Full address of the venue"
-                                    required
-                                />
-                            </div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                <MapPin className="h-5 w-5 text-indigo-600" />
+                                Venue Location *
+                            </label>
+                            <VenueLocationPicker
+                                onLocationSelect={(location) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        location: location.address,
+                                        latitude: location.latitude,
+                                        longitude: location.longitude
+                                    }));
+                                }}
+                                initialLocation={
+                                    formData.latitude && formData.longitude
+                                        ? {
+                                            address: formData.location,
+                                            latitude: formData.latitude,
+                                            longitude: formData.longitude
+                                        }
+                                        : undefined
+                                }
+                            />
                         </div>
 
                         <div>

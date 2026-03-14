@@ -71,11 +71,15 @@ const RefereeAvailabilityPage: React.FC = () => {
   const fetchAvailabilities = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await api.get('/api/referees/availability/');
       // Handle both paginated and non-paginated responses
       const data = response.data.results || response.data;
-      setAvailabilities(Array.isArray(data) ? data : []);
+      const availabilityArray = Array.isArray(data) ? data : [];
+      console.log('Fetched availabilities:', availabilityArray);
+      setAvailabilities(availabilityArray);
     } catch (err: any) {
+      console.error('Fetch availabilities error:', err);
       setError(err.response?.data?.error || 'Failed to fetch availabilities');
     } finally {
       setLoading(false);
@@ -104,16 +108,21 @@ const RefereeAvailabilityPage: React.FC = () => {
       // Check if there's any existing slot for this date
       const existingSlot = availabilities.find(slot => slot.available_date === date);
       
-      if (existingSlot) {
-        if (existingSlot.is_available) {
-          // If currently available, make unavailable
-          const updatedSlot = { ...existingSlot, is_available: false };
-          await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
-        } else {
-          // If currently unavailable, make available
-          const updatedSlot = { ...existingSlot, is_available: true };
-          await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
-        }
+      if (existingSlot && existingSlot.id) {
+        // Update existing slot - toggle is_available
+        const updatedSlot = {
+          available_date: existingSlot.available_date,
+          start_time: existingSlot.start_time,
+          end_time: existingSlot.end_time,
+          is_available: !existingSlot.is_available,
+          notes: existingSlot.notes
+        };
+        await api.put(`/api/referees/availability/${existingSlot.id}/`, updatedSlot);
+        
+        // Optimistically update local state
+        setAvailabilities(prev => prev.map(slot => 
+          slot.id === existingSlot.id ? { ...slot, is_available: !slot.is_available } : slot
+        ));
       } else {
         // Create new available slot
         const newSlot = {
@@ -123,13 +132,19 @@ const RefereeAvailabilityPage: React.FC = () => {
           is_available: true,
           notes: `Available ${daySettings.start_time} - ${daySettings.end_time}`
         };
-        await api.post('/api/referees/availability/', newSlot);
+        const response = await api.post('/api/referees/availability/', newSlot);
+        
+        // Add new slot to local state
+        setAvailabilities(prev => [...prev, response.data]);
       }
       
-      await fetchAvailabilities();
+      // Refresh from server to ensure consistency
+      setTimeout(() => fetchAvailabilities(), 100);
     } catch (err: any) {
       console.error('Availability toggle error:', err.response?.data);
       alert(err.response?.data?.error || err.response?.data?.detail || 'Failed to update availability');
+      // Revert optimistic update on error
+      await fetchAvailabilities();
     } finally {
       setSaving(false);
     }

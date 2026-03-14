@@ -3,11 +3,13 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from . import futsal_scoring_views
 from .admin_views import AdminTournamentViewSet
+from .match_events_views import MatchEventViewSet
 
 router = DefaultRouter()
 router.register(r'tournaments', views.TournamentViewSet)
 router.register(r'registrations', views.TournamentRegistrationViewSet)
 router.register(r'matches', views.MatchViewSet)
+router.register(r'match-events', MatchEventViewSet, basename='match-events')
 router.register(r'referee-bookings', views.RefereeBookingViewSet)
 router.register(r'player-stats', views.PlayerStatsViewSet, basename='player-stats')
 router.register(r'admin/tournaments', AdminTournamentViewSet, basename='admin-tournament')

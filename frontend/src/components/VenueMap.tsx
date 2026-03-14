@@ -15,6 +15,8 @@ interface Venue {
   id: string;
   name: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
   sport_types?: string[];
   price_per_hour?: number;
   coordinates?: { lat: number; lng: number };
@@ -34,9 +36,9 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Initialize map
+    // Initialize map with default center (Kathmandu, Nepal)
     if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapRef.current).setView([1.3521, 103.8198], 12);
+      mapInstanceRef.current = L.map(mapRef.current).setView([27.7172, 85.3240], 12);
 
       // Add tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -56,13 +58,25 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
 
     // Add venue markers
     const bounds = L.latLngBounds([]);
+    const venuesWithCoords: Venue[] = [];
     
     venues.forEach((venue) => {
-      // Generate coordinates if not provided
-      const coords = venue.coordinates || {
-        lat: 1.3521 + (Math.random() - 0.5) * 0.1,
-        lng: 103.8198 + (Math.random() - 0.5) * 0.1
-      };
+      // Check if venue has valid coordinates
+      let coords: { lat: number; lng: number } | null = null;
+      
+      if (venue.coordinates) {
+        coords = venue.coordinates;
+      } else if (venue.latitude && venue.longitude) {
+        coords = { lat: Number(venue.latitude), lng: Number(venue.longitude) };
+      }
+      
+      // Skip venues without coordinates
+      if (!coords || isNaN(coords.lat) || isNaN(coords.lng)) {
+        console.warn(`Venue "${venue.name}" has no valid coordinates, skipping map marker`);
+        return;
+      }
+      
+      venuesWithCoords.push(venue);
 
       // Create custom icon
       const customIcon = L.divIcon({
@@ -116,9 +130,12 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
       bounds.extend([coords.lat, coords.lng]);
     });
 
-    // Fit map to show all venues
-    if (venues.length > 0) {
-      mapInstanceRef.current.fitBounds(bounds, { padding: [20, 20] });
+    // Fit map to show all venues with coordinates
+    if (venuesWithCoords.length > 0) {
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    } else if (venues.length > 0) {
+      // If no venues have coordinates, show default location (Kathmandu, Nepal)
+      mapInstanceRef.current.setView([27.7172, 85.3240], 12);
     }
 
     // Global click handler for popup buttons
@@ -154,7 +171,7 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
       />
       
       {venues.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg z-10">
           <div className="text-center">
             <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-700 font-medium mb-1">No venues to display</p>
@@ -166,6 +183,14 @@ export default function VenueMap({ venues, onVenueClick, height = '300px' }: Ven
               Add Your First Venue
             </button>
           </div>
+        </div>
+      )}
+      
+      {venues.length > 0 && venues.every(v => !v.latitude && !v.longitude && !v.coordinates) && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 shadow-sm z-10">
+          <p className="text-sm text-yellow-800">
+            ⚠️ Venues don't have location coordinates. Edit venues to add map locations.
+          </p>
         </div>
       )}
 

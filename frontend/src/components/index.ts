@@ -17,6 +17,7 @@ export { default as BadmintonScoreForm } from './BadmintonScoreForm';
 export { default as MatchScoringInterface } from './MatchScoringInterface';
 export { default as LeagueMatchScorer } from './LeagueMatchScorer';
 export { default as PlayerStatsInput } from './PlayerStatsInput';
+export { default as LiveMatchScorer } from './LiveMatchScorer';
 
 // Tournament Components
 export { default as TournamentTypeSelector } from './TournamentTypeSelector';

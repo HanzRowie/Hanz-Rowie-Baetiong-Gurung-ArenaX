@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/design-system/components/Card';
 import { Button } from '@/design-system/components/Button';
 import { MatchScorer } from './MatchScorer';
+import { LiveMatchScorer } from './LiveMatchScorer';
 import { tournamentService } from '@/services/tournamentService';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-hot-toast';
+import { Zap, FileText } from 'lucide-react';
 
 interface Match {
   id: string;
@@ -75,6 +77,8 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
+  const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
+  const [scoringMode, setScoringMode] = useState<'live' | 'detailed'>('live');
 
   // Check if user is an organizer
   const isOrganizer = user?.role === 'ORGANIZER';
@@ -195,7 +199,21 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
       onMatchScored(updatedMatch);
     }
     
+    // Close live scorer if match is completed
+    if (updatedMatch.status === 'COMPLETED') {
+      setLiveMatchId(null);
+    }
+    
     toast.success('Match score updated successfully');
+  };
+
+  const handleOpenLiveScorer = (matchId: string) => {
+    setLiveMatchId(matchId);
+  };
+
+  const handleCloseLiveScorer = () => {
+    setLiveMatchId(null);
+    loadMatches(); // Refresh matches
   };
 
   const getFilteredMatches = () => {
@@ -231,6 +249,18 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
           <p className="text-gray-600">Only tournament organizers can access match scoring.</p>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Show live scorer if a match is selected
+  const selectedMatch = matches.find(m => m.id === liveMatchId);
+  if (selectedMatch && scoringMode === 'live') {
+    return (
+      <LiveMatchScorer
+        match={selectedMatch}
+        onMatchUpdated={handleMatchScored}
+        onClose={handleCloseLiveScorer}
+      />
     );
   }
 
@@ -311,21 +341,97 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
             </Card>
           ) : (
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">
                   {filter === 'pending' ? 'Pending Matches' :
                    filter === 'completed' ? 'Completed Matches' :
                    'All Matches'} ({getFilteredMatches().length})
                 </h3>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Scoring Mode:</span>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setScoringMode('live')}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                        scoringMode === 'live'
+                          ? 'bg-white text-purple-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <Zap className="w-4 h-4" />
+                      Live
+                    </button>
+                    <button
+                      onClick={() => setScoringMode('detailed')}
+                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
+                        scoringMode === 'detailed'
+                          ? 'bg-white text-purple-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      Detailed
+                    </button>
+                  </div>
+                </div>
               </div>
               
               <div className="space-y-4">
                 {getFilteredMatches().map(match => (
-                  <MatchScorer
-                    key={match.id}
-                    match={match}
-                    onScoreRecorded={handleMatchScored}
-                  />
+                  scoringMode === 'live' ? (
+                    <Card key={match.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm text-gray-500">
+                                Round {match.round_number} • Match {match.match_number}
+                              </span>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getMatchStatusColor(match.status)}`}>
+                                {match.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900">
+                                  {match.team1?.name || match.player1?.name || 'TBD'}
+                                </div>
+                                <div className="font-semibold text-gray-900 mt-1">
+                                  {match.team2?.name || match.player2?.name || 'TBD'}
+                                </div>
+                              </div>
+                              <div className="text-center px-6">
+                                <div className="text-3xl font-bold text-gray-900">
+                                  {match.team1_score ?? match.player1_score ?? 0}
+                                </div>
+                                <div className="text-sm text-gray-400 my-1">-</div>
+                                <div className="text-3xl font-bold text-gray-900">
+                                  {match.team2_score ?? match.player2_score ?? 0}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="ml-6">
+                            <button
+                              onClick={() => handleOpenLiveScorer(match.id)}
+                              disabled={match.status === 'COMPLETED'}
+                              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Zap className="w-4 h-4" />
+                              {match.status === 'COMPLETED' ? 'Completed' : 'Score Live'}
+                            </button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <MatchScorer
+                      key={match.id}
+                      match={match}
+                      onScoreRecorded={handleMatchScored}
+                    />
+                  )
                 ))}
               </div>
             </>
