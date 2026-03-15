@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Tournament, TournamentRegistration, Match, RefereeBooking
+from .models import Tournament, TournamentRegistration, Match, TournamentRefereeAvailability
 
 # Tournament Serializer
 class TournamentSerializer(serializers.ModelSerializer):
@@ -12,6 +12,7 @@ class TournamentSerializer(serializers.ModelSerializer):
     registered_players = serializers.SerializerMethodField()
     matches = serializers.SerializerMethodField()
     sport_requirements = serializers.SerializerMethodField()
+    tournament_image = serializers.SerializerMethodField()
 
     participation_type = serializers.CharField(source='registration_type', read_only=True)
 
@@ -28,6 +29,15 @@ class TournamentSerializer(serializers.ModelSerializer):
             'user_registration_status', 'registered_players', 'matches',
             'sport_requirements', 'created_at', 'updated_at'
         ]
+
+    def get_tournament_image(self, obj):
+        """Return full URL for tournament image"""
+        if obj.tournament_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.tournament_image.url)
+            return obj.tournament_image.url
+        return None
 
     def get_registered_count(self, obj):
         if obj.registration_type == 'TEAM':
@@ -221,18 +231,21 @@ class MatchSerializer(serializers.ModelSerializer):
             }
         return None
 
-# Referee Booking Serializer
-class RefereeBookingSerializer(serializers.ModelSerializer):
+# Tournament Referee Availability Serializer (for booking before matches exist)
+class TournamentRefereeAvailabilitySerializer(serializers.ModelSerializer):
     referee_name = serializers.CharField(source='referee.full_name', read_only=True)
-    match_details = serializers.SerializerMethodField()
-    tournament_title = serializers.CharField(source='match.tournament.title', read_only=True)
+    referee_email = serializers.CharField(source='referee.email', read_only=True)
+    tournament_title = serializers.CharField(source='tournament.title', read_only=True)
+    requested_by_name = serializers.CharField(source='requested_by.full_name', read_only=True)
 
     class Meta:
-        model = RefereeBooking
-        fields = ['id', 'referee', 'referee_name', 'match', 'match_details', 'tournament_title', 'requested_by', 'status', 'requested_at', 'responded_at', 'notes']
-
-    def get_match_details(self, obj):
-        return f"Round {obj.match.round_number}, Match {obj.match.match_number}"
+        model = TournamentRefereeAvailability
+        fields = [
+            'id', 'tournament', 'tournament_title', 'referee', 'referee_name', 
+            'referee_email', 'requested_by', 'requested_by_name', 'status', 
+            'requested_at', 'responded_at', 'notes', 'fee'
+        ]
+        read_only_fields = ['id', 'requested_at', 'responded_at']
 
 
 # Team Tournament Registration Serializer

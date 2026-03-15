@@ -31,6 +31,7 @@ export default function VenueSearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [activeSport, setActiveSport] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('relevant');
 
   useEffect(() => {
     // Determine if we should redirect based on auth
@@ -93,6 +94,21 @@ export default function VenueSearchPage() {
 
     return matchesSearch && matchesSportTab;
   }) : [];
+
+  // Sort venues based on selected sort option
+  const sortedVenues = [...filteredVenues].sort((a, b) => {
+    switch (sortBy) {
+      case 'price-low':
+        return (a.price_per_hour || 0) - (b.price_per_hour || 0);
+      case 'price-high':
+        return (b.price_per_hour || 0) - (a.price_per_hour || 0);
+      case 'rating':
+        return (b.rating || 0) - (a.rating || 0);
+      case 'relevant':
+      default:
+        return 0; // Keep original order
+    }
+  });
 
   const getAmenityIcon = (amenity: string) => {
     const lower = amenity.toLowerCase();
@@ -288,15 +304,19 @@ export default function VenueSearchPage() {
             Found <span className="text-gray-900 font-bold">{filteredVenues.length}</span> venues nearby
           </p>
 
-          <select className="bg-transparent text-sm font-medium text-gray-600 border-none outline-none cursor-pointer hover:text-purple-600 focus:ring-0">
-            <option>Most Relevant</option>
-            <option>Price: Low to High</option>
-            <option>Price: High to Low</option>
-            <option>Top Rated</option>
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent text-sm font-medium text-gray-600 border-none outline-none cursor-pointer hover:text-purple-600 focus:ring-0"
+          >
+            <option value="relevant">Most Relevant</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="price-high">Price: High to Low</option>
+            <option value="rating">Top Rated</option>
           </select>
         </div>
 
-        {filteredVenues.length === 0 ? (
+        {sortedVenues.length === 0 ? (
           <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-16 text-center">
             <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6">
               <Building2 className="h-10 w-10 text-purple-300" />
@@ -318,7 +338,7 @@ export default function VenueSearchPage() {
           </div>
         ) : (
           <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" : "space-y-4"}>
-            {filteredVenues.map((venue) => (
+            {sortedVenues.map((venue) => (
               viewMode === 'grid' ? (
                 // GRID VIEW CARD
                 <div
@@ -355,12 +375,14 @@ export default function VenueSearchPage() {
                       <Heart className={`h-5 w-5 ${favorites.includes(venue.id) ? 'text-red-500 fill-red-500' : 'text-gray-400 hover:text-red-500'}`} />
                     </button>
 
-                    <div className="absolute bottom-4 right-4">
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-sm border border-purple-100">
-                        <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                        <span className="text-sm font-bold text-gray-900">{venue.rating?.toFixed(1) || 'NEW'}</span>
+                    {venue.rating && (
+                      <div className="absolute bottom-4 right-4">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-sm rounded-lg shadow-sm border border-purple-100">
+                          <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
+                          <span className="text-sm font-bold text-gray-900">{venue.rating.toFixed(1)}</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="p-6 flex-1 flex flex-col">
@@ -447,10 +469,12 @@ export default function VenueSearchPage() {
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-lg border border-amber-100">
-                            <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                            <span className="text-sm font-bold text-amber-700">{venue.rating?.toFixed(1) || '0.0'}</span>
-                          </div>
+                          {venue.rating && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-lg border border-amber-100">
+                              <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                              <span className="text-sm font-bold text-amber-700">{venue.rating.toFixed(1)}</span>
+                            </div>
+                          )}
                           <button
                             onClick={(e) => toggleFavorite(e, venue.id)}
                             className={`p-1.5 rounded-full hover:bg-red-50 transition-colors ${favorites.includes(venue.id) ? 'text-red-500' : 'text-gray-300 hover:text-red-500'}`}

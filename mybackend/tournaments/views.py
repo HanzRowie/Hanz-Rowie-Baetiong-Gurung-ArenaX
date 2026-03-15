@@ -9,8 +9,8 @@ from accounts.utils import decode_jwt
 from django.core.exceptions import ValidationError
 import uuid
 
-from .models import Tournament, TournamentRegistration, Match
-from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer
+from .models import Tournament, TournamentRegistration, Match, TournamentRefereeAvailability
+from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer, TournamentRefereeAvailabilitySerializer
 from .permissions import ApprovalStatusPermission, filter_tournaments_by_approval_status
 from referees.models import RefereeBooking
 from referees.serializers import RefereeBookingSerializer
@@ -1490,6 +1490,90 @@ class RefereeBookingViewSet(viewsets.ModelViewSet):
             return RefereeBooking.objects.filter(requested_by=self.request.user)
         return RefereeBooking.objects.none()
 
+
+class TournamentRefereeAvailabilityViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing tournament-level referee availability.
+    Allows organizers to book referees before matches are created.
+    """
+    queryset = TournamentRefereeAvailability.objects.all()
+    serializer_class = TournamentRefereeAvailabilitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.role == 'REFEREE':
+            return TournamentRefereeAvailability.objects.filter(referee=self.request.user)
+        elif self.request.user.role == 'ORGANIZER':
+            return TournamentRefereeAvailability.objects.filter(requested_by=self.request.user)
+        return TournamentRefereeAvailability.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        """Create a new referee availability request"""
+        if request.user.role != 'ORGANIZER':
+            return Response(
+                {'error': 'Only organizers can request referee availability'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        tournament_id = request.data.get('tournament')
+        referee_id = request.data.get('referee')
+        
+        # Validate tournament ownership
+        try:
+            tournament = Tournament.objects.get(id=tournament_id)
+            if tournament.organizer != request.user:
+                return Response(
+                    {'error': 'You can only request referees for your own tournaments'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Tournament.DoesNotExist:
+            return Response(
+                {'error': 'Tournament not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if referee exists and has correct role
+        try:
+            from accounts.models import CustomUser
+            referee = CustomUser.objects.get(id=referee_id, role='REFEREE')
+        except CustomUser.DoesNotExist:
+            return Response(
+                {'error': 'Referee not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if already requested
+        if TournamentRefereeAvailability.objects.filter(
+            tournament=tournament,
+            referee=referee
+        ).exists():
+            return Response(
+                {'error': 'Referee availability already requested for this tournament'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create the availability request
+        data = request.data.copy()
+        data['requested_by'] = request.user.id
+        
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        availability = serializer.save()
+        
+        # Send notification to referee
+        from notifications.utils import send_notification
+        send_notification(
+            user=referee,
+            notification_type='REFEREE_BOOKING_REQUEST',
+            title='New Tournament Referee Request',
+            message=f'{request.user.full_name} has requested your availability for {tournament.title}',
+            tournament=tournament,
+            action_url=f'/referee/availability'
+        )
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def tournament_participants(request, tournament_id):
@@ -1782,6 +1866,11 @@ def accept_tournament_participant(request, tournament_id, participant_id):
 @permission_classes([IsAuthenticated])
 def reject_tournament_participant(request, tournament_id, participant_id):
     """Reject a participant's registration for a tournament"""
+    from payments.services import TournamentPaymentService
+    from payments.models import Payment
+    import logging
+    
+    logger = logging.getLogger(__name__)
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
     # Check if user is the organizer
@@ -1791,22 +1880,68 @@ def reject_tournament_participant(request, tournament_id, participant_id):
     try:
         registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
         
+        rejection_reason = request.data.get('reason', 'No reason provided')
         registration.status = 'REJECTED'
-        registration.notes = request.data.get('reason', 'No reason provided')
+        registration.notes = rejection_reason
         registration.save()
 
-        # Notify player
+        # Process refund if payment was made
+        refund_info = None
+        if registration.payment and registration.payment.status == 'COMPLETED':
+            try:
+                payment_service = TournamentPaymentService()
+                refund_amount = payment_service.calculate_refund_amount(tournament, registration.payment)
+                
+                if refund_amount > 0:
+                    # Process refund
+                    refund = payment_service.process_refund(
+                        payment=registration.payment,
+                        amount=refund_amount,
+                        reason=f'Tournament registration rejected: {rejection_reason}'
+                    )
+                    
+                    refund_info = {
+                        'refund_amount': float(refund_amount),
+                        'original_amount': float(registration.payment.amount),
+                        'refund_percentage': float((refund_amount / registration.payment.amount) * 100),
+                        'refund_id': str(refund.id)
+                    }
+                    
+                    logger.info(f"Refund processed for rejected registration {registration.id}: {refund_amount}")
+                    
+                    # Notify player about refund
+                    send_notification(
+                        user=registration.player,
+                        notification_type='PAYMENT',
+                        title='Refund Processed',
+                        message=f'A refund of NPR {refund_amount} has been processed for your rejected registration to {tournament.title}.',
+                        tournament=tournament,
+                        related_id=str(refund.id),
+                        action_url=f'/payment-history'
+                    )
+                else:
+                    refund_info = {
+                        'refund_amount': 0,
+                        'original_amount': float(registration.payment.amount),
+                        'refund_percentage': 0,
+                        'message': 'No refund available due to tournament proximity'
+                    }
+            except Exception as e:
+                logger.error(f"Error processing refund for registration {registration.id}: {str(e)}")
+                refund_info = {'error': 'Refund processing failed'}
+
+        # Notify player about rejection
         send_notification(
             user=registration.player,
             notification_type='GENERAL',
             title='Tournament Registration Rejected',
-            message=f'Your registration for {tournament.title} has been rejected. Reason: {registration.notes}',
+            message=f'Your registration for {tournament.title} has been rejected. Reason: {rejection_reason}',
             tournament=tournament,
             related_id=registration.id,
             action_url=f'/tournaments'
         )
         
-        return Response({
+        response_data = {
             'message': f'Participant {registration.player.full_name} rejected successfully',
             'participant': {
                 'id': str(registration.id),
@@ -1819,7 +1954,12 @@ def reject_tournament_participant(request, tournament_id, participant_id):
                 'registration_date': registration.registered_at,
                 'rejection_reason': registration.notes
             }
-        }, status=status.HTTP_200_OK)
+        }
+        
+        if refund_info:
+            response_data['refund'] = refund_info
+        
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except TournamentRegistration.DoesNotExist:
         return Response({'error': 'Participant registration not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -2870,6 +3010,11 @@ def accept_team_participant(request, tournament_id, registration_id):
 @permission_classes([IsAuthenticated])
 def reject_team_participant(request, tournament_id, registration_id):
     """Reject a team's registration for a tournament"""
+    from payments.services import TournamentPaymentService
+    from payments.models import Payment
+    import logging
+    
+    logger = logging.getLogger(__name__)
     tournament = get_object_or_404(Tournament, id=tournament_id)
     
     # Check if user is the organizer
@@ -2886,7 +3031,52 @@ def reject_team_participant(request, tournament_id, registration_id):
         registration.status = 'CANCELLED'
         registration.save()
 
-        # Notify team captain
+        # Process refund if payment was made
+        refund_info = None
+        if registration.payment and registration.payment.status == 'COMPLETED':
+            try:
+                payment_service = TournamentPaymentService()
+                refund_amount = payment_service.calculate_refund_amount(tournament, registration.payment)
+                
+                if refund_amount > 0:
+                    # Process refund
+                    refund = payment_service.process_refund(
+                        payment=registration.payment,
+                        amount=refund_amount,
+                        reason=f'Team tournament registration rejected: {rejection_reason}'
+                    )
+                    
+                    refund_info = {
+                        'refund_amount': float(refund_amount),
+                        'original_amount': float(registration.payment.amount),
+                        'refund_percentage': float((refund_amount / registration.payment.amount) * 100),
+                        'refund_id': str(refund.id)
+                    }
+                    
+                    logger.info(f"Refund processed for rejected team registration {registration.id}: {refund_amount}")
+                    
+                    # Notify team captain about refund
+                    send_notification(
+                        user=registration.registered_by,
+                        notification_type='PAYMENT',
+                        title='Refund Processed',
+                        message=f'A refund of NPR {refund_amount} has been processed for your team\'s rejected registration to {tournament.title}.',
+                        tournament=tournament,
+                        related_id=str(refund.id),
+                        action_url=f'/payment-history'
+                    )
+                else:
+                    refund_info = {
+                        'refund_amount': 0,
+                        'original_amount': float(registration.payment.amount),
+                        'refund_percentage': 0,
+                        'message': 'No refund available due to tournament proximity'
+                    }
+            except Exception as e:
+                logger.error(f"Error processing refund for team registration {registration.id}: {str(e)}")
+                refund_info = {'error': 'Refund processing failed'}
+
+        # Notify team captain about rejection
         send_notification(
             user=registration.registered_by,
             notification_type='GENERAL',
@@ -2911,7 +3101,7 @@ def reject_team_participant(request, tournament_id, registration_id):
             }
         )
         
-        return Response({
+        response_data = {
             'message': f'Team {registration.team.name} rejected successfully',
             'team': {
                 'id': str(registration.team.id),
@@ -2921,7 +3111,12 @@ def reject_team_participant(request, tournament_id, registration_id):
             'status': 'CANCELLED',
             'registration_date': registration.registered_at,
             'rejection_reason': rejection_reason
-        }, status=status.HTTP_200_OK)
+        }
+        
+        if refund_info:
+            response_data['refund'] = refund_info
+        
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except TeamTournamentRegistration.DoesNotExist:
         return Response({'error': 'Team registration not found'}, status=status.HTTP_404_NOT_FOUND)

@@ -215,6 +215,66 @@ class TournamentPaymentService(PaymentService):
             return payment.amount * Decimal('0.50')  # 50% refund
         else:
             return Decimal('0')  # No refund
+    
+    @transaction.atomic
+    def process_refund(self, payment, amount, reason=''):
+        """Process refund for tournament registration"""
+        from .models import Refund
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        if payment.status != 'COMPLETED':
+            raise ValueError('Can only refund completed payments')
+        
+        if amount <= 0:
+            raise ValueError('Refund amount must be greater than 0')
+        
+        if amount > payment.amount:
+            raise ValueError('Refund amount cannot exceed original payment amount')
+        
+        # Create refund payment record
+        refund_payment = Payment.objects.create(
+            user=payment.user,
+            payment_type=payment.payment_type,
+            amount=amount,
+            currency=payment.currency,
+            status='COMPLETED',
+            description=f'Refund for {payment.description}',
+            tournament=payment.tournament,
+            payment_processor=payment.payment_processor,
+            metadata={'original_payment_id': str(payment.id), 'refund_reason': reason}
+        )
+        
+        # Create refund record
+        refund = Refund.objects.create(
+            original_payment=payment,
+            refund_payment=refund_payment,
+            amount=amount,
+            reason=reason,
+            status='COMPLETED',
+            processed_at=timezone.now()
+        )
+        
+        # Update original payment status
+        payment.status = 'REFUNDED'
+        payment.save()
+        
+        # Create transaction record
+        Transaction.objects.create(
+            payment=refund_payment,
+            transaction_type='REFUND',
+            amount=amount,
+            currency=payment.currency,
+            status='SUCCESS',
+            external_transaction_id=f'refund_{refund.id}',
+            payment_processor=payment.payment_processor,
+            processed_at=timezone.now()
+        )
+        
+        logger.info(f"Refund processed: {amount} {payment.currency} for payment {payment.id}")
+        
+        return refund
 
 
 class VenuePaymentService(PaymentService):

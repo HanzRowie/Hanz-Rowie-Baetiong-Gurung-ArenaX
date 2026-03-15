@@ -65,9 +65,9 @@ class Payment(models.Model):
     description = models.TextField(blank=True)
 
     # Related objects (nullable foreign keys to different models)
-    venue_booking = models.ForeignKey('venues.VenueBooking', on_delete=models.SET_NULL, null=True, blank=True)
-    referee_booking = models.ForeignKey('referees.RefereeBooking', on_delete=models.SET_NULL, null=True, blank=True)
-    tournament = models.ForeignKey('tournaments.Tournament', on_delete=models.SET_NULL, null=True, blank=True)
+    venue_booking = models.ForeignKey('venues.VenueBooking', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
+    referee_booking = models.ForeignKey('referees.RefereeBooking', on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_records')
+    tournament = models.ForeignKey('tournaments.Tournament', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
 
     # Payment processor details
     transaction_id = models.CharField(max_length=255, blank=True)  # External transaction ID

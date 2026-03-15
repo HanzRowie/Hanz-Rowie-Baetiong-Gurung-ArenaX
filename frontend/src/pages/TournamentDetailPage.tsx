@@ -404,18 +404,26 @@ export default function TournamentDetailPage() {
     if (!tournamentId) return;
 
     try {
-      // Use the correct endpoint for updating match results
-      await tournamentService.updateMatchResult(tournamentId, matchId, updates);
+      // Check if this is a schedule update (scheduled_time) or score update
+      if (updates.scheduled_time) {
+        // Update match schedule
+        await tournamentService.updateMatchResult(tournamentId, matchId, updates);
+        toastService.success('Match schedule updated successfully!');
+      } else {
+        // Update match scores
+        await tournamentService.updateMatchResult(tournamentId, matchId, updates);
+        toastService.success('Match result updated successfully!');
+      }
 
       // Refresh matches and standings
       await loadMatches();
-      await loadStandings();
-
-      setSuccessMessage('Match updated successfully!');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      if (tournament.tournament_type === 'league') {
+        await loadStandings();
+      }
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || 'Failed to update match';
       toastService.error(errorMsg);
+      console.error('Match update error:', err);
     }
   };
 

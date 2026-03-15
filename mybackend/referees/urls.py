@@ -21,4 +21,8 @@ urlpatterns = [
     # New tournament-specific endpoints
     path('tournament/<uuid:tournament_id>/available/', views.available_referees_for_tournament, name='available_referees_for_tournament'),
     path('tournament/<uuid:tournament_id>/assign/', views.assign_referee_to_tournament, name='assign_referee_to_tournament'),
+    
+    # Payment-related endpoints
+    path('bookings/<int:booking_id>/complete/', views.complete_match_and_release_payment, name='complete_match_and_release_payment'),
+    path('earnings/', views.referee_earnings, name='referee_earnings'),
 ]

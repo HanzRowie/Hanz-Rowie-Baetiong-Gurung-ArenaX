@@ -394,7 +394,7 @@ class TournamentService {
 
   async getMyPlayerStats(tournamentId?: string): Promise<any> {
     const params = tournamentId ? `?tournament_id=${tournamentId}` : '';
-    const response = await api.get(`/api/player-stats/my_stats/${params}`);
+    const response = await api.get(`/api/tournaments/player-stats/my_stats/${params}`);
     return response.data;
   }
 
@@ -404,7 +404,7 @@ class TournamentService {
     if (playerId) {
       params.append('player_id', playerId);
     }
-    const response = await api.get(`/api/player-stats/tournament_stats/?${params.toString()}`);
+    const response = await api.get(`/api/tournaments/player-stats/tournament_stats/?${params.toString()}`);
     return response.data;
   }
 

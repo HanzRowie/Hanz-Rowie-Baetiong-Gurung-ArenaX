@@ -389,7 +389,7 @@ The Arena X Team
         
         return Response(stats)
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='bulk-approve')
     def bulk_approve(self, request):
         """
         Approve multiple users at once.
@@ -485,7 +485,7 @@ The Arena X Team
             'total_requested': len(user_ids)
         })
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='bulk-reject')
     def bulk_reject(self, request):
         """
         Reject multiple users with a single reason.

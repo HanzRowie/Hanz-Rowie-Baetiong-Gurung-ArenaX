@@ -83,7 +83,7 @@ export default function CreateTournamentPage() {
       case 'BADMINTON':
         return '2'; // For doubles
       default:
-        return '5';
+        return '1';
     }
   };
 
@@ -94,7 +94,18 @@ export default function CreateTournamentPage() {
       case 'BADMINTON':
         return '0'; // No substitutes in badminton
       default:
-        return '3';
+        return '0';
+    }
+  };
+
+  const getTeamSizeOptions = (sportType: string) => {
+    switch (sportType) {
+      case 'FUTSAL':
+        return { min: 5, max: 11, label: 'Players per team (5 for standard futsal)' };
+      case 'BADMINTON':
+        return { min: 1, max: 2, label: 'Players per team (1 for singles, 2 for doubles)' };
+      default:
+        return { min: 1, max: 11, label: 'Players per team' };
     }
   };
 

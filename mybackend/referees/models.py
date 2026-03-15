@@ -67,6 +67,12 @@ class RefereeBooking(models.Model):
         ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
     )
+    
+    PAYMENT_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('RELEASED', 'Released'),
+    )
 
     referee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='referee_bookings_referees', limit_choices_to={'role':'REFEREE'})
     match = models.ForeignKey('tournaments.Match', on_delete=models.CASCADE, related_name='referee_bookings_referees')
@@ -78,6 +84,18 @@ class RefereeBooking(models.Model):
     match_date = models.DateTimeField()  # Denormalized for easier querying
     fee = models.DecimalField(max_digits=8, decimal_places=2, default=0)
     notes = models.TextField(blank=True)
+    
+    # Payment integration
+    payment = models.ForeignKey(
+        'payments.Payment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referee_bookings'
+    )
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    payment_released = models.BooleanField(default=False)
+    payment_released_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('referee', 'match')

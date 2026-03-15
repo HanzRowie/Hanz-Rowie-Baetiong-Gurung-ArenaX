@@ -62,7 +62,14 @@ class VenueViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(location__icontains=location)
         
         if sport_type:
-            queryset = queryset.filter(sport_type__icontains=sport_type)
+            # sport_types is a JSONField containing a list of sports
+            # Use JSON containment to check if the sport is in the list
+            from django.db.models import Q
+            sport_upper = sport_type.upper()
+            queryset = queryset.filter(
+                Q(sport_types__contains=[sport_upper]) |
+                Q(sport_types__icontains=sport_type)
+            )
         
         if capacity_min:
             try:

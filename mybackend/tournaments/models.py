@@ -328,28 +328,42 @@ class Match(models.Model):
             p2_name = self.player2.full_name if self.player2 else "TBD"
             return f"{self.tournament.title} - Round {self.round_number}, Match {self.match_number}: {p1_name} vs {p2_name}"
 
-# Referee Booking Request
-class RefereeBooking(models.Model):
+# Tournament-Level Referee Availability (before matches are created)
+class TournamentRefereeAvailability(models.Model):
+    """
+    Allows organizers to book referee availability at tournament level,
+    before matches are created. When bracket is generated, these convert
+    to match-specific RefereeBooking records.
+    """
     STATUS_CHOICES = (
         ('REQUESTED', 'Requested'),
-        ('ACCEPTED', 'Accepted'),
+        ('CONFIRMED', 'Confirmed'),
         ('DECLINED', 'Declined'),
         ('CANCELLED', 'Cancelled'),
+        ('CONVERTED', 'Converted to Match Bookings'),
     )
 
-    referee = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='referee_bookings_tournaments', limit_choices_to={'role':'REFEREE'})
-    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='referee_bookings_tournaments')
-    requested_by = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='referee_requests_tournaments', limit_choices_to={'role':'ORGANIZER'})
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='REQUESTED')
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name='referee_availability')
+    referee = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='tournament_availability', limit_choices_to={'role':'REFEREE'})
+    requested_by = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, related_name='referee_availability_requests', limit_choices_to={'role':'ORGANIZER'})
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='REQUESTED')
     requested_at = models.DateTimeField(auto_now_add=True)
     responded_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    fee = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Agreed referee fee for the tournament")
 
     class Meta:
-        unique_together = ('referee', 'match')
+        unique_together = ('tournament', 'referee')
+        indexes = [
+            models.Index(fields=['tournament', 'status']),
+            models.Index(fields=['referee', 'status']),
+        ]
+        verbose_name = 'Tournament Referee Availability'
+        verbose_name_plural = 'Tournament Referee Availabilities'
 
     def __str__(self):
-        return f"Referee {self.referee.full_name} for Match {self.match.id} ({self.status})"
+        return f"Referee {self.referee.full_name} for {self.tournament.title} ({self.status})"
 
 
 # Player Match Statistics for League Tournaments

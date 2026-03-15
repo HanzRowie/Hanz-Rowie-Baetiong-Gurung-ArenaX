@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Tournament, TournamentRegistration, Match, RefereeBooking, PlayerMatchStats, TournamentAuditLog
+from .models import Tournament, TournamentRegistration, Match, TournamentRefereeAvailability, PlayerMatchStats, TournamentAuditLog
 
 
 @admin.register(Tournament)
@@ -28,10 +28,10 @@ class MatchAdmin(admin.ModelAdmin):
     ordering = ('tournament', 'round_number', 'match_number')
 
 
-@admin.register(RefereeBooking)
-class RefereeBookingAdmin(admin.ModelAdmin):
-    list_display = ('referee', 'match', 'requested_by', 'status', 'requested_at')
-    search_fields = ('referee__full_name', 'match__tournament__title', 'requested_by__full_name')
+@admin.register(TournamentRefereeAvailability)
+class TournamentRefereeAvailabilityAdmin(admin.ModelAdmin):
+    list_display = ('referee', 'tournament', 'requested_by', 'status', 'fee', 'requested_at')
+    search_fields = ('referee__full_name', 'tournament__title', 'requested_by__full_name')
     list_filter = ('status', 'requested_at')
     ordering = ('-requested_at',)
 

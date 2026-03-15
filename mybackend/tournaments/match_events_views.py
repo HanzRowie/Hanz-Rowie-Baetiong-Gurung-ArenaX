@@ -132,9 +132,9 @@ class MatchEventViewSet(viewsets.ViewSet):
             futsal_score__team=match.team2
         ).count()
         
-        # Update match scores
-        match.team1_score = team1_goals
-        match.team2_score = team2_goals
+        # Update match scores (using player1_score and player2_score fields)
+        match.player1_score = team1_goals
+        match.player2_score = team2_goals
         
         # Update match status
         if match.status == 'SCHEDULED':
@@ -502,18 +502,37 @@ class MatchEventViewSet(viewsets.ViewSet):
                 match.status = 'COMPLETED'
                 match.actual_end_time = timezone.now()
                 
-                # Determine winner
-                if match.team1_score > match.team2_score:
-                    match.winning_team = match.team1
-                elif match.team2_score > match.team1_score:
-                    match.winning_team = match.team2
+                # Determine winner based on tournament type
+                if match.tournament.registration_type == 'TEAM':
+                    # Team tournament - use player scores (which represent team scores)
+                    if match.player1_score and match.player2_score:
+                        if match.player1_score > match.player2_score:
+                            match.winning_team = match.team1
+                        elif match.player2_score > match.player1_score:
+                            match.winning_team = match.team2
+                else:
+                    # Individual tournament
+                    if match.player1_score and match.player2_score:
+                        if match.player1_score > match.player2_score:
+                            match.winner = match.player1
+                        elif match.player2_score > match.player1_score:
+                            match.winner = match.player2
                 
                 match.save()
+                
+                # Determine winner name for response
+                winner_name = 'Draw'
+                if match.tournament.registration_type == 'TEAM':
+                    if match.winning_team:
+                        winner_name = match.winning_team.name
+                else:
+                    if match.winner:
+                        winner_name = match.winner.full_name
                 
                 return Response(
                     {
                         'message': 'Match completed successfully',
-                        'winner': match.winning_team.name if match.winning_team else 'Draw'
+                        'winner': winner_name
                     },
                     status=status.HTTP_200_OK
                 )

@@ -164,12 +164,12 @@ export default function QuickTeamRegistrationModal({
       setLoading(true);
       const response = await TeamService.getMyTeams();
       
-      // Filter teams by sport and where user is owner/captain
+      // Filter teams by sport and where user is owner/leader (not captain)
       const eligibleTeams = response.data.filter((team: TeamWithRole) => {
         const teamSport = team.sport_types?.[0] || '';
         const userRole = team.role || (team.owner ? 'OWNER' : 'MEMBER');
         return teamSport.toUpperCase() === tournament.sport_type.toUpperCase() &&
-          (userRole === 'OWNER' || userRole === 'CAPTAIN' || userRole === 'LEADER');
+          (userRole === 'OWNER' || userRole === 'LEADER');
       });
       
       setTeams(eligibleTeams);

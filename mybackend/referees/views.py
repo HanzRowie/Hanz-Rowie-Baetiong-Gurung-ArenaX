@@ -133,6 +133,10 @@ class RefereeBookingViewSet(viewsets.ModelViewSet):
 def respond_to_booking_request(request, booking_id):
     """Referee responds to booking request"""
     from accounts.models import CustomUser
+    from payments.services import RefereePaymentService
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     # Get the authenticated user
     user = CustomUser.objects.get(id=request.user_id)
@@ -150,6 +154,34 @@ def respond_to_booking_request(request, booking_id):
     booking.responded_at = datetime.now()
     booking.save()
 
+    # Process payment if accepted
+    payment_info = None
+    if response_type == 'accept' and booking.fee > 0:
+        try:
+            payment_service = RefereePaymentService()
+            
+            # Create payment record
+            payment = payment_service.process_referee_payment(
+                referee_booking=booking,
+                organizer=booking.requested_by
+            )
+            
+            # Hold payment in escrow
+            payment_service.hold_in_escrow(payment)
+            
+            payment_info = {
+                'payment_id': str(payment.id),
+                'amount': float(payment.amount),
+                'status': 'HELD_IN_ESCROW',
+                'message': 'Payment will be released after match completion'
+            }
+            
+            logger.info(f"Referee payment held in escrow for booking {booking.id}: {payment.amount}")
+            
+        except Exception as e:
+            logger.error(f"Error processing referee payment for booking {booking.id}: {str(e)}")
+            payment_info = {'error': 'Payment processing failed'}
+
     # Notify organizer
     status_text = 'accepted' if response_type == 'accept' else 'declined'
     send_notification(
@@ -162,7 +194,12 @@ def respond_to_booking_request(request, booking_id):
     )
 
     serializer = RefereeBookingSerializer(booking)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    response_data = serializer.data
+    
+    if payment_info:
+        response_data['payment'] = payment_info
+    
+    return Response(response_data, status=status.HTTP_200_OK)
 
 @api_view(['POST'])
 @jwt_required
@@ -344,6 +381,21 @@ def available_referees_for_tournament(request, tournament_id):
             if specialization and tournament.sport_type.upper() not in [s.upper() for s in specialization]:
                 continue
             
+            # Check if this referee has already been requested for this tournament
+            existing_booking = RefereeBooking.objects.filter(
+                referee=referee,
+                tournament=tournament
+            ).first()
+            
+            booking_info = None
+            if existing_booking:
+                booking_info = {
+                    'status': existing_booking.status,
+                    'requested_at': existing_booking.requested_at.isoformat(),
+                    'fee': float(existing_booking.fee) if existing_booking.fee else 0,
+                    'notes': existing_booking.notes
+                }
+            
             available_referees_data.append({
                 'id': str(referee.id),
                 'name': referee.full_name,
@@ -359,7 +411,8 @@ def available_referees_for_tournament(request, tournament_id):
                     'start_time': str(covering_slot.start_time) if covering_slot and covering_slot.start_time else None,
                     'end_time': str(covering_slot.end_time) if covering_slot and covering_slot.end_time else None,
                     'notes': covering_slot.notes if covering_slot else ''
-                } if covering_slot else None
+                } if covering_slot else None,
+                'booking_status': booking_info
             })
     
     # Sort by rating (highest first), then by experience
@@ -385,7 +438,10 @@ def assign_referee_to_tournament(request, tournament_id):
     """Assign a referee to a tournament"""
     from tournaments.models import Tournament, Match
     from accounts.models import CustomUser
+    from payments.services import RefereePaymentService
+    import logging
     
+    logger = logging.getLogger(__name__)
     user = CustomUser.objects.get(id=request.user_id)
     
     if user.role != 'ORGANIZER':
@@ -462,6 +518,46 @@ def assign_referee_to_tournament(request, tournament_id):
         status='REQUESTED'  # Referee needs to accept
     )
     
+    # If there's a fee, create payment and initiate Khalti payment
+    payment_info = None
+    if fee > 0:
+        try:
+            payment_service = RefereePaymentService()
+            
+            # Create payment record
+            payment = payment_service.process_referee_payment(
+                referee_booking=booking,
+                organizer=user
+            )
+            
+            # Initiate Khalti payment
+            customer_info = {
+                'name': user.full_name,
+                'email': user.email,
+                'phone': user.phone_number or ''
+            }
+            
+            khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
+            
+            if 'error' not in khalti_response:
+                payment_info = {
+                    'payment_id': str(payment.id),
+                    'amount': float(payment.amount),
+                    'payment_url': khalti_response.get('payment_url'),
+                    'pidx': khalti_response.get('pidx')
+                }
+                
+                logger.info(f"Payment initiated for referee booking {booking.id}: {payment.amount}")
+            else:
+                logger.error(f"Khalti payment initiation failed: {khalti_response['error']}")
+                # Don't fail the booking, just log the error
+                payment_info = {'error': 'Payment initiation failed'}
+                
+        except Exception as e:
+            logger.error(f"Error creating payment for referee booking {booking.id}: {str(e)}")
+            # Don't fail the booking, just log the error
+            payment_info = {'error': str(e)}
+    
     # Create notification for referee
     send_notification(
         user=referee,
@@ -474,7 +570,13 @@ def assign_referee_to_tournament(request, tournament_id):
     )
     
     serializer = RefereeBookingSerializer(booking)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+    response_data = serializer.data
+    
+    # Add payment info to response if payment was created
+    if payment_info:
+        response_data['payment'] = payment_info
+    
+    return Response(response_data, status=status.HTTP_201_CREATED)
 
 # Find available referees (for organizers)
 @api_view(['GET'])
@@ -517,3 +619,107 @@ def find_available_referees(request):
         })
 
     return Response({"referees": referees_data})
+
+
+@api_view(['POST'])
+@jwt_required
+def complete_match_and_release_payment(request, booking_id):
+    """Mark match as completed and release payment to referee"""
+    from accounts.models import CustomUser
+    from payments.services import RefereePaymentService
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    booking = get_object_or_404(RefereeBooking, id=booking_id)
+    
+    # Check if user is the organizer who requested the booking
+    if user != booking.requested_by:
+        return Response({
+            'error': 'Only the organizer who requested this booking can complete it'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Check if booking is in accepted status
+    if booking.status != 'ACCEPTED':
+        return Response({
+            'error': 'Booking must be in ACCEPTED status to complete'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Mark booking as completed
+    booking.status = 'COMPLETED'
+    booking.save()
+    
+    # Release payment if exists
+    payment_info = None
+    if booking.payment and not booking.payment_released:
+        try:
+            payment_service = RefereePaymentService()
+            payment_service.release_to_referee(booking)
+            
+            payment_info = {
+                'payment_id': str(booking.payment.id),
+                'amount': float(booking.payment.amount),
+                'status': 'RELEASED',
+                'released_at': booking.payment_released_at.isoformat() if booking.payment_released_at else None
+            }
+            
+            logger.info(f"Payment released to referee for booking {booking.id}: {booking.payment.amount}")
+            
+        except Exception as e:
+            logger.error(f"Error releasing payment for booking {booking.id}: {str(e)}")
+            return Response({
+                'error': f'Failed to release payment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Notify referee about match completion
+    send_notification(
+        user=booking.referee,
+        notification_type='GENERAL',
+        title='Match Completed',
+        message=f'Your match for {booking.tournament.title} has been marked as completed.',
+        related_id=booking.id,
+        action_url='/referee/bookings'
+    )
+    
+    serializer = RefereeBookingSerializer(booking)
+    response_data = serializer.data
+    
+    if payment_info:
+        response_data['payment'] = payment_info
+    
+    return Response(response_data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@jwt_required
+def referee_earnings(request):
+    """Get referee earnings summary"""
+    from accounts.models import CustomUser
+    from payments.services import RefereePaymentService
+    from datetime import datetime
+    
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role != 'REFEREE':
+        return Response({
+            'error': 'Only referees can view earnings'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get date range from query params
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    
+    if start_date:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    if end_date:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    payment_service = RefereePaymentService()
+    earnings = payment_service.calculate_referee_earnings(
+        referee=user,
+        start_date=start_date,
+        end_date=end_date
+    )
+    
+    return Response(earnings, status=status.HTTP_200_OK)

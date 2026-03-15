@@ -22,14 +22,30 @@ class VenueSerializer(serializers.ModelSerializer):
     description = serializers.CharField(source='facilities', required=False, allow_blank=True)
     amenities = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     
     class Meta:
         model = Venue
         fields = ['id', 'owner', 'name', 'description', 'location', 'latitude', 'longitude', 
                  'capacity', 'price_per_hour', 'sport_types', 'court_size', 
-                 'facilities', 'amenities', 'rating', 'image', 'is_active',
+                 'facilities', 'amenities', 'rating', 'image', 'images', 'is_active',
                  'default_opening_time', 'default_closing_time', 'operating_days']
         read_only_fields = ['owner']
+    
+    def get_image(self, obj):
+        """Return full URL for venue image"""
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+    
+    def get_images(self, obj):
+        """Return array of images (for now just the single image, but supports future multi-image)"""
+        image_url = self.get_image(obj)
+        return [image_url] if image_url else []
     
     def get_amenities(self, obj):
         """Return mock amenities for now"""
@@ -49,8 +65,10 @@ class VenueSerializer(serializers.ModelSerializer):
         return amenities or ['Basic Facilities']
     
     def get_rating(self, obj):
-        """Return mock rating for now"""
-        return 4.2  # Mock rating
+        """Return calculated average rating or None for new venues"""
+        # TODO: Implement proper rating calculation from VenueReview model
+        # For now, return None to show 'NEW' badge for venues without ratings
+        return None  # Will show as 'NEW' in frontend
 
 # Venue Availability Serializer
 class VenueAvailabilitySerializer(serializers.ModelSerializer):

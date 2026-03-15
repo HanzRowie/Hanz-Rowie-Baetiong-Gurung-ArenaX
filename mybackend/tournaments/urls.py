@@ -11,6 +11,7 @@ router.register(r'registrations', views.TournamentRegistrationViewSet)
 router.register(r'matches', views.MatchViewSet)
 router.register(r'match-events', MatchEventViewSet, basename='match-events')
 router.register(r'referee-bookings', views.RefereeBookingViewSet)
+router.register(r'tournament-referee-availability', views.TournamentRefereeAvailabilityViewSet, basename='tournament-referee-availability')
 router.register(r'player-stats', views.PlayerStatsViewSet, basename='player-stats')
 router.register(r'admin/tournaments', AdminTournamentViewSet, basename='admin-tournament')
 
