@@ -5,6 +5,7 @@ from . import views
 router = DefaultRouter()
 router.register(r'profiles', views.RefereeProfileViewSet)
 router.register(r'availability', views.RefereeAvailabilityViewSet)
+router.register(r'general-availability', views.RefereeGeneralAvailabilityViewSet)
 router.register(r'bookings', views.RefereeBookingViewSet)
 router.register(r'ratings', views.RefereeRatingViewSet)
 router.register(r'certifications', views.RefereeCertificationViewSet)

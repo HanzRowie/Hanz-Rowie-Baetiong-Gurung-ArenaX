@@ -10,11 +10,13 @@ from accounts.models import CustomUser
 from accounts.decorators import jwt_required, role_required
 from .models import (
     RefereeProfile, RefereeAvailability, RefereeBooking,
-    RefereeRating, RefereeCertification, RefereeMatchReport
+    RefereeRating, RefereeCertification, RefereeMatchReport,
+    RefereeGeneralAvailability
 )
 from .serializers import (
     RefereeProfileSerializer, RefereeAvailabilitySerializer, RefereeBookingSerializer,
-    RefereeRatingSerializer, RefereeCertificationSerializer, RefereeMatchReportSerializer
+    RefereeRatingSerializer, RefereeCertificationSerializer, RefereeMatchReportSerializer,
+    RefereeGeneralAvailabilitySerializer
 )
 from notifications.utils import send_notification
 
@@ -111,6 +113,35 @@ class RefereeAvailabilityViewSet(viewsets.ModelViewSet):
             availability.save()
         
         serializer.instance = availability
+
+class RefereeGeneralAvailabilityViewSet(viewsets.ModelViewSet):
+    queryset = RefereeGeneralAvailability.objects.all()
+    serializer_class = RefereeGeneralAvailabilitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Ensure user is a referee
+        if self.request.user.role != 'REFEREE':
+            return RefereeGeneralAvailability.objects.none()
+        return RefereeGeneralAvailability.objects.filter(referee=self.request.user)
+
+    def perform_create(self, serializer):
+        # Ensure user is a referee
+        if self.request.user.role != 'REFEREE':
+            raise serializers.ValidationError('Only referees can create general availability')
+        
+        # Use get_or_create to handle duplicates (one per referee)
+        general_availability, created = RefereeGeneralAvailability.objects.get_or_create(
+            referee=self.request.user,
+            defaults={'weekly_pattern': serializer.validated_data.get('weekly_pattern', {})}
+        )
+        
+        if not created:
+            # Update existing record
+            general_availability.weekly_pattern = serializer.validated_data.get('weekly_pattern', {})
+            general_availability.save()
+        
+        serializer.instance = general_availability
 
 class RefereeBookingViewSet(viewsets.ModelViewSet):
     queryset = RefereeBooking.objects.all()
@@ -339,9 +370,26 @@ def available_referees_for_tournament(request, tournament_id):
                 covering_slot = slot
                 break
         
-        # If no availability slots exist, referee is NOT available (must explicitly set availability)
+        # If no explicit availability slots exist, check general availability pattern
         if not availability_slots.exists():
-            is_available = False
+            try:
+                general_availability = RefereeGeneralAvailability.objects.get(referee=referee)
+                is_available = general_availability.is_available_on_date(
+                    tournament_date, 
+                    tournament_start, 
+                    tournament_end
+                )
+                # Create a virtual slot for display purposes
+                if is_available:
+                    day_name = tournament_date.strftime('%A').lower()
+                    day_settings = general_availability.weekly_pattern.get(day_name, {})
+                    covering_slot = type('obj', (object,), {
+                        'start_time': day_settings.get('start_time'),
+                        'end_time': day_settings.get('end_time'),
+                        'notes': 'Based on general availability'
+                    })()
+            except RefereeGeneralAvailability.DoesNotExist:
+                is_available = False
         
         # Check for conflicting bookings
         if is_available:
@@ -476,8 +524,16 @@ def assign_referee_to_tournament(request, tournament_id):
                 is_available = True
                 break
     else:
-        # No availability set, referee is NOT available (must explicitly set availability)
-        is_available = False
+        # Check general availability pattern
+        try:
+            general_availability = RefereeGeneralAvailability.objects.get(referee=referee)
+            is_available = general_availability.is_available_on_date(
+                tournament_date, 
+                tournament_start, 
+                tournament_end
+            )
+        except RefereeGeneralAvailability.DoesNotExist:
+            is_available = False
     
     if not is_available:
         return Response({'error': 'Referee is not available for this tournament time'}, status=status.HTTP_400_BAD_REQUEST)

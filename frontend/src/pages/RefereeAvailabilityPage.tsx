@@ -66,7 +66,22 @@ const RefereeAvailabilityPage: React.FC = () => {
 
   useEffect(() => {
     fetchAvailabilities();
+    fetchGeneralAvailability();
   }, []);
+
+  const fetchGeneralAvailability = async () => {
+    try {
+      const response = await api.get('/api/referees/general-availability/');
+      const existingSettings = response.data.results || response.data;
+      
+      if (existingSettings.length > 0 && existingSettings[0].weekly_pattern) {
+        setGeneralAvailability(existingSettings[0].weekly_pattern);
+      }
+    } catch (err: any) {
+      console.error('Fetch general availability error:', err);
+      // Don't show error to user, just use defaults
+    }
+  };
 
   const fetchAvailabilities = async () => {
     try {
@@ -153,12 +168,28 @@ const RefereeAvailabilityPage: React.FC = () => {
   const saveGeneralAvailability = async () => {
     try {
       setSaving(true);
-      // Here you could save general availability settings to backend if needed
-      // For now, we'll just close the settings panel
+      
+      // Save general availability settings to backend
+      const response = await api.get('/api/referees/general-availability/');
+      const existingSettings = response.data.results || response.data;
+      
+      if (existingSettings.length > 0) {
+        // Update existing
+        await api.put(`/api/referees/general-availability/${existingSettings[0].id}/`, {
+          weekly_pattern: generalAvailability
+        });
+      } else {
+        // Create new
+        await api.post('/api/referees/general-availability/', {
+          weekly_pattern: generalAvailability
+        });
+      }
+      
       setShowSettings(false);
-      alert('General availability settings saved!');
+      alert('General availability settings saved! These settings will apply to all future dates.');
     } catch (err: any) {
-      alert('Failed to save general availability settings');
+      console.error('Save general availability error:', err.response?.data);
+      alert(err.response?.data?.error || 'Failed to save general availability settings');
     } finally {
       setSaving(false);
     }
@@ -224,7 +255,9 @@ const RefereeAvailabilityPage: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Availability</h1>
-          <p className="text-gray-600 mt-1">Manage when you're available to referee tournaments</p>
+          <p className="text-gray-600 mt-1">
+            Set your general weekly availability pattern. This applies to ALL future tournament dates automatically.
+          </p>
         </div>
         <Button 
           onClick={() => setShowSettings(!showSettings)}
@@ -246,7 +279,12 @@ const RefereeAvailabilityPage: React.FC = () => {
       {showSettings && (
         <Card className="p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">General Availability Settings</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">General Availability Settings</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                These settings apply to ALL future dates. When you save, referees will be available for tournaments on any matching day.
+              </p>
+            </div>
             <div className="flex space-x-2">
               <Button 
                 onClick={saveGeneralAvailability}
@@ -265,7 +303,7 @@ const RefereeAvailabilityPage: React.FC = () => {
                 className="flex items-center space-x-1"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>Apply to All</span>
+                <span>Apply to Next 14 Days</span>
               </Button>
             </div>
           </div>
@@ -326,10 +364,10 @@ const RefereeAvailabilityPage: React.FC = () => {
       <Card className="p-6">
         <div className="flex items-center space-x-2 mb-4">
           <Calendar className="w-5 h-5 text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Quick Availability Toggle</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Quick Availability Toggle (Optional)</h2>
         </div>
         <p className="text-sm text-gray-600 mb-6">
-          Toggle your availability for the next 14 days. Times are based on your general availability settings.
+          Your general availability settings already apply to all future dates. Use this section only if you want to override specific days in the next 14 days.
         </p>
         
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">

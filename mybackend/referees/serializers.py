@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     RefereeProfile, RefereeAvailability, RefereeBooking,
-    RefereeRating, RefereeCertification, RefereeMatchReport
+    RefereeRating, RefereeCertification, RefereeMatchReport,
+    RefereeGeneralAvailability
 )
 
 class RefereeProfileSerializer(serializers.ModelSerializer):
@@ -11,6 +12,14 @@ class RefereeProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = RefereeProfile
         fields = '__all__'
+
+class RefereeGeneralAvailabilitySerializer(serializers.ModelSerializer):
+    referee_name = serializers.CharField(source='referee.full_name', read_only=True)
+
+    class Meta:
+        model = RefereeGeneralAvailability
+        fields = '__all__'
+        read_only_fields = ('referee',)
 
 class RefereeAvailabilitySerializer(serializers.ModelSerializer):
     referee_name = serializers.CharField(source='referee.full_name', read_only=True)

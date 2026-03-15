@@ -29,6 +29,62 @@ class RefereeProfile(models.Model):
     def __str__(self):
         return f"{self.user.full_name} - {self.certification_level}"
 
+class RefereeGeneralAvailability(models.Model):
+    """General weekly availability pattern for referees"""
+    referee = models.OneToOneField(
+        CustomUser, 
+        on_delete=models.CASCADE, 
+        related_name='general_availability',
+        limit_choices_to={'role': 'REFEREE'}
+    )
+    
+    # Weekly pattern stored as JSON
+    # Format: {"monday": {"enabled": true, "start_time": "09:00", "end_time": "17:00"}, ...}
+    weekly_pattern = models.JSONField(default=dict, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.referee.full_name} - General Availability"
+    
+    def is_available_on_date(self, check_date, start_time=None, end_time=None):
+        """Check if referee is generally available on a given date based on weekly pattern"""
+        if not self.weekly_pattern:
+            return False
+        
+        # Get day of week (monday, tuesday, etc.)
+        day_name = check_date.strftime('%A').lower()
+        
+        day_settings = self.weekly_pattern.get(day_name, {})
+        
+        if not day_settings.get('enabled', False):
+            return False
+        
+        # If no specific time check needed, just return enabled status
+        if start_time is None or end_time is None:
+            return True
+        
+        # Check if the time range is covered
+        pattern_start = day_settings.get('start_time')
+        pattern_end = day_settings.get('end_time')
+        
+        if not pattern_start or not pattern_end:
+            return True  # Available all day
+        
+        # Convert string times to time objects for comparison
+        from datetime import time as dt_time
+        if isinstance(pattern_start, str):
+            pattern_start = dt_time.fromisoformat(pattern_start)
+        if isinstance(pattern_end, str):
+            pattern_end = dt_time.fromisoformat(pattern_end)
+        if isinstance(start_time, str):
+            start_time = dt_time.fromisoformat(start_time)
+        if isinstance(end_time, str):
+            end_time = dt_time.fromisoformat(end_time)
+        
+        return pattern_start <= start_time and pattern_end >= end_time
+
 class RefereeAvailability(models.Model):
     """Referee availability schedule"""
     referee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='referee_availabilities', limit_choices_to={'role':'REFEREE'})
