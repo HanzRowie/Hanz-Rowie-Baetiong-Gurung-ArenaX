@@ -45,6 +45,8 @@ class RefereeBookingSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_match_details(self, obj):
+        if not obj.match:
+            return None
         return f"Round {obj.match.round_number}, Match {obj.match.match_number}"
     
     def get_tournament(self, obj):
@@ -60,6 +62,8 @@ class RefereeBookingSerializer(serializers.ModelSerializer):
         }
     
     def get_match(self, obj):
+        if not obj.match:
+            return None
         return {
             'id': str(obj.match.id),
             'round_number': obj.match.round_number,
@@ -101,4 +105,6 @@ class RefereeMatchReportSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_match_details(self, obj):
+        if not obj.match:
+            return None
         return f"Round {obj.match.round_number}, Match {obj.match.match_number}"

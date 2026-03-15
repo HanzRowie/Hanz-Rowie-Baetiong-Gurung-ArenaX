@@ -131,7 +131,7 @@ class RefereeBooking(models.Model):
     )
 
     referee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='referee_bookings_referees', limit_choices_to={'role':'REFEREE'})
-    match = models.ForeignKey('tournaments.Match', on_delete=models.CASCADE, related_name='referee_bookings_referees')
+    match = models.ForeignKey('tournaments.Match', on_delete=models.CASCADE, related_name='referee_bookings_referees', null=True, blank=True)
     tournament = models.ForeignKey('tournaments.Tournament', on_delete=models.CASCADE, related_name='referee_bookings_referees')
     requested_by = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='referee_requests_referees', limit_choices_to={'role':'ORGANIZER'})
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='REQUESTED')
@@ -154,7 +154,7 @@ class RefereeBooking(models.Model):
     payment_released_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = ('referee', 'match')
+        unique_together = ('referee', 'tournament')
         ordering = ['match_date']
 
     def __str__(self):

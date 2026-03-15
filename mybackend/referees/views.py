@@ -505,67 +505,28 @@ def assign_referee_to_tournament(request, tournament_id):
     
     referee = get_object_or_404(CustomUser, id=referee_id, role='REFEREE')
     
-    # Check if referee is available (reuse logic from above)
     tournament_date = tournament.date
     tournament_start = tournament.start_time
-    tournament_end = tournament.end_time or tournament.start_time
     
-    # Check availability
-    availability_slots = RefereeAvailability.objects.filter(
+    # Check if referee is already booked for this tournament
+    existing_booking = RefereeBooking.objects.filter(
         referee=referee,
-        available_date=tournament_date,
-        is_available=True
-    )
+        tournament=tournament
+    ).first()
+    if existing_booking:
+        serializer = RefereeBookingSerializer(existing_booking)
+        return Response(
+            {'error': 'This referee has already been requested for this tournament', 'existing_booking': serializer.data},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
-    is_available = False
-    if availability_slots.exists():
-        for slot in availability_slots:
-            if slot.covers_time_range(tournament_start, tournament_end):
-                is_available = True
-                break
-    else:
-        # Check general availability pattern
-        try:
-            general_availability = RefereeGeneralAvailability.objects.get(referee=referee)
-            is_available = general_availability.is_available_on_date(
-                tournament_date, 
-                tournament_start, 
-                tournament_end
-            )
-        except RefereeGeneralAvailability.DoesNotExist:
-            is_available = False
-    
-    if not is_available:
-        return Response({'error': 'Referee is not available for this tournament time'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Check for conflicts
-    conflicting_bookings = RefereeBooking.objects.filter(
-        referee=referee,
-        status__in=['REQUESTED', 'ACCEPTED'],
-        match_date__date=tournament_date
-    )
-    
-    for booking in conflicting_bookings:
-        booking_start = booking.match_date.time()
-        booking_end = (booking.match_date + timedelta(hours=2)).time()
-        
-        if (tournament_start < booking_end and tournament_end > booking_start):
-            return Response({'error': 'Referee has conflicting bookings'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Check if tournament has matches
-    matches = Match.objects.filter(tournament=tournament)
-    if not matches.exists():
-        return Response({
-            'error': 'Tournament has no matches yet. Please generate the bracket first before assigning referees.'
-        }, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Get the first match (or you can let organizer select specific match)
-    match = matches.first()
+    # Get the first match if available (optional)
+    match = Match.objects.filter(tournament=tournament).first()
     
     # Create referee booking
     booking = RefereeBooking.objects.create(
         referee=referee,
-        match=match,
+        match=match,  # May be None if bracket not generated yet
         tournament=tournament,
         requested_by=user,
         match_date=datetime.combine(tournament_date, tournament_start),
