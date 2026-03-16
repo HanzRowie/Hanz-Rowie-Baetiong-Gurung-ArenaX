@@ -32,10 +32,12 @@ export default function VenueBookingPage() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentData, setPaymentData] = useState<any>(null);
+  const [pendingBooking, setPendingBooking] = useState<any>(null);
 
   useEffect(() => {
     if (venueId) {
       loadVenue();
+      checkPendingBooking();
     }
   }, [venueId]);
 
@@ -51,6 +53,31 @@ export default function VenueBookingPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkPendingBooking = async () => {
+    try {
+      const response = await venueService.getPendingBooking(venueId!);
+      if (response.pending_booking) {
+        setPendingBooking(response);
+      }
+    } catch {
+      // no pending booking or endpoint not available — ignore
+    }
+  };
+
+  const handleResumePayment = () => {
+    if (!pendingBooking) return;
+    const { pending_booking, payment, expires_at } = pendingBooking;
+    setPaymentData({
+      bookingId: pending_booking.id,
+      paymentId: payment?.id,
+      paymentUrl: payment?.metadata?.payment_url,
+      pidx: payment?.transaction_id,
+      amount: parseFloat(pending_booking.amount),
+      expiresAt: expires_at,
+    });
+    setShowPaymentModal(true);
   };
 
   useEffect(() => {
@@ -206,15 +233,22 @@ export default function VenueBookingPage() {
     } catch (error: any) {
       console.error('Booking error:', error);
       console.error('Error response:', error.response);
-      
-      let errorMessage = 'Failed to create booking';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
 
-      toastService.error(errorMessage);
+      const status = error.response?.status;
+      const data = error.response?.data;
+
+      if (status === 503 && data?.retry) {
+        // Payment gateway is down but booking was saved
+        toastService.warning(data.error || 'Payment gateway is temporarily unavailable. Your booking has been saved — please try again shortly.');
+      } else {
+        let errorMessage = 'Failed to create booking';
+        if (data?.error) {
+          errorMessage = data.error;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        toastService.error(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -278,6 +312,16 @@ export default function VenueBookingPage() {
 
   const totalCost = calculateCost();
 
+  // Format countdown for pending booking
+  const getPendingExpiry = () => {
+    if (!pendingBooking?.expires_at) return '';
+    const diff = new Date(pendingBooking.expires_at).getTime() - Date.now();
+    if (diff <= 0) return 'Expired';
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${mins}m ${secs}s`;
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
@@ -293,6 +337,29 @@ export default function VenueBookingPage() {
           <p className="text-gray-500 text-sm">Send a booking request to the venue owner</p>
         </div>
       </div>
+
+      {/* Resume pending payment banner */}
+      {pendingBooking && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="font-medium text-amber-800">You have an incomplete booking</p>
+              <p className="text-sm text-amber-700">
+                {pendingBooking.pending_booking.date} &nbsp;
+                {pendingBooking.pending_booking.start_time}–{pendingBooking.pending_booking.end_time}
+                &nbsp;· expires in {getPendingExpiry()}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleResumePayment}
+            className="shrink-0 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+          >
+            Pay Now
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Venue Details */}

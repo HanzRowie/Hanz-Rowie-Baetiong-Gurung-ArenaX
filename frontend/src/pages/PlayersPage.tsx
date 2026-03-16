@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { Search, MapPin, MessageCircle, User, Filter } from 'lucide-react';
 import { profileService } from '@/services/profileService';
 import type { ExtendedUserProfile } from '@/types';
@@ -186,7 +187,7 @@ export default function PlayersPage() {
                 <div className="flex items-center gap-4 mb-4">
                   {player.profile_picture ? (
                     <img
-                      src={player.profile_picture}
+                      src={getAvatarUrl(player.profile_picture)!}
                       alt={player.full_name}
                       className="h-16 w-16 rounded-full object-cover"
                     />

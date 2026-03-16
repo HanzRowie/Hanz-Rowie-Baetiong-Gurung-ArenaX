@@ -21,25 +21,43 @@ class VenueViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Set the owner to the current user for venue owners"""
-        print(f"PERFORM_CREATE - User: {self.request.user}, Role: {getattr(self.request.user, 'role', 'No role')}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[VenueViewSet.perform_create] User: {self.request.user}, FILES: {list(self.request.FILES.keys())}")
+        if 'image' in self.request.FILES:
+            logger.info(f"[VenueViewSet.perform_create] image file: {self.request.FILES['image'].name}, size: {self.request.FILES['image'].size}")
+        else:
+            logger.warning("[VenueViewSet.perform_create] No 'image' in request.FILES")
         serializer.save(owner=self.request.user)
 
     def update(self, request, *args, **kwargs):
         """Custom update method with debug logging"""
-        print(f"VENUE UPDATE - User: {request.user}, Data: {request.data}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[VenueViewSet.update] User: {request.user}, DATA keys: {list(request.data.keys())}, FILES keys: {list(request.FILES.keys())}")
+        if 'image' in request.FILES:
+            logger.info(f"[VenueViewSet.update] image file: {request.FILES['image'].name}, size: {request.FILES['image'].size}")
+        else:
+            logger.warning("[VenueViewSet.update] No 'image' in request.FILES")
         try:
             return super().update(request, *args, **kwargs)
         except Exception as e:
-            print(f"VENUE UPDATE ERROR: {str(e)}")
+            logger.error(f"[VenueViewSet.update] ERROR: {str(e)}")
             raise
 
     def partial_update(self, request, *args, **kwargs):
         """Custom partial update method with debug logging"""
-        print(f"VENUE PARTIAL UPDATE - User: {request.user}, Data: {request.data}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[VenueViewSet.partial_update] User: {request.user}, DATA keys: {list(request.data.keys())}, FILES keys: {list(request.FILES.keys())}")
+        if 'image' in request.FILES:
+            logger.info(f"[VenueViewSet.partial_update] image file: {request.FILES['image'].name}, size: {request.FILES['image'].size}")
+        else:
+            logger.warning("[VenueViewSet.partial_update] No 'image' in request.FILES")
         try:
             return super().partial_update(request, *args, **kwargs)
         except Exception as e:
-            print(f"VENUE PARTIAL UPDATE ERROR: {str(e)}")
+            logger.error(f"[VenueViewSet.partial_update] ERROR: {str(e)}")
             raise
 
     def get_queryset(self):
@@ -251,7 +269,17 @@ def book_venue(request, venue_id):
             print("Blocking booking: Slots exist for day but none cover requested time.")
             return Response({'error': 'Venue is not available for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check for conflicting bookings
+        # Expire any stale PENDING bookings whose payment window has passed
+        from django.utils import timezone as tz
+        tz.now()  # ensure timezone is imported
+        VenueBooking.objects.filter(
+            venue=venue,
+            date=data['date'],
+            status='PENDING',
+            payment_expires_at__lt=tz.now()
+        ).update(status='CANCELLED')
+
+        # Check for conflicting bookings (exclude expired PENDING ones)
         print("Checking conflicts with:")
         print(f"Start < {end_time_obj}")
         print(f"End > {start_time_obj}")
@@ -276,6 +304,8 @@ def book_venue(request, venue_id):
         # Create booking with PENDING status and payment
         print("Creating booking...")
         
+        from django.utils import timezone as tz
+        from datetime import timedelta
         booking = VenueBooking.objects.create(
             venue=venue,
             user=request.user,
@@ -285,7 +315,8 @@ def book_venue(request, venue_id):
             purpose=data.get('purpose', ''),
             notes=data.get('notes', ''),
             status='PENDING',
-            payment_status='PENDING'
+            payment_status='PENDING',
+            payment_expires_at=tz.now() + timedelta(minutes=15)
         )
         print(f"Booking created: {booking.id}, Amount: {booking.amount}")
 
@@ -315,11 +346,28 @@ def book_venue(request, venue_id):
         khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
         
         if 'error' in khalti_response:
-            # Delete booking if payment initiation fails
+            error_str = str(khalti_response.get('error', ''))
+            # Check if it's a gateway/network issue (503, connection error, timeout)
+            is_gateway_error = (
+                '503' in error_str or
+                'Service Temporarily Unavailable' in error_str or
+                'ConnectionError' in error_str or
+                'Timeout' in error_str or
+                'timed out' in error_str.lower()
+            )
+            if is_gateway_error:
+                # Keep the booking alive so user can retry payment later
+                return Response({
+                    'error': 'Payment gateway is temporarily unavailable. Your booking has been saved — please try again in a few minutes.',
+                    'booking_id': booking.id,
+                    'retry': True
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            # For other errors, clean up the booking
             booking.delete()
+            payment.delete()
             return Response({
                 'error': 'Failed to initiate payment',
-                'details': khalti_response['error']
+                'details': error_str
             }, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = VenueBookingSerializer(booking)
@@ -664,8 +712,10 @@ def available_venues_for_tournament(request):
         venues = filter_venues_by_approval_status(venues, request.user)
         
         # Filter by sport type if provided
+        # sport_types is a JSONField (list); filter in Python for SQLite compatibility
         if sport_type:
-            venues = venues.filter(sport_type__iexact=sport_type)
+            sport_upper = sport_type.upper()
+            venues = [v for v in venues if sport_upper in (v.sport_types or [])]
         
         available_venues = []
         
@@ -709,11 +759,15 @@ def available_venues_for_tournament(request):
                 # If no availability slots exist, assume venue is available (legacy venues)
                 pass
             
-            # Check for conflicting bookings
+            # Check for conflicting bookings (skip expired PENDING bookings)
+            from django.utils import timezone as tz
             conflicting_bookings = VenueBooking.objects.filter(
                 venue=venue,
                 date=date,
                 status__in=['PENDING', 'CONFIRMED']
+            ).exclude(
+                status='PENDING',
+                payment_expires_at__lt=tz.now()
             ).filter(
                 start_time__lt=end_time_obj,
                 end_time__gt=start_time_obj
@@ -860,7 +914,7 @@ def calculate_booking_cost(request, venue_id):
                 'name': venue.name,
                 'location': venue.location,
                 'price_per_hour': float(venue.price_per_hour),
-                'sport_type': venue.sport_type
+                'sport_types': venue.sport_types
             },
             'duration_hours': round(duration_hours, 2),
             'breakdown': {
@@ -892,3 +946,36 @@ def calculate_booking_cost(request, venue_id):
         return Response({
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_pending_booking(request, venue_id):
+    """Return the user's active (non-expired) PENDING booking for a venue, if any."""
+    from django.utils import timezone as tz
+    from payments.models import Payment
+    from payments.serializers import PaymentSerializer
+
+    # Auto-expire stale bookings first
+    VenueBooking.objects.filter(
+        user=request.user,
+        venue_id=venue_id,
+        status='PENDING',
+        payment_expires_at__lt=tz.now()
+    ).update(status='CANCELLED')
+
+    booking = VenueBooking.objects.filter(
+        user=request.user,
+        venue_id=venue_id,
+        status='PENDING',
+        payment_expires_at__gt=tz.now()
+    ).order_by('-created_at').first()
+
+    if not booking:
+        return Response({'pending_booking': None})
+
+    payment = Payment.objects.filter(venue_booking=booking).first()
+    return Response({
+        'pending_booking': VenueBookingSerializer(booking).data,
+        'payment': PaymentSerializer(payment).data if payment else None,
+        'expires_at': booking.payment_expires_at.isoformat(),
+    })

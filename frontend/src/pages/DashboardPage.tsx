@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/utils/dateUtils';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { 
   Trophy, User, Calendar, Eye, 
   Award, BarChart3,
@@ -322,7 +323,7 @@ export default function DashboardPage() {
                             <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-2">
                               {user.profile_picture ? (
                                 <img 
-                                  src={user.profile_picture}
+                                  src={getAvatarUrl(user.profile_picture)!}
                                   alt="You" 
                                   className="w-14 h-14 rounded-full object-cover"
                                 />

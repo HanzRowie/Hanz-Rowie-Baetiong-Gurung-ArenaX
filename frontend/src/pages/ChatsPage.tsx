@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
@@ -467,7 +468,7 @@ export default function ChatsPage() {
         </button>
         {currentConversation?.profile_picture ? (
           <img
-            src={currentConversation.profile_picture}
+            src={getAvatarUrl(currentConversation.profile_picture)!}
             alt={currentConversation.full_name}
             className="h-8 w-8 rounded-full object-cover"
           />
@@ -665,7 +666,7 @@ export default function ChatsPage() {
                         <div className="flex items-center gap-3">
                           {conversation.user.profile_picture ? (
                             <img
-                              src={conversation.user.profile_picture}
+                              src={getAvatarUrl(conversation.user.profile_picture)!}
                               alt={conversation.user.full_name}
                               className="h-12 w-12 rounded-full object-cover"
                             />
@@ -733,7 +734,7 @@ export default function ChatsPage() {
                       <div className="flex items-center gap-3">
                         {conversation.user.profile_picture ? (
                           <img
-                            src={conversation.user.profile_picture}
+                            src={getAvatarUrl(conversation.user.profile_picture)!}
                             alt={conversation.user.full_name}
                             className="h-12 w-12 rounded-full object-cover"
                           />

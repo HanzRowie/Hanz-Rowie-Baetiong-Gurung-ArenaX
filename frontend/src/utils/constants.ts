@@ -1,5 +1,17 @@
 // API Configuration
 export const API_URL = import.meta.env.VITE_API_URL;
+
+/**
+ * Converts a potentially relative media URL to an absolute URL.
+ * The backend serializer may return relative paths (e.g. /media/...) when
+ * the request context is unavailable. This ensures images always load.
+ */
+export const getMediaUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = (API_URL || 'http://localhost:8000').replace(/\/$/, '');
+  return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 export const WS_URL = import.meta.env.VITE_WS_URL;
 
 // Application Configuration

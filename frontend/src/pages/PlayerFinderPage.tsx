@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { profileService } from '@/services/profileService';
@@ -343,7 +344,7 @@ export default function PlayerFinderPage() {
                     <div className="flex-shrink-0 relative">
                       {player.profile_picture ? (
                         <img
-                          src={player.profile_picture}
+                          src={getAvatarUrl(player.profile_picture)!}
                           alt={player.full_name}
                           className="w-16 h-16 rounded-full object-cover"
                         />

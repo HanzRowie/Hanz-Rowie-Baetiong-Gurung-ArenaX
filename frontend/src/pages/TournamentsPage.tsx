@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -25,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
 import QuickTeamRegistrationModal from '@/components/player/QuickTeamRegistrationModal';
+import { getMediaUrl } from '@/utils/constants';
 
 // Debounce utility function
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number): T {
@@ -632,7 +634,7 @@ export default function TournamentsPage() {
                       {/* Tournament Image */}
                       {tournament.tournament_image ? (
                         <img
-                          src={tournament.tournament_image}
+                          src={getMediaUrl(tournament.tournament_image)!}
                           alt={tournament.title}
                           className="w-full h-40 object-cover"
                         />
@@ -702,7 +704,7 @@ export default function TournamentsPage() {
                         <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-100">
                           {tournament.organizer.profile_picture ? (
                             <img
-                              src={tournament.organizer.profile_picture}
+                              src={getAvatarUrl(tournament.organizer.profile_picture)!}
                               alt={tournament.organizer.name}
                               className="h-6 w-6 rounded-full object-cover"
                             />
@@ -741,7 +743,7 @@ export default function TournamentsPage() {
                         <div className="flex-shrink-0">
                           {tournament.tournament_image ? (
                             <img
-                              src={tournament.tournament_image}
+                              src={getMediaUrl(tournament.tournament_image)!}
                               alt={tournament.title}
                               className="w-24 h-24 object-cover rounded-lg"
                             />
@@ -808,7 +810,7 @@ export default function TournamentsPage() {
                             <div className="flex items-center gap-2">
                               {tournament.organizer.profile_picture ? (
                                 <img
-                                  src={tournament.organizer.profile_picture}
+                                  src={getAvatarUrl(tournament.organizer.profile_picture)!}
                                   alt={tournament.organizer.name}
                                   className="h-6 w-6 rounded-full object-cover"
                                 />

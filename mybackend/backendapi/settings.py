@@ -264,6 +264,11 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple'
         },
+        'console_always': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
@@ -326,6 +331,16 @@ LOGGING = {
         },
         'security': {
             'handlers': ['console', 'security_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'tournaments': {
+            'handlers': ['console_always', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'venues': {
+            'handlers': ['console_always', 'file'],
             'level': 'INFO',
             'propagate': False,
         },

@@ -241,7 +241,7 @@ def get_conversation(request, other_user_id):
             'username': other_user.username,
             'full_name': other_user.full_name,
             'role': other_user.role,
-            'profile_picture': other_user.profile_picture.url if other_user.profile_picture else None
+            'profile_picture': request.build_absolute_uri(other_user.profile_picture.url) if other_user.profile_picture else None
         }
     }, status=status.HTTP_200_OK)
 
@@ -297,7 +297,7 @@ def create_conversation(request):
                 'username': recipient.username,
                 'full_name': recipient.full_name,
                 'role': recipient.role,
-                'profile_picture': recipient.profile_picture.url if recipient.profile_picture else None
+                'profile_picture': request.build_absolute_uri(recipient.profile_picture.url) if recipient.profile_picture else None
             },
             'latest_message': None,
             'unread_count': 0,
@@ -377,7 +377,7 @@ def get_conversations(request):
                     'username': other_user.username,
                     'full_name': other_user.full_name,
                     'role': other_user.role,
-                    'profile_picture': other_user.profile_picture.url if other_user.profile_picture else None
+                    'profile_picture': request.build_absolute_uri(other_user.profile_picture.url) if other_user.profile_picture else None
                 },
                 'latest_message': {
                     'id': str(latest_message.id),

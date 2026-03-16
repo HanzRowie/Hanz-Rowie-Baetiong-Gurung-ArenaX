@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Edit3, MapPin, Trophy, Calendar, Award,
@@ -493,9 +494,9 @@ export default function ProfilePage() {
                 alt="Crop preview"
                 className="w-full h-64 object-contain border rounded"
               />
-              {/* Simple crop overlay - center crop */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="border-2 border-purple-500 bg-purple-500 bg-opacity-20 w-48 h-48 rounded" />
+              {/* Crop guide - dashed border outline only, no fill */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="border-2 border-dashed border-purple-500 w-48 h-48 rounded" />
               </div>
             </div>
 
@@ -535,7 +536,7 @@ export default function ProfilePage() {
                   {croppedImage || newProfilePicture || profile?.profile_picture ? (
                     <div className="relative">
                       <img
-                        src={croppedImage || (newProfilePicture ? URL.createObjectURL(newProfilePicture) : profile?.profile_picture!)}
+                        src={croppedImage || (newProfilePicture ? URL.createObjectURL(newProfilePicture) : getAvatarUrl(profile?.profile_picture)!)}
                         alt={profile?.full_name}
                         className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg"
                       />
@@ -566,7 +567,7 @@ export default function ProfilePage() {
               ) : (
                 profile?.profile_picture ? (
                   <img
-                    src={profile.profile_picture}
+                    src={getAvatarUrl(profile.profile_picture)!}
                     alt={profile.full_name}
                     className="h-32 w-32 rounded-full object-cover border-4 border-white shadow-lg"
                   />
@@ -1421,7 +1422,7 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3">
                     {connection.profile_picture ? (
                       <img
-                        src={connection.profile_picture}
+                        src={getAvatarUrl(connection.profile_picture)!}
                         alt={connection.full_name}
                         className="w-12 h-12 rounded-full object-cover"
                       />

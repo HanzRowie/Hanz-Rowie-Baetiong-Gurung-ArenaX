@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Star, Award, Calendar, Clock, 
@@ -348,7 +349,7 @@ const RefereeSelectionPage: React.FC = () => {
                     <div className="relative flex-shrink-0">
                       {referee.profile_picture ? (
                         <img
-                          src={referee.profile_picture}
+                          src={getAvatarUrl(referee.profile_picture)!}
                           alt={referee.name}
                           className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
                         />

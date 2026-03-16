@@ -352,7 +352,14 @@ def register_for_tournament(request, tournament_id):
                 'error': 'This tournament requires team registration. Please register as a team.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if user is already registered
+        # Clean up any stale PENDING_PAYMENT registrations (payment was never completed)
+        TournamentRegistration.objects.filter(
+            tournament=tournament,
+            player=user,
+            status='PENDING_PAYMENT'
+        ).delete()
+
+        # Check if user is already registered (exclude PENDING_PAYMENT which was just cleaned up)
         if TournamentRegistration.objects.filter(tournament=tournament, player=user).exists():
             return Response({'error': 'Already registered for this tournament'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -418,7 +425,14 @@ def register_with_payment(request, tournament_id):
                 'error': 'This tournament requires team registration. Please register as a team.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user is already registered
+        # Clean up any stale PENDING_PAYMENT registrations before checking
+        TournamentRegistration.objects.filter(
+            tournament=tournament,
+            player=user,
+            status='PENDING_PAYMENT'
+        ).delete()
+
+        # Check if user is already registered (active registration only)
         if TournamentRegistration.objects.filter(tournament=tournament, player=user).exists():
             return Response({
                 'error': 'Already registered for this tournament'
@@ -621,8 +635,19 @@ def create_tournament(request):
         return Response({'error': 'Only organizers can create tournaments'}, status=status.HTTP_403_FORBIDDEN)
 
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+
         data = request.data.copy()
         linked_venue_id = data.get('linked_venue_id')
+
+        # Log incoming files for debugging
+        logger.info(f"[create_tournament] request.FILES keys: {list(request.FILES.keys())}")
+        logger.info(f"[create_tournament] request.data keys: {list(request.data.keys())}")
+        if 'tournament_image' in request.FILES:
+            logger.info(f"[create_tournament] tournament_image file: {request.FILES['tournament_image'].name}, size: {request.FILES['tournament_image'].size}")
+        else:
+            logger.warning("[create_tournament] No tournament_image found in request.FILES")
         
         # If a venue is selected, create a booking with payment
         venue_booking = None
@@ -750,9 +775,23 @@ def create_tournament(request):
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         # Create the tournament
-        serializer = TournamentSerializer(data=data)
+        # Pass request.data directly (includes files merged in by DRF's MultiPartParser).
+        # The `data` copy above was only used for venue-related mutations; re-apply those here.
+        if linked_venue_id and venue_booking:
+            data['linked_venue'] = venue.id
+            data['venue_booking'] = venue_booking.id
+
+        serializer = TournamentSerializer(data=data, context={'request': request})
         if serializer.is_valid():
-            tournament = serializer.save(organizer=request.user)
+            # Explicitly pass tournament_image from request.FILES to ensure it's saved
+            save_kwargs = {'organizer': request.user}
+            if 'tournament_image' in request.FILES:
+                save_kwargs['tournament_image'] = request.FILES['tournament_image']
+                logger.info(f"[create_tournament] Saving with tournament_image: {request.FILES['tournament_image'].name}")
+            else:
+                logger.warning("[create_tournament] No tournament_image in FILES at save time")
+            tournament = serializer.save(**save_kwargs)
+            logger.info(f"[create_tournament] Saved. tournament_image={tournament.tournament_image}")
             
             # Update venue booking with tournament reference
             if venue_booking:

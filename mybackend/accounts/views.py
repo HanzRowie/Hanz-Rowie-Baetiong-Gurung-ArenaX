@@ -926,7 +926,7 @@ def get_user_profile(request, user_id=None):
             "achievements": user.achievements,
             "social_links": user.social_links,
             "is_available_for_matches": user.is_available_for_matches,
-            "profile_picture": user.profile_picture.url if user.profile_picture else None,
+            "profile_picture": request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None,
             "date_joined": user.date_joined.isoformat(),
             "is_verified": user.is_verified
         }
@@ -969,7 +969,7 @@ def get_user_profile(request, user_id=None):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['PUT'])
+@api_view(['PUT', 'PATCH'])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
 def update_user_profile(request):
@@ -1052,7 +1052,7 @@ def update_user_profile(request):
                 "location": user.location,
                 "preferred_sports": user.preferred_sports,
                 "skill_level": user.skill_level,
-                "profile_picture": user.profile_picture.url if user.profile_picture else None
+                "profile_picture": request.build_absolute_uri(user.profile_picture.url) if user.profile_picture else None
             }
         })
 

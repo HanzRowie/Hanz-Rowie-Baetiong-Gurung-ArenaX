@@ -22,7 +22,7 @@ class VenueSerializer(serializers.ModelSerializer):
     description = serializers.CharField(source='facilities', required=False, allow_blank=True)
     amenities = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
-    image = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True)
     images = serializers.SerializerMethodField()
     
     class Meta:
@@ -33,19 +33,29 @@ class VenueSerializer(serializers.ModelSerializer):
                  'default_opening_time', 'default_closing_time', 'operating_days']
         read_only_fields = ['owner']
     
-    def get_image(self, obj):
-        """Return full URL for venue image"""
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Build full URL for image on output
+        if instance.image:
+            request = self.context.get('request')
+            if request:
+                ret['image'] = request.build_absolute_uri(instance.image.url)
+            else:
+                ret['image'] = f"http://localhost:8000{instance.image.url}"
+        else:
+            ret['image'] = None
+        # Keep images array in sync
+        ret['images'] = [ret['image']] if ret['image'] else []
+        return ret
+
+    def get_images(self, obj):
+        """Return array of images (for now just the single image, but supports future multi-image)"""
         if obj.image:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.image.url)
-            return obj.image.url
-        return None
-    
-    def get_images(self, obj):
-        """Return array of images (for now just the single image, but supports future multi-image)"""
-        image_url = self.get_image(obj)
-        return [image_url] if image_url else []
+                return [request.build_absolute_uri(obj.image.url)]
+            return [f"http://localhost:8000{obj.image.url}"]
+        return []
     
     def get_amenities(self, obj):
         """Return mock amenities for now"""

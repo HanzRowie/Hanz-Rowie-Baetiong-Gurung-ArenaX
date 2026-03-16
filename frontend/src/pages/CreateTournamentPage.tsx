@@ -142,6 +142,7 @@ export default function CreateTournamentPage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      console.log('[CreateTournament] Image selected:', file.name, file.size, file.type);
       setTournamentImage(file);
       const reader = new FileReader();
       reader.onload = () => {
@@ -170,7 +171,7 @@ export default function CreateTournamentPage() {
         customVenueCheck: !useCustomVenue
       });
 
-      if (formData.date && formData.start_time && !useCustomVenue) {
+      if (formData.date && formData.start_time && formData.sport_type && !useCustomVenue) {
         setLoadingVenues(true);
         try {
           const endTime = formData.end_time || formData.start_time;
@@ -178,7 +179,7 @@ export default function CreateTournamentPage() {
             date: formData.date,
             start_time: formData.start_time,
             end_time: endTime,
-            sport_type: formData.sport_type || undefined
+            sport_type: formData.sport_type
           });
           console.log('Venues loaded:', response);
           setAvailableVenues(response.venues);
@@ -731,7 +732,7 @@ export default function CreateTournamentPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Venue <span className="text-red-500">*</span>
                   </label>
-                  {formData.date && formData.start_time ? (
+                  {formData.date && formData.start_time && formData.sport_type ? (
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <select
@@ -763,12 +764,12 @@ export default function CreateTournamentPage() {
                     <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                       <Building2 className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-sm text-gray-600">
-                        Please select date and start time to see available venues
+                        Please select sport type, date, and start time to see available venues
                       </p>
                     </div>
                   )}
 
-                  {availableVenues.length === 0 && formData.date && formData.start_time && !loadingVenues && (
+                  {availableVenues.length === 0 && formData.date && formData.start_time && formData.sport_type && !loadingVenues && (
                     <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <div className="flex items-center gap-2 text-yellow-700">
                         <AlertCircle className="h-4 w-4" />

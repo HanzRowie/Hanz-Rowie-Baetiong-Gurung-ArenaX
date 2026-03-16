@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { profileService } from '@/services/profileService';
@@ -112,7 +113,7 @@ export default function PlayerConnectionsPage() {
         <div className="flex-shrink-0 relative">
           {connection.profile_picture ? (
             <img
-              src={connection.profile_picture}
+              src={getAvatarUrl(connection.profile_picture)!}
               alt={connection.full_name}
               className="w-14 h-14 rounded-full object-cover"
             />
@@ -208,7 +209,7 @@ export default function PlayerConnectionsPage() {
         <div className="flex-shrink-0">
           {(type === 'sent' ? request.to_player : request.from_player)?.profile_picture ? (
             <img
-              src={(type === 'sent' ? request.to_player : request.from_player)?.profile_picture}
+              src={getAvatarUrl((type === 'sent' ? request.to_player : request.from_player)?.profile_picture)!}
               alt={(type === 'sent' ? request.to_player : request.from_player)?.full_name}
               className="w-12 h-12 rounded-full object-cover"
             />

@@ -24,6 +24,7 @@ import type { Tournament } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { tournamentService } from '@/services/tournamentService';
 import toastService from '@/services/toastService';
+import { getMediaUrl } from '@/utils/constants';
 
 interface TournamentDiscoveryCardProps {
   tournament: Tournament;
@@ -144,7 +145,7 @@ export default function TournamentDiscoveryCard({
               <div className="w-32 h-24 rounded-lg overflow-hidden">
                 {tournament.tournament_image ? (
                   <img
-                    src={tournament.tournament_image}
+                    src={getMediaUrl(tournament.tournament_image)!}
                     alt={tournament.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
@@ -329,7 +330,7 @@ export default function TournamentDiscoveryCard({
       <div className="relative h-48 overflow-hidden">
         {tournament.tournament_image ? (
           <img
-            src={tournament.tournament_image}
+            src={getMediaUrl(tournament.tournament_image)!}
             alt={tournament.title}
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
           />

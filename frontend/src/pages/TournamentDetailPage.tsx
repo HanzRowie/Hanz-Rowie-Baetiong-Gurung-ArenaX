@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Calendar, MapPin, Users, Trophy, DollarSign,
@@ -21,6 +22,7 @@ import toastService from '@/services/toastService';
 import { api } from '@/services/api';
 import PaymentModal from '@/components/PaymentModal';
 import ChatButton from '@/components/chat/ChatButton';
+import { getMediaUrl } from '@/utils/constants';
 
 export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -152,6 +154,8 @@ export default function TournamentDetailPage() {
       // Load tournament details
       const response = await tournamentService.getTournamentDetail(tournamentId!);
       setTournament(response.tournament);
+      console.log('[TournamentDetail] tournament_image raw:', response.tournament.tournament_image);
+      console.log('[TournamentDetail] getMediaUrl result:', getMediaUrl(response.tournament.tournament_image));
 
       // Load standings if this is a league tournament
       if (response.tournament.tournament_type === 'league') {
@@ -686,18 +690,21 @@ export default function TournamentDetailPage() {
       </header>
 
       {/* Hero Section */}
-      <div className="relative">
+      <div className="relative h-64">
         {tournament.tournament_image ? (
-          <div className="h-64 bg-cover bg-center" style={{ backgroundImage: `url(${tournament.tournament_image})` }}>
-            <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-          </div>
+          <img
+            src={getMediaUrl(tournament.tournament_image)!}
+            alt={tournament.title}
+            className="absolute inset-0 w-full h-full object-cover z-0"
+            onLoad={() => console.log('[TournamentDetail] Image loaded OK:', getMediaUrl(tournament.tournament_image))}
+            onError={(e) => console.error('[TournamentDetail] Image FAILED to load:', getMediaUrl(tournament.tournament_image), e)}
+          />
         ) : (
-          <div className="h-64 bg-gradient-to-br from-purple-600 to-purple-800">
-            <div className="absolute inset-0 bg-black bg-opacity-20"></div>
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-purple-800 z-0" />
         )}
+        <div className="absolute inset-0 bg-black/40 z-10" />
 
-        <div className="absolute inset-0 flex items-end">
+        <div className="absolute inset-0 flex items-end z-20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 w-full">
             <div className="flex items-end justify-between">
               <div className="text-white">
@@ -936,7 +943,7 @@ export default function TournamentDetailPage() {
                                   // Individual player display
                                   participant.user.profile_picture ? (
                                     <img
-                                      src={participant.user.profile_picture}
+                                      src={getAvatarUrl(participant.user.profile_picture)!}
                                       alt={participant.user.full_name}
                                       className="h-12 w-12 rounded-full object-cover"
                                     />
@@ -1361,7 +1368,7 @@ export default function TournamentDetailPage() {
               <div className="flex items-center gap-3">
                 {tournament.organizer.profile_picture ? (
                   <img
-                    src={tournament.organizer.profile_picture}
+                    src={getAvatarUrl(tournament.organizer.profile_picture)!}
                     alt={tournament.organizer.name}
                     className="h-12 w-12 rounded-full object-cover"
                   />

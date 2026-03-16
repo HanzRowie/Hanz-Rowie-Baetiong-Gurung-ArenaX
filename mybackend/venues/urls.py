@@ -13,6 +13,7 @@ router.register(r'admin/venues', AdminVenueViewSet, basename='admin-venue')
 urlpatterns = [
     path('', include(router.urls)),
     path('venues/<int:venue_id>/book/', views.book_venue, name='book_venue'),
+    path('venues/<int:venue_id>/pending-booking/', views.get_pending_booking, name='get_pending_booking'),
     path('bookings/<int:booking_id>/cancel/', views.cancel_booking, name='cancel_booking'),
     path('bookings/<int:booking_id>/verify-payment/', views.verify_booking_payment, name='verify_booking_payment'),
     path('bookings/<int:booking_id>/approve/', views.approve_booking, name='approve_booking'),

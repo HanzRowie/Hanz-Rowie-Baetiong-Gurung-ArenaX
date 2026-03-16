@@ -12,7 +12,7 @@ class TournamentSerializer(serializers.ModelSerializer):
     registered_players = serializers.SerializerMethodField()
     matches = serializers.SerializerMethodField()
     sport_requirements = serializers.SerializerMethodField()
-    tournament_image = serializers.SerializerMethodField()
+    tournament_image = serializers.ImageField(required=False, allow_null=True)
 
     participation_type = serializers.CharField(source='registration_type', read_only=True)
 
@@ -30,14 +30,18 @@ class TournamentSerializer(serializers.ModelSerializer):
             'sport_requirements', 'created_at', 'updated_at'
         ]
 
-    def get_tournament_image(self, obj):
-        """Return full URL for tournament image"""
-        if obj.tournament_image:
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Build full URL for tournament_image on output
+        if instance.tournament_image:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.tournament_image.url)
-            return obj.tournament_image.url
-        return None
+                ret['tournament_image'] = request.build_absolute_uri(instance.tournament_image.url)
+            else:
+                ret['tournament_image'] = f"http://localhost:8000{instance.tournament_image.url}"
+        else:
+            ret['tournament_image'] = None
+        return ret
 
     def get_registered_count(self, obj):
         if obj.registration_type == 'TEAM':

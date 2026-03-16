@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -400,7 +401,7 @@ const LeaderboardSection: React.FC<LeaderboardSectionProps> = ({ title, icon, da
                       {player.profile_picture ? (
                         <img
                           className="h-10 w-10 rounded-full object-cover"
-                          src={player.profile_picture}
+                          src={getAvatarUrl(player.profile_picture)!}
                           alt={player.player_name}
                         />
                       ) : (

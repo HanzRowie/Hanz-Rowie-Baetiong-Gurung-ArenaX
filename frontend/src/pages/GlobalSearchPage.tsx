@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { debounce } from 'lodash';
 import {
@@ -23,6 +24,7 @@ import type {
 import type { Tournament } from '@/types/tournament.types';
 import type { ExtendedUserProfile } from '@/types/user.types';
 import type { Venue } from '@/types/venue.types';
+import { getMediaUrl } from '@/utils/constants';
 
 interface SearchResultCardProps {
   item: Tournament | ExtendedUserProfile | Venue;
@@ -64,7 +66,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ item, type, onResul
           </div>
           {tournament.tournament_image && (
             <img 
-              src={tournament.tournament_image} 
+              src={getMediaUrl(tournament.tournament_image)!} 
               alt={tournament.title}
               className="w-16 h-16 rounded-lg object-cover ml-4"
             />
@@ -84,7 +86,7 @@ const SearchResultCard: React.FC<SearchResultCardProps> = ({ item, type, onResul
         <div className="flex items-center space-x-4">
           {player.profile_picture ? (
             <img 
-              src={player.profile_picture} 
+              src={getAvatarUrl(player.profile_picture)!} 
               alt={player.full_name}
               className="w-12 h-12 rounded-full object-cover"
             />

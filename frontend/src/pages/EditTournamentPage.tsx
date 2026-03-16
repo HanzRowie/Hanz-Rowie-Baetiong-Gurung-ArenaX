@@ -211,7 +211,12 @@ export default function EditTournamentPage() {
       // Add image if selected
       if (imageFile) {
         submitData.append('tournament_image', imageFile);
+        console.log('[EditTournament] Appending tournament_image:', imageFile.name, imageFile.size);
+      } else {
+        console.log('[EditTournament] No new image selected - existing image will be preserved (PATCH)');
       }
+
+      console.log('[EditTournament] Submitting FormData keys:', [...submitData.keys()]);
 
       // Update tournament
       await tournamentService.updateTournament(tournamentId, submitData);

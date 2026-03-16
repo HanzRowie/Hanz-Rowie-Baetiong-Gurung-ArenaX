@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { getAvatarUrl } from '@/utils/imageUtils';
 import type { Conversation } from '@/types/chat.types';
 import { formatDistanceToNow } from 'date-fns';
 import PresenceIndicator from './PresenceIndicator.js';
@@ -57,7 +58,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
       <div className="relative flex-shrink-0">
         {user.profile_picture ? (
           <img
-            src={user.profile_picture}
+            src={getAvatarUrl(user.profile_picture)!}
             alt={user.full_name}
             className="h-12 w-12 rounded-full object-cover"
           />

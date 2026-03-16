@@ -51,11 +51,15 @@ class TournamentService {
       if (value !== undefined && value !== null) {
         if (key === 'tournament_image' && value instanceof File) {
           formData.append(key, value);
+          console.log(`[createTournament] Appending file: ${key} = ${value.name} (${value.size} bytes)`);
         } else {
           formData.append(key, value.toString());
         }
       }
     });
+
+    console.log('[createTournament] FormData keys:', [...formData.keys()]);
+    console.log('[createTournament] Has tournament_image:', formData.has('tournament_image'));
 
     const response = await api.post(API_ENDPOINTS.TOURNAMENTS.CREATE, formData, {
       headers: {
@@ -319,7 +323,7 @@ class TournamentService {
   }
 
   async updateTournament(tournamentId: string, data: FormData): Promise<{ tournament: Tournament; message: string }> {
-    const response = await api.put(API_ENDPOINTS.TOURNAMENTS.UPDATE(tournamentId), data, {
+    const response = await api.patch(API_ENDPOINTS.TOURNAMENTS.UPDATE(tournamentId), data, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

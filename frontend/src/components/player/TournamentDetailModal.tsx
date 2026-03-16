@@ -26,6 +26,7 @@ import { Card } from '@/design-system/components/Card';
 import type { Tournament } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import toastService from '@/services/toastService';
+import { getMediaUrl } from '@/utils/constants';
 
 interface TournamentDetailModalProps {
   tournament: Tournament | null;
@@ -174,7 +175,7 @@ export default function TournamentDetailModal({
           <div className="h-64 overflow-hidden">
             {tournament.tournament_image ? (
               <img
-                src={tournament.tournament_image}
+                src={getMediaUrl(tournament.tournament_image)!}
                 alt={tournament.title}
                 className="w-full h-full object-cover"
               />

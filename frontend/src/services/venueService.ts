@@ -95,7 +95,7 @@ class VenueService {
       formData.append('image', data.images[0]);
     }
 
-    const response = await api.put(`/api/venues/venues/${venueId}/`, formData, {
+    const response = await api.patch(`/api/venues/venues/${venueId}/`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -281,6 +281,11 @@ class VenueService {
 
   async getBooking(bookingId: string): Promise<any> {
     const response = await api.get(`/api/venues/bookings/${bookingId}/`);
+    return response.data;
+  }
+
+  async getPendingBooking(venueId: string): Promise<any> {
+    const response = await api.get(`/api/venues/venues/${venueId}/pending-booking/`);
     return response.data;
   }
 }
