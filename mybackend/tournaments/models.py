@@ -479,7 +479,7 @@ class TournamentAuditLog(models.Model):
     
     tournament = models.ForeignKey(
         Tournament,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name='audit_logs',
         null=True,
         blank=True
