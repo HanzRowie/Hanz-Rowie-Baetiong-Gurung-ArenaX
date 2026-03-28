@@ -342,15 +342,17 @@ export default function TournamentDetailPage() {
   };
 
   const handleShareTournament = () => {
-    const url = window.location.href;
+    const shareUrl = tournament?.share_token
+      ? `${window.location.origin}/t/${tournament.share_token}`
+      : window.location.href;
     if (navigator.share) {
       navigator.share({
         title: tournament?.title,
         text: `Check out this tournament: ${tournament?.title}`,
-        url: url,
+        url: shareUrl,
       });
     } else {
-      navigator.clipboard.writeText(url);
+      navigator.clipboard.writeText(shareUrl);
       toastService.success('Tournament link copied to clipboard!');
     }
     setShowShareModal(false);
@@ -408,18 +410,14 @@ export default function TournamentDetailPage() {
     if (!tournamentId) return;
 
     try {
-      // Check if this is a schedule update (scheduled_time) or score update
       if (updates.scheduled_time) {
-        // Update match schedule
-        await tournamentService.updateMatchResult(tournamentId, matchId, updates);
+        await tournamentService.scheduleMatch(tournamentId, matchId, updates.scheduled_time);
         toastService.success('Match schedule updated successfully!');
       } else {
-        // Update match scores
         await tournamentService.updateMatchResult(tournamentId, matchId, updates);
         toastService.success('Match result updated successfully!');
       }
 
-      // Refresh matches and standings
       await loadMatches();
       if (tournament.tournament_type === 'league') {
         await loadStandings();
@@ -429,6 +427,125 @@ export default function TournamentDetailPage() {
       toastService.error(errorMsg);
       console.error('Match update error:', err);
     }
+  };
+
+  // Venue assignment state
+  const [venueModalMatchId, setVenueModalMatchId] = useState<string | null>(null);
+  const [venueInput, setVenueInput] = useState('');
+  const [selectedVenueId, setSelectedVenueId] = useState('');
+  const [availableVenues, setAvailableVenues] = useState<any[]>([]);
+  const [loadingVenues, setLoadingVenues] = useState(false);
+  const [savingVenue, setSavingVenue] = useState(false);
+
+  const handleAssignVenue = async (matchId: string) => {
+    const match = matches.find((m: any) => m.id === matchId);
+    setVenueInput(match?.match_venue_name || '');
+    setSelectedVenueId(match?.match_venue ? String(match.match_venue) : '');
+    setVenueModalMatchId(matchId);
+    // Load approved venues
+    try {
+      setLoadingVenues(true);
+      const res = await api.get('/api/venues/venues/');
+      const venues = res.data.venues || res.data;
+      setAvailableVenues(Array.isArray(venues) ? venues : []);
+    } catch {
+      setAvailableVenues([]);
+    } finally {
+      setLoadingVenues(false);
+    }
+  };
+
+  // Payment modal state for venue booking from match assignment
+  const [showVenueBookingPayment, setShowVenueBookingPayment] = useState(false);
+  const [venueBookingPaymentData, setVenueBookingPaymentData] = useState<any>(null);
+  const [venueBookingDate, setVenueBookingDate] = useState('');
+  const [venueBookingStartTime, setVenueBookingStartTime] = useState('');
+  const [venueBookingEndTime, setVenueBookingEndTime] = useState('');
+
+  const handleSaveVenue = async () => {
+    if (!tournamentId || !venueModalMatchId) return;
+
+    // Custom name — no payment needed, just save the label
+    if (!selectedVenueId && venueInput.trim()) {
+      try {
+        setSavingVenue(true);
+        await api.put(`/api/tournaments/${tournamentId}/matches/${venueModalMatchId}/result/`, {
+          match_venue_name: venueInput,
+        });
+        toastService.success('Venue assigned successfully!');
+        setVenueModalMatchId(null);
+        await loadMatches();
+      } catch (err: any) {
+        toastService.error(err.response?.data?.error || 'Failed to assign venue');
+      } finally {
+        setSavingVenue(false);
+      }
+      return;
+    }
+
+    // Linked venue — need date/time and payment
+    if (selectedVenueId) {
+      if (!venueBookingDate || !venueBookingStartTime || !venueBookingEndTime) {
+        toastService.error('Please enter the match date and time slot for the venue booking');
+        return;
+      }
+      try {
+        setSavingVenue(true);
+        const selectedVenue = availableVenues.find((v: any) => v.id === selectedVenueId);
+        const res = await api.post(`/api/venues/venues/${selectedVenueId}/book/`, {
+          date: venueBookingDate,
+          start_time: venueBookingStartTime,
+          end_time: venueBookingEndTime,
+          purpose: `Match - ${tournament?.title || 'Tournament'}`,
+          notes: `Auto-booked for match ${venueModalMatchId}`,
+          match_id: venueModalMatchId,
+          tournament_id: tournamentId,
+        });
+
+        if (res.data.payment_url) {
+          setVenueBookingPaymentData({
+            paymentId: res.data.payment?.id,
+            paymentUrl: res.data.payment_url,
+            pidx: res.data.pidx,
+            amount: parseFloat(res.data.payment?.amount || 0),
+            matchId: venueModalMatchId,
+            venueId: selectedVenueId,
+            bookingId: res.data.booking?.id,
+            venueName: selectedVenue?.name,
+          });
+          setVenueModalMatchId(null);
+          setShowVenueBookingPayment(true);
+        } else {
+          // No payment required (free venue or mock mode)
+          await api.put(`/api/tournaments/${tournamentId}/matches/${venueModalMatchId}/result/`, {
+            match_venue_id: selectedVenueId,
+          });
+          toastService.success('Venue booked and assigned!');
+          setVenueModalMatchId(null);
+          await loadMatches();
+        }
+      } catch (err: any) {
+        toastService.error(err.response?.data?.error || 'Failed to book venue');
+      } finally {
+        setSavingVenue(false);
+      }
+    }
+  };
+
+  const handleVenueBookingPaymentSuccess = async () => {
+    setShowVenueBookingPayment(false);
+    if (venueBookingPaymentData?.matchId && venueBookingPaymentData?.venueId) {
+      try {
+        await api.put(`/api/tournaments/${tournamentId}/matches/${venueBookingPaymentData.matchId}/result/`, {
+          match_venue_id: venueBookingPaymentData.venueId,
+        });
+        toastService.success('Venue booked and assigned to match!');
+        await loadMatches();
+      } catch {
+        toastService.error('Payment succeeded but failed to link venue to match. Please contact support.');
+      }
+    }
+    setVenueBookingPaymentData(null);
   };
 
   const handleDeleteTournament = async () => {
@@ -753,10 +870,10 @@ export default function TournamentDetailPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             {/* Tabs */}
             <div className="bg-white rounded-lg shadow-sm mb-6">
               <div className="border-b border-gray-200">
@@ -1173,11 +1290,15 @@ export default function TournamentDetailPage() {
                           away_score: match.away_score || match.team2_score,
                           scheduled_time: match.scheduled_time,
                           venue: match.venue || tournament.venue || 'TBD',
+                          match_venue: match.match_venue,
+                          match_venue_name: match.match_venue_name,
+                          match_venue_display: match.match_venue_display,
                           status: match.status || 'SCHEDULED'
                         }))}
                         editable={isOrganizer()}
                         onEditMatch={isOrganizer() ? handleEditMatch : undefined}
                         onEnterScore={isOrganizer() ? (matchId) => navigate(`/match-scoring?tournamentId=${tournamentId}&matchId=${matchId}`) : undefined}
+                        onAssignVenue={isOrganizer() ? handleAssignVenue : undefined}
                       />
                     ) : (
                       <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -1391,24 +1512,27 @@ export default function TournamentDetailPage() {
 
       {/* Share Modal */}
       {showShareModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Share Tournament</h3>
-            <p className="text-gray-600 mb-4">Share this tournament with others</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Share Tournament</h3>
+            <p className="text-gray-500 text-sm mb-4">Anyone with this link can view the tournament — no account needed.</p>
 
             <div className="flex items-center gap-2 mb-4">
               <input
                 type="text"
-                value={window.location.href}
+                value={tournament?.share_token ? `${window.location.origin}/t/${tournament.share_token}` : window.location.href}
                 readOnly
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
               />
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
+                  const shareUrl = tournament?.share_token
+                    ? `${window.location.origin}/t/${tournament.share_token}`
+                    : window.location.href;
+                  navigator.clipboard.writeText(shareUrl);
                   toastService.success('Link copied!');
                 }}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
               >
                 Copy
               </button>
@@ -1417,13 +1541,13 @@ export default function TournamentDetailPage() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowShareModal(false)}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handleShareTournament}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
               >
                 Share
               </button>
@@ -1443,6 +1567,120 @@ export default function TournamentDetailPage() {
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}
           onClose={handlePaymentClose}
+        />
+      )}
+
+      {/* Venue Assignment Modal */}
+      {venueModalMatchId && (
+        <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-purple-600" />
+              Assign Venue for Match
+            </h3>
+
+            {loadingVenues ? (
+              <div className="text-sm text-gray-500 py-4 text-center">Loading venues...</div>
+            ) : availableVenues.length > 0 ? (
+              <>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select a venue</label>
+                <select
+                  value={selectedVenueId}
+                  onChange={(e) => {
+                    setSelectedVenueId(e.target.value);
+                    setVenueInput('');
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none mb-3"
+                >
+                  <option value="">— Choose a venue —</option>
+                  {availableVenues.map((v: any) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} — {v.location} (NPR {v.price_per_hour}/hr)
+                    </option>
+                  ))}
+                </select>
+
+                {/* Date/time fields shown only when a linked venue is selected */}
+                {selectedVenueId && (
+                  <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                    <p className="text-xs font-medium text-blue-800">Booking details (required for payment)</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-3">
+                        <label className="block text-xs text-gray-600 mb-1">Date</label>
+                        <input type="date" value={venueBookingDate}
+                          onChange={(e) => setVenueBookingDate(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Start</label>
+                        <input type="time" value={venueBookingStartTime}
+                          onChange={(e) => setVenueBookingStartTime(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">End</label>
+                        <input type="time" value={venueBookingEndTime}
+                          onChange={(e) => setVenueBookingEndTime(e.target.value)}
+                          className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 outline-none" />
+                      </div>
+                    </div>
+                    {venueBookingDate && venueBookingStartTime && venueBookingEndTime && (() => {
+                      const venue = availableVenues.find((v: any) => v.id === selectedVenueId);
+                      if (!venue) return null;
+                      const hrs = (new Date(`2000-01-01T${venueBookingEndTime}`).getTime() - new Date(`2000-01-01T${venueBookingStartTime}`).getTime()) / 3600000;
+                      const cost = hrs > 0 ? (hrs * venue.price_per_hour).toFixed(2) : null;
+                      return cost ? <p className="text-xs text-blue-700 font-medium">Estimated cost: NPR {cost}</p> : null;
+                    })()}
+                  </div>
+                )}
+
+                <p className="text-xs text-gray-500 mb-3 text-center">or enter a custom venue name below (no payment)</p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 mb-3">No approved venues found. Enter a custom name.</p>
+            )}
+
+            <input
+              type="text"
+              value={venueInput}
+              onChange={(e) => {
+                setVenueInput(e.target.value);
+                setSelectedVenueId('');
+              }}
+              placeholder="e.g. Futsal Arena, Court 2"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none mb-4"
+            />
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setVenueModalMatchId(null)}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveVenue}
+                disabled={savingVenue || (!selectedVenueId && !venueInput.trim())}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
+              >
+                {savingVenue ? 'Processing...' : selectedVenueId ? 'Book & Pay' : 'Save Venue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Venue Booking Payment Modal */}
+      {showVenueBookingPayment && venueBookingPaymentData && (
+        <PaymentModal
+          isOpen={showVenueBookingPayment}
+          onClose={() => { setShowVenueBookingPayment(false); setVenueBookingPaymentData(null); }}
+          amount={venueBookingPaymentData.amount}
+          productName={`Venue Booking - ${venueBookingPaymentData.venueName}`}
+          paymentId={venueBookingPaymentData.paymentId}
+          paymentUrl={venueBookingPaymentData.paymentUrl}
+          onSuccess={handleVenueBookingPaymentSuccess}
+          onError={() => { setShowVenueBookingPayment(false); toastService.error('Payment failed'); }}
         />
       )}
 

@@ -75,7 +75,13 @@ export interface Transaction {
 export interface Refund {
   id: number;
   original_payment: string;
-  refund_payment: string;
+  original_payment_details?: Payment;
+  refund_payment?: string;
+  refund_payment_details?: Payment;
+  initiated_by?: string;
+  initiated_by_name?: string;
+  tournament_registration?: string;
+  player_name?: string;
   amount: string;
   reason: string;
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
@@ -83,6 +89,17 @@ export interface Refund {
   processor_response: Record<string, any>;
   requested_at: string;
   processed_at?: string;
+}
+
+export interface InitiateRefundRequest {
+  payment_id: string;
+  amount?: string;
+  reason: string;
+  registration_id?: string;
+}
+
+export interface CompleteRefundRequest {
+  refund_transaction_id?: string;
 }
 
 export interface KhaltiConfig {
@@ -129,6 +146,6 @@ export interface CreatePaymentMethodRequest {
 }
 
 export interface RefundRequest {
-  amount: string;
+  amount?: string;
   reason: string;
 }

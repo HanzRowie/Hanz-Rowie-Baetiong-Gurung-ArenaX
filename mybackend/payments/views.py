@@ -7,13 +7,16 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.http import JsonResponse
 from django.conf import settings
+from django.db import transaction as db_transaction
 import decimal
 from .models import PaymentMethod, Payment, Transaction, Refund
 from .serializers import (
     PaymentMethodSerializer,
     PaymentSerializer,
     TransactionSerializer,
-    RefundSerializer
+    RefundSerializer,
+    InitiateRefundSerializer,
+    CompleteRefundSerializer,
 )
 from .utils import khalti_gateway, process_khalti_webhook
 from notifications.utils import send_notification
@@ -220,6 +223,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def refund(self, request, pk=None):
+        """Player-facing: request a refund on their own completed payment."""
         payment = self.get_object()
         if payment.status != 'COMPLETED':
             return Response(
@@ -227,34 +231,28 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if payment.refunds.filter(status__in=['PENDING', 'PROCESSING', 'COMPLETED']).exists():
+            return Response(
+                {'error': 'A refund for this payment already exists.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         refund_amount = request.data.get('amount', payment.amount)
         reason = request.data.get('reason', '')
 
-        # Create refund payment
-        refund_payment = Payment.objects.create(
-            user=payment.user,
-            payment_type=payment.payment_type,
-            amount=refund_amount,
-            currency=payment.currency,
-            status='COMPLETED',
-            description=f"Refund for payment {payment.id}",
-            processed_at=timezone.now()
-        )
+        if not reason:
+            return Response({'error': 'Reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create refund record
+        # Create refund record in PENDING state (organizer must complete it)
         refund = Refund.objects.create(
             original_payment=payment,
-            refund_payment=refund_payment,
             amount=refund_amount,
             reason=reason,
-            status='COMPLETED'
+            status='PENDING',
+            initiated_by=request.user,
         )
 
-        # Update original payment status
-        payment.status = 'REFUNDED'
-        payment.save()
-
-        return Response(RefundSerializer(refund).data)
+        return Response(RefundSerializer(refund).data, status=status.HTTP_201_CREATED)
 
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TransactionSerializer
@@ -270,10 +268,15 @@ class RefundViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Refund.objects.all()
 
     def get_queryset(self):
-        return Refund.objects.filter(
-            original_payment__user=self.request.user
-        ) | Refund.objects.filter(
-            refund_payment__user=self.request.user
+        user = self.request.user
+        # Players see refunds on their own payments
+        # Organizers see refunds they initiated
+        return (
+            Refund.objects.filter(original_payment__user=user) |
+            Refund.objects.filter(initiated_by=user)
+        ).distinct().select_related(
+            'original_payment', 'refund_payment', 'initiated_by',
+            'tournament_registration__player'
         )
 
 class ProcessPaymentView(APIView):
@@ -646,3 +649,276 @@ class WalletWithdrawalView(APIView):
             'withdrawn_amount': amount_to_withdraw
         }, status=status.HTTP_200_OK)
 
+
+
+# ---------------------------------------------------------------------------
+# Organizer Refund Management
+# ---------------------------------------------------------------------------
+
+class OrganizerRefundListView(APIView):
+    """
+    GET  /api/payments/organizer/refunds/
+        List all refunds for tournaments the organizer owns.
+    POST /api/payments/organizer/refunds/
+        Initiate a refund for a player's tournament registration payment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _check_organizer(self, request):
+        if request.user.role != 'ORGANIZER':
+            return Response(
+                {'error': 'Only organizers can manage tournament refunds.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return None
+
+    def get(self, request):
+        err = self._check_organizer(request)
+        if err:
+            return err
+
+        refunds = Refund.objects.filter(
+            original_payment__tournament__organizer=request.user
+        ).select_related(
+            'original_payment__user',
+            'original_payment__tournament',
+            'initiated_by',
+            'tournament_registration__player',
+        ).order_by('-requested_at')
+
+        # Optional filters
+        refund_status = request.query_params.get('status')
+        tournament_id = request.query_params.get('tournament_id')
+        if refund_status:
+            refunds = refunds.filter(status=refund_status.upper())
+        if tournament_id:
+            refunds = refunds.filter(original_payment__tournament_id=tournament_id)
+
+        serializer = RefundSerializer(refunds, many=True)
+        return Response(serializer.data)
+
+    @db_transaction.atomic
+    def post(self, request):
+        err = self._check_organizer(request)
+        if err:
+            return err
+
+        serializer = InitiateRefundSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        payment = data['payment']
+
+        # Verify the payment belongs to a tournament this organizer owns
+        if not payment.tournament or payment.tournament.organizer != request.user:
+            return Response(
+                {'error': 'You can only refund payments for your own tournaments.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        amount = data['amount']
+        reason = data['reason']
+        registration_id = data.get('registration_id')
+
+        # Resolve registration
+        registration = None
+        if registration_id:
+            from tournaments.models import TournamentRegistration
+            try:
+                registration = TournamentRegistration.objects.get(
+                    id=registration_id,
+                    tournament=payment.tournament,
+                )
+            except TournamentRegistration.DoesNotExist:
+                return Response(
+                    {'error': 'Registration not found for this tournament.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        # Create the refund payment record
+        refund_payment = Payment.objects.create(
+            user=payment.user,
+            payment_type=payment.payment_type,
+            amount=amount,
+            currency=payment.currency,
+            status='PENDING',
+            description=f'Refund: {reason[:100]}',
+            tournament=payment.tournament,
+            payment_processor=payment.payment_processor,
+            metadata={'original_payment_id': str(payment.id), 'refund_reason': reason},
+        )
+
+        # Create refund record (PENDING — organizer must mark complete after actual transfer)
+        refund = Refund.objects.create(
+            original_payment=payment,
+            refund_payment=refund_payment,
+            initiated_by=request.user,
+            tournament_registration=registration,
+            amount=amount,
+            reason=reason,
+            status='PENDING',
+        )
+
+        # Mark original payment as REFUNDED immediately so it can't be double-refunded
+        payment.status = 'REFUNDED'
+        payment.save()
+
+        # Update registration status if provided
+        if registration and registration.status in ('ACCEPTED', 'PENDING'):
+            registration.status = 'WITHDRAWN'
+            registration.save()
+
+        # Notify the player
+        send_notification(
+            user=payment.user,
+            notification_type='GENERAL',
+            title='Refund Initiated',
+            message=(
+                f'A refund of {amount} {payment.currency} has been initiated for your '
+                f'registration in {payment.tournament.title}. Reason: {reason}'
+            ),
+            related_id=str(refund.id),
+        )
+
+        return Response(RefundSerializer(refund).data, status=status.HTTP_201_CREATED)
+
+
+class OrganizerRefundDetailView(APIView):
+    """
+    GET   /api/payments/organizer/refunds/<refund_id>/  — Retrieve a single refund.
+    PATCH /api/payments/organizer/refunds/<refund_id>/complete/  — Mark refund as completed.
+    PATCH /api/payments/organizer/refunds/<refund_id>/cancel/    — Cancel a pending refund.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _get_refund(self, request, refund_id):
+        refund = get_object_or_404(
+            Refund,
+            id=refund_id,
+            original_payment__tournament__organizer=request.user,
+        )
+        return refund
+
+    def get(self, request, refund_id):
+        if request.user.role != 'ORGANIZER':
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        refund = self._get_refund(request, refund_id)
+        return Response(RefundSerializer(refund).data)
+
+
+class CompleteRefundView(APIView):
+    """PATCH /api/payments/organizer/refunds/<refund_id>/complete/"""
+    permission_classes = [IsAuthenticated]
+
+    @db_transaction.atomic
+    def patch(self, request, refund_id):
+        if request.user.role != 'ORGANIZER':
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+        refund = get_object_or_404(
+            Refund,
+            id=refund_id,
+            original_payment__tournament__organizer=request.user,
+        )
+
+        if refund.status != 'PENDING':
+            return Response(
+                {'error': f'Cannot complete a refund with status "{refund.status}".'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = CompleteRefundSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        txn_id = serializer.validated_data.get('refund_transaction_id', '')
+
+        # Complete the refund
+        refund.status = 'COMPLETED'
+        refund.processed_at = timezone.now()
+        refund.refund_transaction_id = txn_id
+        refund.save()
+
+        # Complete the refund payment record
+        if refund.refund_payment:
+            refund.refund_payment.status = 'COMPLETED'
+            refund.refund_payment.processed_at = timezone.now()
+            refund.refund_payment.transaction_id = txn_id
+            refund.refund_payment.save()
+
+        # Create transaction record
+        Transaction.objects.create(
+            payment=refund.refund_payment or refund.original_payment,
+            transaction_type='REFUND',
+            amount=refund.amount,
+            currency=refund.original_payment.currency,
+            status='SUCCESS',
+            external_transaction_id=txn_id or f'refund_{refund.id}',
+            payment_processor=refund.original_payment.payment_processor,
+            processed_at=timezone.now(),
+            processor_response={'refund_id': str(refund.id)},
+        )
+
+        # Notify the player
+        send_notification(
+            user=refund.original_payment.user,
+            notification_type='PAYMENT_RECEIVED',
+            title='Refund Completed',
+            message=(
+                f'Your refund of {refund.amount} {refund.original_payment.currency} '
+                f'for {refund.original_payment.tournament.title} has been completed.'
+            ),
+            related_id=str(refund.id),
+        )
+
+        return Response(RefundSerializer(refund).data)
+
+
+class CancelRefundView(APIView):
+    """PATCH /api/payments/organizer/refunds/<refund_id>/cancel/"""
+    permission_classes = [IsAuthenticated]
+
+    @db_transaction.atomic
+    def patch(self, request, refund_id):
+        if request.user.role != 'ORGANIZER':
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+        refund = get_object_or_404(
+            Refund,
+            id=refund_id,
+            original_payment__tournament__organizer=request.user,
+        )
+
+        if refund.status not in ('PENDING', 'PROCESSING'):
+            return Response(
+                {'error': f'Cannot cancel a refund with status "{refund.status}".'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        refund.status = 'CANCELLED'
+        refund.save()
+
+        # Restore original payment to COMPLETED
+        original = refund.original_payment
+        original.status = 'COMPLETED'
+        original.save()
+
+        # Cancel the refund payment record if it exists
+        if refund.refund_payment:
+            refund.refund_payment.status = 'CANCELLED'
+            refund.refund_payment.save()
+
+        # Notify the player
+        send_notification(
+            user=original.user,
+            notification_type='GENERAL',
+            title='Refund Cancelled',
+            message=(
+                f'Your refund request of {refund.amount} {original.currency} '
+                f'for {original.tournament.title} has been cancelled.'
+            ),
+            related_id=str(refund.id),
+        )
+
+        return Response(RefundSerializer(refund).data)

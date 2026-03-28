@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, Sum
 from datetime import datetime, date, timedelta
 
 from accounts.models import CustomUser
@@ -11,12 +11,12 @@ from accounts.decorators import jwt_required, role_required
 from .models import (
     RefereeProfile, RefereeAvailability, RefereeBooking,
     RefereeRating, RefereeCertification, RefereeMatchReport,
-    RefereeGeneralAvailability
+    RefereeGeneralAvailability, RefereePaymentRecord
 )
 from .serializers import (
     RefereeProfileSerializer, RefereeAvailabilitySerializer, RefereeBookingSerializer,
     RefereeRatingSerializer, RefereeCertificationSerializer, RefereeMatchReportSerializer,
-    RefereeGeneralAvailabilitySerializer
+    RefereeGeneralAvailabilitySerializer, RefereePaymentRecordSerializer
 )
 from notifications.utils import send_notification
 
@@ -213,6 +213,45 @@ def respond_to_booking_request(request, booking_id):
             logger.error(f"Error processing referee payment for booking {booking.id}: {str(e)}")
             payment_info = {'error': 'Payment processing failed'}
 
+    # Refund organizer if referee declined and payment exists and was completed
+    # Refresh payment from DB to get latest status
+    elif response_type == 'decline' and booking.payment_id:
+        booking.refresh_from_db()
+        payment = booking.payment
+        if payment and payment.status == 'COMPLETED':
+            try:
+                payment_service = RefereePaymentService()
+                payment_service.process_refund(
+                    payment,
+                    payment.amount,
+                    reason='Referee declined the booking request'
+                )
+                booking.payment_status = 'PENDING'
+                booking.save(update_fields=['payment_status'])
+                
+                payment_info = {
+                    'payment_id': str(payment.id),
+                    'amount': float(payment.amount),
+                    'status': 'REFUNDED',
+                    'message': 'Payment has been refunded to the organizer'
+                }
+                
+                logger.info(f"Refund issued to organizer for declined booking {booking.id}: {payment.amount}")
+                
+                # Notify organizer about the refund
+                send_notification(
+                    user=booking.requested_by,
+                    notification_type='GENERAL',
+                    title='Referee Fee Refunded',
+                    message=f'Your referee fee of NPR {payment.amount} has been refunded as {user.full_name} declined the booking.',
+                    related_id=booking.id,
+                    action_url='/payments/history'
+                )
+                
+            except Exception as e:
+                logger.error(f"Error processing refund for declined booking {booking.id}: {str(e)}")
+                payment_info = {'error': 'Refund processing failed, please contact support'}
+
     # Notify organizer
     status_text = 'accepted' if response_type == 'accept' else 'declined'
     send_notification(
@@ -327,6 +366,35 @@ class RefereeMatchReportViewSet(viewsets.ModelViewSet):
 
         serializer.save(referee=self.request.user, tournament=match.tournament)
 
+
+class RefereePaymentRecordViewSet(viewsets.ModelViewSet):
+    queryset = RefereePaymentRecord.objects.all()
+    serializer_class = RefereePaymentRecordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'REFEREE':
+            return RefereePaymentRecord.objects.filter(referee=user).select_related(
+                'tournament', 'match', 'booking', 'payment'
+            )
+        elif user.role == 'ORGANIZER':
+            # Organizers can see payments for their tournaments
+            return RefereePaymentRecord.objects.filter(
+                tournament__organizer=user
+            ).select_related('referee', 'tournament', 'match', 'booking', 'payment')
+        elif user.role == 'ADMIN':
+            return RefereePaymentRecord.objects.all().select_related(
+                'referee', 'tournament', 'match', 'booking', 'payment'
+            )
+        return RefereePaymentRecord.objects.none()
+
+    def perform_create(self, serializer):
+        # Only admins and organizers can create payment records
+        if self.request.user.role not in ['ADMIN', 'ORGANIZER']:
+            raise serializers.ValidationError('Only admins and organizers can create payment records')
+        serializer.save()
+
 @api_view(['GET'])
 @jwt_required
 def available_referees_for_tournament(request, tournament_id):
@@ -418,15 +486,20 @@ def available_referees_for_tournament(request, tournament_id):
                 certification = profile.certification_level
                 experience = profile.years_experience
                 matches_officiated = profile.total_matches_officiated
+                default_fee_per_match = float(profile.default_fee_per_match)
+                default_fee_per_session = float(profile.default_fee_per_session)
             except RefereeProfile.DoesNotExist:
                 rating = 0.0
                 specialization = []
                 certification = 'Not Certified'
                 experience = 0
                 matches_officiated = 0
+                default_fee_per_match = 0
+                default_fee_per_session = 0
             
-            # Filter by sport if referee has specializations
-            if specialization and tournament.sport_type.upper() not in [s.upper() for s in specialization]:
+            # STRICT FILTER: Only show referees with matching sport specialization
+            # Referees MUST have the tournament's sport type in their specialization list
+            if not specialization or tournament.sport_type.upper() not in [s.upper() for s in specialization]:
                 continue
             
             # Check if this referee has already been requested for this tournament
@@ -454,6 +527,8 @@ def available_referees_for_tournament(request, tournament_id):
                 'certification_level': certification,
                 'years_experience': experience,
                 'matches_officiated': matches_officiated,
+                'default_fee_per_match': default_fee_per_match,
+                'default_fee_per_session': default_fee_per_session,
                 'profile_picture': referee.profile_picture.url if referee.profile_picture else None,
                 'availability_slot': {
                     'start_time': str(covering_slot.start_time) if covering_slot and covering_slot.start_time else None,
@@ -504,6 +579,20 @@ def assign_referee_to_tournament(request, tournament_id):
         return Response({'error': 'referee_id is required'}, status=status.HTTP_400_BAD_REQUEST)
     
     referee = get_object_or_404(CustomUser, id=referee_id, role='REFEREE')
+    
+    # VALIDATE: Check if referee has the required sport specialization
+    try:
+        referee_profile = RefereeProfile.objects.get(user=referee)
+        if not referee_profile.has_sport_specialization(tournament.sport_type):
+            return Response({
+                'error': f'This referee is not specialized in {tournament.sport_type}. Only referees with matching sport specialization can be assigned.',
+                'referee_specializations': referee_profile.sports_specialization,
+                'required_sport': tournament.sport_type
+            }, status=status.HTTP_400_BAD_REQUEST)
+    except RefereeProfile.DoesNotExist:
+        return Response({
+            'error': 'Referee profile not found. Cannot verify sport specialization.'
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     tournament_date = tournament.date
     tournament_start = tournament.start_time
@@ -740,3 +829,173 @@ def referee_earnings(request):
     )
     
     return Response(earnings, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@jwt_required
+def referee_payment_summary(request):
+    """Get comprehensive payment summary for referee"""
+    from accounts.models import CustomUser
+    
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role != 'REFEREE':
+        return Response({
+            'error': 'Only referees can view payment summary'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get all payment records
+    payment_records = RefereePaymentRecord.objects.filter(referee=user)
+    
+    # Calculate totals
+    total_earned = payment_records.filter(payment_status='PAID').aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    pending_amount = payment_records.filter(payment_status='PENDING').aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    held_in_escrow = payment_records.filter(payment_status='HELD_IN_ESCROW').aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    # Get recent payments
+    recent_payments = payment_records.order_by('-created_at')[:10]
+    
+    # Group by status
+    by_status = {}
+    for status_choice in RefereePaymentRecord.PAYMENT_STATUS_CHOICES:
+        status_code = status_choice[0]
+        count = payment_records.filter(payment_status=status_code).count()
+        amount = payment_records.filter(payment_status=status_code).aggregate(
+            total=Sum('amount')
+        )['total'] or 0
+        by_status[status_code] = {
+            'count': count,
+            'amount': float(amount),
+            'label': status_choice[1]
+        }
+    
+    return Response({
+        'summary': {
+            'total_earned': float(total_earned),
+            'pending_amount': float(pending_amount),
+            'held_in_escrow': float(held_in_escrow),
+            'total_payments': payment_records.count(),
+        },
+        'by_status': by_status,
+        'recent_payments': RefereePaymentRecordSerializer(recent_payments, many=True).data,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@jwt_required
+def create_referee_payment_record(request):
+    """Create a payment record for a referee (Organizer/Admin only)"""
+    from accounts.models import CustomUser
+    
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role not in ['ORGANIZER', 'ADMIN']:
+        return Response({
+            'error': 'Only organizers and admins can create payment records'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    referee_id = request.data.get('referee_id')
+    booking_id = request.data.get('booking_id')
+    tournament_id = request.data.get('tournament_id')
+    match_id = request.data.get('match_id')
+    amount = request.data.get('amount')
+    description = request.data.get('description', '')
+    notes = request.data.get('notes', '')
+    
+    if not referee_id or not amount:
+        return Response({
+            'error': 'referee_id and amount are required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    referee = get_object_or_404(CustomUser, id=referee_id, role='REFEREE')
+    
+    # Get related objects
+    booking = None
+    tournament = None
+    match = None
+    
+    if booking_id:
+        from .models import RefereeBooking
+        booking = get_object_or_404(RefereeBooking, id=booking_id)
+        tournament = booking.tournament
+        match = booking.match
+    elif tournament_id:
+        from tournaments.models import Tournament
+        tournament = get_object_or_404(Tournament, id=tournament_id)
+    
+    if match_id:
+        from tournaments.models import Match
+        match = get_object_or_404(Match, id=match_id)
+    
+    # Create payment record
+    payment_record = RefereePaymentRecord.objects.create(
+        referee=referee,
+        booking=booking,
+        tournament=tournament,
+        match=match,
+        amount=amount,
+        description=description,
+        notes=notes,
+        payment_status='PENDING'
+    )
+    
+    # Notify referee
+    send_notification(
+        user=referee,
+        notification_type='GENERAL',
+        title='New Payment Record',
+        message=f'A payment of {amount} has been recorded for your services.',
+        related_id=str(payment_record.id),
+        action_url='/referee/payments'
+    )
+    
+    serializer = RefereePaymentRecordSerializer(payment_record)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@jwt_required
+def mark_payment_as_paid(request, payment_record_id):
+    """Mark a payment record as paid (Organizer/Admin only)"""
+    from accounts.models import CustomUser
+    
+    user = CustomUser.objects.get(id=request.user_id)
+    
+    if user.role not in ['ORGANIZER', 'ADMIN']:
+        return Response({
+            'error': 'Only organizers and admins can mark payments as paid'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    payment_record = get_object_or_404(RefereePaymentRecord, id=payment_record_id)
+    
+    # If organizer, verify they own the tournament
+    if user.role == 'ORGANIZER' and payment_record.tournament:
+        if payment_record.tournament.organizer != user:
+            return Response({
+                'error': 'You can only mark payments for your own tournaments'
+            }, status=status.HTTP_403_FORBIDDEN)
+    
+    payment_record.payment_status = 'PAID'
+    payment_record.paid_at = datetime.now()
+    payment_record.save()
+    
+    # Notify referee
+    send_notification(
+        user=payment_record.referee,
+        notification_type='GENERAL',
+        title='Payment Received',
+        message=f'Your payment of {payment_record.amount} {payment_record.currency} has been marked as paid.',
+        related_id=str(payment_record.id),
+        action_url='/referee/payments'
+    )
+    
+    serializer = RefereePaymentRecordSerializer(payment_record)
+    return Response(serializer.data, status=status.HTTP_200_OK)

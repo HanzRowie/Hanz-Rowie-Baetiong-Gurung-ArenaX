@@ -10,6 +10,7 @@ router.register(r'bookings', views.RefereeBookingViewSet)
 router.register(r'ratings', views.RefereeRatingViewSet)
 router.register(r'certifications', views.RefereeCertificationViewSet)
 router.register(r'match-reports', views.RefereeMatchReportViewSet)
+router.register(r'payment-records', views.RefereePaymentRecordViewSet)
 
 # URL patterns for referees app
 urlpatterns = [
@@ -26,4 +27,7 @@ urlpatterns = [
     # Payment-related endpoints
     path('bookings/<int:booking_id>/complete/', views.complete_match_and_release_payment, name='complete_match_and_release_payment'),
     path('earnings/', views.referee_earnings, name='referee_earnings'),
+    path('payment-summary/', views.referee_payment_summary, name='referee_payment_summary'),
+    path('payment-records/create/', views.create_referee_payment_record, name='create_referee_payment_record'),
+    path('payment-records/<uuid:payment_record_id>/mark-paid/', views.mark_payment_as_paid, name='mark_payment_as_paid'),
 ]

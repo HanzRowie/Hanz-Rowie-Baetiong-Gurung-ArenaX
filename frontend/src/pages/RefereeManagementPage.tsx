@@ -31,7 +31,7 @@ interface RefereeBooking {
     id: string;
     round_number: number;
     match_number: number;
-  };
+  } | null;
   requested_by: {
     full_name: string;
     email: string;
@@ -356,8 +356,14 @@ const RefereeManagementPage: React.FC = () => {
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Match Details</h3>
                   <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <p><strong>Round:</strong> {selectedBooking.match.round_number}</p>
-                    <p><strong>Match:</strong> {selectedBooking.match.match_number}</p>
+                    {selectedBooking.match ? (
+                      <>
+                        <p><strong>Round:</strong> {selectedBooking.match.round_number}</p>
+                        <p><strong>Match:</strong> {selectedBooking.match.match_number}</p>
+                      </>
+                    ) : (
+                      <p className="text-gray-500 italic">Match details not yet assigned</p>
+                    )}
                     <p><strong>Date & Time:</strong> {new Date(selectedBooking.match_date).toLocaleString()}</p>
                     <p><strong>Fee:</strong> NPR {Number(selectedBooking.fee || 0).toFixed(2)}</p>
                   </div>

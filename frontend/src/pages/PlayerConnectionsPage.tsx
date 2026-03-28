@@ -232,16 +232,16 @@ export default function PlayerConnectionsPage() {
               
               <div className="flex items-center gap-2 mb-2">
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                  request.status === 'PENDING' 
+                  request.status.toLowerCase() === 'pending' 
                     ? 'bg-yellow-100 text-yellow-800' 
-                    : request.status === 'ACCEPTED'
+                    : request.status.toLowerCase() === 'accepted'
                     ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {request.status === 'PENDING' && <Clock className="h-3 w-3" />}
-                  {request.status === 'ACCEPTED' && <CheckCircle className="h-3 w-3" />}
-                  {request.status === 'DECLINED' && <XCircle className="h-3 w-3" />}
-                  {request.status}
+                  {request.status.toLowerCase() === 'pending' && <Clock className="h-3 w-3" />}
+                  {request.status.toLowerCase() === 'accepted' && <CheckCircle className="h-3 w-3" />}
+                  {request.status.toLowerCase() === 'declined' && <XCircle className="h-3 w-3" />}
+                  {request.status.toUpperCase()}
                 </div>
                 <span className="text-xs text-gray-500">
                   {new Date(request.created_at).toLocaleDateString()}
@@ -258,7 +258,7 @@ export default function PlayerConnectionsPage() {
 
             {/* Actions */}
             <div className="flex gap-2 ml-4">
-              {type === 'received' && request.status === 'PENDING' && (
+              {type === 'received' && request.status.toLowerCase() === 'pending' && (
                 <>
                   <button
                     onClick={() => handleRespondToRequest(request.id, 'accept')}
@@ -277,7 +277,7 @@ export default function PlayerConnectionsPage() {
                 </>
               )}
               
-              {type === 'sent' && request.status === 'PENDING' && (
+              {type === 'sent' && request.status.toLowerCase() === 'pending' && (
                 <button
                   onClick={() => handleCancelRequest(request.id)}
                   className="flex items-center gap-1 px-3 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors text-sm"

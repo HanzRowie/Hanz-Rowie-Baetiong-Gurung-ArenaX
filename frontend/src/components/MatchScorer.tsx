@@ -107,6 +107,11 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
       return;
     }
 
+    if (match.status === 'COMPLETED') {
+      toast.error('This match has already been completed and cannot be edited.');
+      return;
+    }
+
     if (!match.tournament?.id) {
       toast.error('Tournament information not available');
       return;
@@ -158,6 +163,11 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
   const handleUpdateScore = async (scoreData: any) => {
     if (!canScoreMatch) {
       toast.error('You are not authorized to update this match');
+      return;
+    }
+
+    if (match.status === 'COMPLETED') {
+      toast.error('This match has already been completed and cannot be edited.');
       return;
     }
 

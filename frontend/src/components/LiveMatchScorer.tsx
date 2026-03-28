@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Target, Clock, Users, AlertCircle, Undo2, CheckCircle,
-  Trophy, Shirt, Flag, Zap, Shield, Save as SaveIcon
+  Trophy, Shirt, Flag, Zap, Shield, Save as SaveIcon, MessageSquare
 } from 'lucide-react';
+import { MatchRemarksPanel } from './MatchRemarksPanel';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
 
@@ -73,6 +74,7 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
     team1: match.team1_score || 0,
     team2: match.team2_score || 0
   });
+  const [showRemarks, setShowRemarks] = useState(false);
 
   useEffect(() => {
     loadMatchEvents();
@@ -413,6 +415,13 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
               </button>
             )}
             <button
+              onClick={() => setShowRemarks(v => !v)}
+              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 border transition-colors ${showRemarks ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              Remarks
+            </button>
+            <button
               onClick={handleCompleteMatch}
               disabled={isLoading}
               className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold shadow-md flex items-center gap-2 disabled:opacity-50"
@@ -431,7 +440,19 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
             <Zap className="w-5 h-5 text-purple-600" />
             Match Events ({events.length})
           </h3>
-          
+
+          {/* Remarks Panel */}
+          {showRemarks && (
+            <div className="mb-6">
+              <MatchRemarksPanel
+                tournamentId={match.tournament.id}
+                matchId={match.id}
+                team1={match.team1}
+                team2={match.team2}
+              />
+            </div>
+          )}
+
           {events.length === 0 ? (
             <div className="text-center py-12">
               <AlertCircle className="w-16 h-16 mx-auto text-gray-300 mb-3" />
@@ -493,7 +514,8 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
             if (selectedEventType === 'GOAL') {
               handleAddGoal(data.playerId, data.assistById, data.goalType);
             } else if (selectedEventType === 'YELLOW_CARD' || selectedEventType === 'RED_CARD') {
-              handleAddCard(data.playerId, selectedEventType, data.reason || 'UNSPORTING_BEHAVIOR');
+              const cardType = selectedEventType === 'YELLOW_CARD' ? 'YELLOW' : 'RED';
+              handleAddCard(data.playerId, cardType as 'YELLOW' | 'RED', data.reason || 'UNSPORTING_BEHAVIOR');
             }
           }}
           onClose={() => {
@@ -544,7 +566,7 @@ const EventModal: React.FC<EventModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-4">

@@ -21,6 +21,8 @@ interface RefereeProfile {
   years_experience: number;
   matches_officiated: number;
   profile_picture: string | null;
+  default_fee_per_match: number;
+  default_fee_per_session: number;
   availability_slot: {
     start_time: string | null;
     end_time: string | null;
@@ -225,6 +227,22 @@ const RefereeSelectionPage: React.FC = () => {
                 <span className="text-sm font-medium">{data.tournament.sport_type}</span>
               </div>
             </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2">
+              <p className="text-xs text-purple-600 font-medium">Sport Filter Active</p>
+              <p className="text-sm font-bold text-purple-700">{data.tournament.sport_type} Only</p>
+            </div>
+          </div>
+          
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Shield className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Sport-Specific Filtering</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Only referees specialized in {data.tournament.sport_type} are shown. This ensures qualified officials for your tournament.
+                </p>
+              </div>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -315,7 +333,12 @@ const RefereeSelectionPage: React.FC = () => {
             {filteredReferees.map((referee) => (
               <div
                 key={referee.id}
-                onClick={() => !referee.booking_status && setSelectedReferee(referee)}
+                onClick={() => {
+                  if (!referee.booking_status) {
+                    setSelectedReferee(referee);
+                    setAssignmentFee(referee.default_fee_per_match > 0 ? String(referee.default_fee_per_match) : '');
+                  }
+                }}
                 className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all border-2 ${
                   referee.booking_status 
                     ? 'border-gray-300 opacity-75 cursor-not-allowed' 
@@ -416,9 +439,16 @@ const RefereeSelectionPage: React.FC = () => {
                           {referee.specialization.map((sport, index) => (
                             <span
                               key={index}
-                              className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-md font-medium"
+                              className={`px-2 py-1 text-xs rounded-md font-medium ${
+                                sport.toUpperCase() === data.tournament.sport_type.toUpperCase()
+                                  ? 'bg-green-100 text-green-700 border border-green-300'
+                                  : 'bg-purple-50 text-purple-700'
+                              }`}
                             >
                               {sport}
+                              {sport.toUpperCase() === data.tournament.sport_type.toUpperCase() && (
+                                <CheckCircle className="h-3 w-3 inline ml-1" />
+                              )}
                             </span>
                           ))}
                         </div>
@@ -465,10 +495,10 @@ const RefereeSelectionPage: React.FC = () => {
                   step="0.01"
                   value={assignmentFee}
                   onChange={(e) => setAssignmentFee(e.target.value)}
-                  placeholder="Enter amount (optional)"
+                  placeholder="Enter amount"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">Leave empty for no fee</p>
+                <p className="text-xs text-gray-500 mt-1">Pre-filled from referee's default fee</p>
               </div>
 
               <div>

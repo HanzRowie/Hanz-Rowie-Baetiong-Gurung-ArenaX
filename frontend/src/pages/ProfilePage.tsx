@@ -6,7 +6,7 @@ import {
   X, Save, Camera, Mail, Phone, MessageCircle,
   Target, Users, Clock, Settings,
   Shield, Activity, BarChart3, Zap, Medal, Crown,
-  ChevronRight, ChevronDown, ChevronUp, Globe, Crop, Building2
+  ChevronRight, ChevronDown, ChevronUp, Globe, Crop, Building2, Star
 } from 'lucide-react';
 import { profileService } from '@/services/profileService';
 import type { ExtendedUserProfile } from '@/types';
@@ -67,6 +67,14 @@ export default function ProfilePage() {
     business_name: '',
     business_registration: '',
     business_contact: '',
+    // Referee-specific fields
+    sports_specialization: [] as string[],
+    certification_level: '',
+    years_experience: 0,
+    license_number: '',
+    license_expiry: '',
+    default_fee_per_match: 0,
+    default_fee_per_session: 0,
   });
 
   // Privacy settings state
@@ -94,6 +102,14 @@ export default function ProfilePage() {
     { value: 'INTERMEDIATE', label: 'Intermediate' },
     { value: 'ADVANCED', label: 'Advanced' },
     { value: 'PROFESSIONAL', label: 'Professional' },
+  ];
+
+  const certificationLevels = [
+    { value: 'LEVEL_1', label: 'Level 1 - Beginner' },
+    { value: 'LEVEL_2', label: 'Level 2 - Intermediate' },
+    { value: 'LEVEL_3', label: 'Level 3 - Advanced' },
+    { value: 'LEVEL_4', label: 'Level 4 - Professional' },
+    { value: 'INTERNATIONAL', label: 'International' },
   ];
 
   const sportTypes = [
@@ -218,6 +234,14 @@ export default function ProfilePage() {
           business_name: response.profile.business_name || '',
           business_registration: response.profile.business_registration || '',
           business_contact: response.profile.business_contact || '',
+          // Referee-specific fields
+          sports_specialization: response.profile.referee_profile?.sports_specialization || [],
+          certification_level: response.profile.referee_profile?.certification_level || 'LEVEL_1',
+          years_experience: response.profile.referee_profile?.years_experience || 0,
+          license_number: response.profile.referee_profile?.license_number || '',
+          license_expiry: response.profile.referee_profile?.license_expiry || '',
+          default_fee_per_match: response.profile.referee_profile?.default_fee_per_match || 0,
+          default_fee_per_session: response.profile.referee_profile?.default_fee_per_session || 0,
         });
       }
     } catch (err: any) {
@@ -232,25 +256,22 @@ export default function ProfilePage() {
     if (!isOwnProfile) return;
 
     try {
-      const [statsResponse, achievementsResponse, connectionsResponse, recentResponse] = await Promise.allSettled([
+      const [statsResponse, connectionsResponse] = await Promise.allSettled([
         profileService.getUserStatistics(),
-        profileService.getUserAchievements(),
         profileService.getPlayerConnections(),
-        profileService.getRecentActivity()
       ]);
 
       if (statsResponse.status === 'fulfilled') {
         setStatistics(statsResponse.value);
       }
-      if (achievementsResponse.status === 'fulfilled') {
-        setAchievements(achievementsResponse.value);
-      }
       if (connectionsResponse.status === 'fulfilled') {
         setConnections(connectionsResponse.value);
       }
-      if (recentResponse.status === 'fulfilled') {
-        setRecentActivity(recentResponse.value);
-      }
+      
+      // Set placeholder data for achievements and recent activity
+      // These can be implemented later when the backend endpoints are ready
+      setAchievements({ achievements: [], total_points: 0 });
+      setRecentActivity({ activities: [] });
     } catch (err) {
       console.error('Failed to load additional data:', err);
     }
@@ -364,10 +385,36 @@ export default function ProfilePage() {
     try {
       setSaving(true);
 
-      const updateData = {
-        ...editForm,
+      // Build update data based on user role
+      const updateData: any = {
+        full_name: editForm.full_name,
+        bio: editForm.bio,
+        location: editForm.location,
+        country: editForm.country,
+        phone_number: editForm.phone_number,
+        date_of_birth: editForm.date_of_birth,
+        gender: editForm.gender,
+        preferred_sports: editForm.preferred_sports,
+        skill_level: editForm.skill_level,
+        achievements: editForm.achievements,
+        social_links: editForm.social_links,
+        is_available_for_matches: editForm.is_available_for_matches,
+        business_name: editForm.business_name,
+        business_registration: editForm.business_registration,
+        business_contact: editForm.business_contact,
         profile_picture: newProfilePicture || undefined,
       };
+
+      // Only include referee fields if user is a referee
+      if (profile?.role === 'REFEREE') {
+        updateData.sports_specialization = editForm.sports_specialization;
+        updateData.certification_level = editForm.certification_level;
+        updateData.years_experience = editForm.years_experience;
+        updateData.license_number = editForm.license_number;
+        updateData.license_expiry = editForm.license_expiry;
+        updateData.default_fee_per_match = editForm.default_fee_per_match;
+        updateData.default_fee_per_session = editForm.default_fee_per_session;
+      }
 
       console.log('Saving profile with data:', updateData);
 
@@ -437,6 +484,14 @@ export default function ProfilePage() {
         business_name: profile.business_name || '',
         business_registration: profile.business_registration || '',
         business_contact: profile.business_contact || '',
+        // Referee-specific fields
+        sports_specialization: profile.referee_profile?.sports_specialization || [],
+        certification_level: profile.referee_profile?.certification_level || 'LEVEL_1',
+        years_experience: profile.referee_profile?.years_experience || 0,
+        license_number: profile.referee_profile?.license_number || '',
+        license_expiry: profile.referee_profile?.license_expiry || '',
+        default_fee_per_match: profile.referee_profile?.default_fee_per_match || 0,
+        default_fee_per_session: profile.referee_profile?.default_fee_per_session || 0,
       });
     }
   };
@@ -484,7 +539,7 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Image Cropper Modal */}
       {showImageCropper && originalImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">Crop Profile Picture</h3>
 
@@ -834,7 +889,9 @@ export default function ProfilePage() {
                   onClick={() => toggleSection('sportsSkills')}
                 >
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {profile?.role === 'VENUE_OWNER' ? 'Business Information' : 'Sports & Skills'}
+                    {profile?.role === 'VENUE_OWNER' ? 'Business Information' : 
+                     profile?.role === 'REFEREE' ? 'Referee Information' : 
+                     'Sports & Skills'}
                   </h3>
                   {expandedSections.sportsSkills ? (
                     <ChevronUp className="h-5 w-5 text-gray-400" />
@@ -886,6 +943,118 @@ export default function ProfilePage() {
                                 value={editForm.location}
                                 onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
                                 placeholder="Headquarters Location"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+                          </>
+                        ) : profile?.role === 'REFEREE' ? (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Sports Specialization *</label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {sportTypes.map((sport) => (
+                                  <label key={sport} className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+                                    <input
+                                      type="checkbox"
+                                      checked={editForm.sports_specialization.includes(sport)}
+                                      onChange={() => {
+                                        setEditForm(prev => ({
+                                          ...prev,
+                                          sports_specialization: prev.sports_specialization.includes(sport)
+                                            ? prev.sports_specialization.filter(s => s !== sport)
+                                            : [...prev.sports_specialization, sport]
+                                        }));
+                                      }}
+                                      className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                    />
+                                    <span className="text-sm font-medium">{formatSportName(sport)}</span>
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Select the sports you can officiate</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Certification Level</label>
+                              <select
+                                value={editForm.certification_level}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, certification_level: e.target.value }))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              >
+                                {certificationLevels.map((level) => (
+                                  <option key={level.value} value={level.value}>{level.label}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="50"
+                                value={editForm.years_experience}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, years_experience: parseInt(e.target.value) || 0 }))}
+                                placeholder="Years as a referee"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
+                              <input
+                                type="text"
+                                value={editForm.license_number}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, license_number: e.target.value }))}
+                                placeholder="Your referee license number"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">License Expiry Date</label>
+                              <input
+                                type="date"
+                                value={editForm.license_expiry}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, license_expiry: e.target.value }))}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Default Fee per Match (NPR)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={editForm.default_fee_per_match}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, default_fee_per_match: parseFloat(e.target.value) || 0 }))}
+                                placeholder="e.g. 1500"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">This will be pre-filled when organizers book you</p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Default Fee per Session (NPR)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={editForm.default_fee_per_session}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, default_fee_per_session: parseFloat(e.target.value) || 0 }))}
+                                placeholder="e.g. 5000"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                              <input
+                                type="text"
+                                value={editForm.location}
+                                onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
+                                placeholder="Your location"
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                               />
                             </div>
@@ -962,6 +1131,99 @@ export default function ProfilePage() {
                               <div>
                                 <h4 className="text-sm font-medium text-gray-700 mb-1">Location</h4>
                                 <p className="text-gray-900">{profile.location}</p>
+                              </div>
+                            )}
+                          </div>
+                        ) : profile?.role === 'REFEREE' ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {profile.referee_profile?.sports_specialization && profile.referee_profile.sports_specialization.length > 0 && (
+                              <div className="md:col-span-2">
+                                <h4 className="text-sm font-medium text-gray-700 mb-2">Sports Specialization</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {profile.referee_profile.sports_specialization.map((sport: string) => (
+                                    <span key={sport} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                                      {formatSportName(sport)}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {profile.referee_profile?.certification_level && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">Certification Level</h4>
+                                <p className="text-gray-900">
+                                  {certificationLevels.find(l => l.value === profile.referee_profile?.certification_level)?.label || profile.referee_profile.certification_level}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {profile.referee_profile?.years_experience !== undefined && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">Experience</h4>
+                                <p className="text-gray-900">{profile.referee_profile.years_experience} years</p>
+                              </div>
+                            )}
+                            
+                            {isOwnProfile && profile.referee_profile?.license_number && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">License Number</h4>
+                                <p className="text-gray-900">{profile.referee_profile.license_number}</p>
+                              </div>
+                            )}
+                            
+                            {isOwnProfile && profile.referee_profile?.license_expiry && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">License Expiry</h4>
+                                <p className="text-gray-900">
+                                  {new Date(profile.referee_profile.license_expiry).toLocaleDateString()}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {profile.referee_profile?.rating !== undefined && profile.referee_profile.rating > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">Rating</h4>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                      <Star
+                                        key={star}
+                                        className={`h-5 w-5 ${
+                                          star <= Math.round(profile.referee_profile?.rating || 0)
+                                            ? 'text-yellow-400 fill-yellow-400'
+                                            : 'text-gray-300'
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="text-gray-900 font-medium">
+                                    {profile.referee_profile.rating.toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {profile.referee_profile?.total_matches_officiated !== undefined && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">Matches Officiated</h4>
+                                <p className="text-gray-900">{profile.referee_profile.total_matches_officiated}</p>
+                              </div>
+                            )}
+                            
+                            {profile.location && (
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-1">Location</h4>
+                                <p className="text-gray-900">{profile.location}</p>
+                              </div>
+                            )}
+                            
+                            {profile.referee_profile?.is_verified && (
+                              <div className="md:col-span-2">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                  <Shield className="h-5 w-5 text-green-600" />
+                                  <span className="text-sm font-medium text-green-800">Verified Referee</span>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1081,6 +1343,107 @@ export default function ProfilePage() {
                 <div className="bg-white rounded-lg shadow-sm p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-6">League Tournament Statistics</h3>
                   <PlayerStatsDashboard />
+                </div>
+              )}
+
+              {/* Referee Statistics */}
+              {profile?.role === 'REFEREE' && !isEditing && profile.referee_profile && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-6">Referee Statistics</h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Rating Card */}
+                    <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-yellow-900">Overall Rating</h4>
+                        <Award className="h-5 w-5 text-yellow-600" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-6 w-6 ${
+                                star <= Math.round(profile.referee_profile?.rating || 0)
+                                  ? 'text-yellow-500 fill-yellow-500'
+                                  : 'text-yellow-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-yellow-900 mt-2">
+                        {profile.referee_profile.rating > 0 ? profile.referee_profile.rating.toFixed(1) : 'N/A'}
+                      </p>
+                    </div>
+
+                    {/* Matches Officiated Card */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-blue-900">Matches Officiated</h4>
+                        <Activity className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <p className="text-3xl font-bold text-blue-900">
+                        {profile.referee_profile.total_matches_officiated || 0}
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">Total matches</p>
+                    </div>
+
+                    {/* Experience Card */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-medium text-purple-900">Experience</h4>
+                        <Clock className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <p className="text-3xl font-bold text-purple-900">
+                        {profile.referee_profile.years_experience || 0}
+                      </p>
+                      <p className="text-xs text-purple-700 mt-1">Years</p>
+                    </div>
+                  </div>
+
+                  {/* Booking Statistics */}
+                  {(profile.total_bookings || profile.accepted_bookings || profile.completed_bookings) && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Total Bookings</h4>
+                        <p className="text-2xl font-bold text-gray-900">{profile.total_bookings || 0}</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                        <h4 className="text-sm font-medium text-green-700 mb-1">Accepted</h4>
+                        <p className="text-2xl font-bold text-green-900">{profile.accepted_bookings || 0}</p>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                        <h4 className="text-sm font-medium text-blue-700 mb-1">Completed</h4>
+                        <p className="text-2xl font-bold text-blue-900">{profile.completed_bookings || 0}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Certification Badge */}
+                  {profile.referee_profile.certification_level && (
+                    <div className="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 rounded-full">
+                          <Medal className="h-6 w-6 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700">Certification</h4>
+                          <p className="text-lg font-semibold text-indigo-900">
+                            {certificationLevels.find(l => l.value === profile.referee_profile?.certification_level)?.label}
+                          </p>
+                        </div>
+                        {profile.referee_profile.is_verified && (
+                          <div className="ml-auto">
+                            <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full">
+                              <Shield className="h-4 w-4 text-green-600" />
+                              <span className="text-xs font-medium text-green-800">Verified</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

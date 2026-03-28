@@ -11,6 +11,9 @@ import type {
     CreatePaymentMethodRequest,
     RefundRequest,
     PaymentVerificationResponse,
+    Refund,
+    InitiateRefundRequest,
+    CompleteRefundRequest,
 } from '../types/payment.types';
 
 class PaymentService {
@@ -59,6 +62,45 @@ class PaymentService {
   async requestRefund(id: string, data: RefundRequest): Promise<any> {
     const response = await api.post(`${this.BASE_PATH}/payments/${id}/refund/`, data);
     return response.data;
+  }
+
+  /**
+   * Organizer Refund Management
+   */
+  async getOrganizerRefunds(params?: { status?: string; tournament_id?: string }): Promise<Refund[]> {
+    const response = await api.get(`${this.BASE_PATH}/organizer/refunds/`, { params });
+    return response.data;
+  }
+
+  async initiateRefund(data: InitiateRefundRequest): Promise<Refund> {
+    const response = await api.post(`${this.BASE_PATH}/organizer/refunds/`, data);
+    return response.data;
+  }
+
+  async getOrganizerRefund(refundId: number): Promise<Refund> {
+    const response = await api.get(`${this.BASE_PATH}/organizer/refunds/${refundId}/`);
+    return response.data;
+  }
+
+  async completeRefund(refundId: number, data?: CompleteRefundRequest): Promise<Refund> {
+    const response = await api.patch(`${this.BASE_PATH}/organizer/refunds/${refundId}/complete/`, data || {});
+    return response.data;
+  }
+
+  async cancelRefund(refundId: number): Promise<Refund> {
+    const response = await api.patch(`${this.BASE_PATH}/organizer/refunds/${refundId}/cancel/`, {});
+    return response.data;
+  }
+
+    getRefundStatusColor(status: string): string {
+    switch (status) {
+      case 'COMPLETED': return 'text-green-600 bg-green-50';
+      case 'PENDING':   return 'text-yellow-600 bg-yellow-50';
+      case 'PROCESSING': return 'text-blue-600 bg-blue-50';
+      case 'FAILED':    return 'text-red-600 bg-red-50';
+      case 'CANCELLED': return 'text-gray-600 bg-gray-50';
+      default:          return 'text-gray-600 bg-gray-50';
+    }
   }
 
   /**
@@ -111,7 +153,7 @@ class PaymentService {
   }
 
   formatAmount(amount: string | number, currency: string = 'NPR'): string {
-    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    const numAmount = typeof amount === 'string' ? Number.parseFloat(amount) : amount;
     return `${currency} ${numAmount.toLocaleString('en-NP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 

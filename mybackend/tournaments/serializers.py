@@ -27,7 +27,7 @@ class TournamentSerializer(serializers.ModelSerializer):
             'registration_deadline', 'status', 'prize_pool', 'rules',
             'tournament_image', 'organizer', 'is_registration_open',
             'user_registration_status', 'registered_players', 'matches',
-            'sport_requirements', 'created_at', 'updated_at'
+            'sport_requirements', 'created_at', 'updated_at', 'share_token'
         ]
 
     def to_representation(self, instance):
@@ -132,6 +132,77 @@ class TournamentSerializer(serializers.ModelSerializer):
         matches = obj.matches.all().order_by('round_number', 'match_number')
         return MatchSerializer(matches, many=True, context=self.context).data
 
+
+# Public (guest-accessible) Tournament Serializer — no user-specific fields
+class PublicTournamentSerializer(serializers.ModelSerializer):
+    organizer = serializers.SerializerMethodField()
+    registered_count = serializers.SerializerMethodField()
+    is_registration_open = serializers.SerializerMethodField()
+    sport_requirements = serializers.SerializerMethodField()
+    matches = serializers.SerializerMethodField()
+    registered_players = serializers.SerializerMethodField()
+    tournament_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Tournament
+        fields = [
+            'id', 'title', 'description', 'sport_type', 'tournament_type',
+            'registration_type', 'team_size', 'date', 'start_time', 'end_time',
+            'venue', 'venue_address', 'entry_fee', 'max_participants',
+            'min_participants', 'registered_count', 'registration_deadline',
+            'status', 'prize_pool', 'rules', 'tournament_image', 'organizer',
+            'is_registration_open', 'sport_requirements', 'matches',
+            'registered_players', 'created_at',
+        ]
+
+    def get_organizer(self, obj):
+        return {
+            'id': str(obj.organizer.id),
+            'name': obj.organizer.full_name,
+            'profile_picture': obj.organizer.profile_picture.url if obj.organizer.profile_picture else None,
+        }
+
+    def get_registered_count(self, obj):
+        if obj.registration_type == 'TEAM':
+            return obj.team_registrations.filter(status='CONFIRMED').count()
+        return obj.registrations.filter(status='ACCEPTED').count()
+
+    def get_is_registration_open(self, obj):
+        return (
+            obj.status == 'UPCOMING' and
+            timezone.now() < obj.registration_deadline and
+            self.get_registered_count(obj) < obj.max_participants
+        )
+
+    def get_sport_requirements(self, obj):
+        return obj.get_sport_requirements()
+
+    def get_matches(self, obj):
+        matches = obj.matches.all().order_by('round_number', 'match_number')
+        return MatchSerializer(matches, many=True, context=self.context).data
+
+    def get_registered_players(self, obj):
+        if obj.registration_type == 'INDIVIDUAL':
+            registrations = obj.registrations.filter(status='ACCEPTED').select_related('player')
+            return [
+                {
+                    'id': str(reg.player.id),
+                    'name': reg.player.full_name,
+                    'profile_picture': reg.player.profile_picture.url if reg.player.profile_picture else None,
+                }
+                for reg in registrations
+            ]
+        return []
+
+    def get_tournament_image(self, obj):
+        if obj.tournament_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.tournament_image.url)
+            return f"http://localhost:8000{obj.tournament_image.url}"
+        return None
+
+
 # Tournament Registration Serializer
 class TournamentRegistrationSerializer(serializers.ModelSerializer):
     player_name = serializers.CharField(source='player.full_name', read_only=True)
@@ -168,6 +239,7 @@ class MatchSerializer(serializers.ModelSerializer):
     winner = serializers.SerializerMethodField()
     team1_score = serializers.SerializerMethodField()
     team2_score = serializers.SerializerMethodField()
+    match_venue_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Match
@@ -175,8 +247,14 @@ class MatchSerializer(serializers.ModelSerializer):
             'id', 'round_number', 'match_number', 'status', 'scheduled_time',
             'player1', 'player2', 'team1', 'team2', 'winner',
             'player1_score', 'player2_score', 'team1_score', 'team2_score',
-            'actual_start_time', 'actual_end_time', 'notes'
+            'actual_start_time', 'actual_end_time', 'notes',
+            'match_venue', 'match_venue_name', 'match_venue_display',
         ]
+
+    def get_match_venue_display(self, obj):
+        if obj.match_venue:
+            return obj.match_venue.name
+        return obj.match_venue_name or None
 
     def get_player1(self, obj):
         if obj.player1:

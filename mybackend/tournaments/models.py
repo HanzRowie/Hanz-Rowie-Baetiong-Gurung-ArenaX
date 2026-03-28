@@ -29,6 +29,7 @@ class Tournament(models.Model):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, null=True, blank=True)
     organizer = models.ForeignKey('accounts.CustomUser', on_delete=models.CASCADE, limit_choices_to={'role': 'ORGANIZER'})
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
@@ -309,6 +310,11 @@ class Match(models.Model):
     actual_end_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED')
     notes = models.TextField(blank=True)
+    
+    # Per-match venue (for league tournaments where each match may be at a different venue)
+    match_venue = models.ForeignKey('venues.Venue', on_delete=models.SET_NULL, null=True, blank=True, related_name='hosted_matches')
+    match_venue_name = models.CharField(max_length=200, blank=True, help_text='Custom venue name if not using a linked venue')
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -526,3 +532,71 @@ class TournamentAuditLog(models.Model):
     
     def __str__(self):
         return f"{self.administrator.full_name} - {self.action_type} - {self.timestamp}"
+
+
+# Match Remarks System
+class MatchRemark(models.Model):
+    """
+    Organizer-created remarks for a match: penalties, cards, and custom notes.
+    Used as reference when entering match scores.
+    """
+    REMARK_TYPES = (
+        ('PENALTY', 'Penalty'),
+        ('YELLOW_CARD', 'Yellow Card'),
+        ('RED_CARD', 'Red Card'),
+        ('FOUL', 'Foul'),
+        ('INJURY', 'Injury'),
+        ('SUBSTITUTION', 'Substitution'),
+        ('DISPUTE', 'Dispute'),
+        ('CUSTOM', 'Custom Note'),
+    )
+
+    SEVERITY_CHOICES = (
+        ('LOW', 'Low'),
+        ('MEDIUM', 'Medium'),
+        ('HIGH', 'High'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    match = models.ForeignKey(
+        Match,
+        on_delete=models.CASCADE,
+        related_name='remarks'
+    )
+    created_by = models.ForeignKey(
+        'accounts.CustomUser',
+        on_delete=models.CASCADE,
+        related_name='match_remarks',
+        limit_choices_to={'role': 'ORGANIZER'}
+    )
+
+    remark_type = models.CharField(max_length=20, choices=REMARK_TYPES, default='CUSTOM')
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='LOW')
+
+    # Optional player/team references
+    team = models.ForeignKey(
+        'teams.Team',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='match_remarks'
+    )
+    player_name = models.CharField(max_length=200, blank=True, help_text="Player name (free text for flexibility)")
+    minute = models.IntegerField(null=True, blank=True, help_text="Match minute when this occurred")
+
+    # The actual remark
+    title = models.CharField(max_length=200, blank=True, help_text="Short summary")
+    description = models.TextField(blank=True, help_text="Detailed description")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['minute', 'created_at']
+        indexes = [
+            models.Index(fields=['match', 'remark_type']),
+            models.Index(fields=['match', 'created_at']),
+        ]
+
+    def __str__(self):
+        minute_str = f" ({self.minute}')" if self.minute is not None else ""
+        return f"{self.get_remark_type_display()}{minute_str} - {self.match}"

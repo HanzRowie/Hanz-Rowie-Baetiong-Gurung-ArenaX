@@ -27,6 +27,7 @@ import LoadingSkeleton from '@/components/LoadingSkeleton';
 import { PlayerSelectionModal } from '@/components/team/PlayerSelectionModal';
 import { TournamentSelectionModal } from '@/components/team/TournamentSelectionModal';
 import { InvitationSender } from '@/components/team/InvitationSender';
+import { ConnectionSelector } from '@/components/team/ConnectionSelector';
 import { RoleAssignmentModal } from '@/components/team/RoleAssignmentModal';
 import GroupChatInterface from '@/components/chat/GroupChatInterface';
 import type { Team, TeamMembership } from '@/types/team.types';
@@ -47,6 +48,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
   const [showTournamentSelection, setShowTournamentSelection] = useState(false);
   const [showPlayerSelection, setShowPlayerSelection] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showConnectionSelector, setShowConnectionSelector] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [selectedMembership, setSelectedMembership] = useState<TeamMembership | null>(null);
   const [availableTournaments, setAvailableTournaments] = useState<Tournament[]>([]);
@@ -120,6 +122,33 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
   const handleInvitePlayers = () => {
     setShowInviteModal(true);
+  };
+
+  const handleAddFromConnections = () => {
+    setShowConnectionSelector(true);
+  };
+
+  const handleConnectionsSelected = async (playerIds: string[]) => {
+    if (!team || playerIds.length === 0) return;
+
+    try {
+      const response = await TeamService.addMembers(team.id, playerIds);
+      if (response.success) {
+        const count = playerIds.length;
+        toastService.success(`${count} player${count > 1 ? 's' : ''} added to the team!`);
+        loadTeamDetails(); // Refresh team data
+        
+        // Show any failures if present
+        if (response.failed && response.failed.length > 0) {
+          toastService.warning(`${response.failed.length} player(s) could not be added`);
+        }
+      } else {
+        toastService.error(response.error || 'Failed to add players');
+      }
+    } catch (error: any) {
+      console.error('Error adding players:', error);
+      toastService.error('Failed to add players to team');
+    }
   };
 
   const handleManageMemberRole = (membership: TeamMembership) => {
@@ -290,13 +319,22 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                 </button>
               )}
               {canManage && (
-                <button
-                  onClick={handleInvitePlayers}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Invite Players
-                </button>
+                <>
+                  <button
+                    onClick={handleAddFromConnections}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Users className="w-4 h-4" />
+                    Add from Connections
+                  </button>
+                  <button
+                    onClick={handleInvitePlayers}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Invite by Email
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -828,6 +866,17 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
         />
       )}
 
+      {/* Connection Selector Modal */}
+      {showConnectionSelector && team && (
+        <ConnectionSelector
+          isOpen={showConnectionSelector}
+          onClose={() => setShowConnectionSelector(false)}
+          onPlayersSelected={handleConnectionsSelected}
+          excludePlayerIds={team.memberships.filter(m => m.is_active).map(m => m.player.id)}
+          sportFilter={team.sport_types[0]}
+        />
+      )}
+
       {/* Role Assignment Modal */}
       {showRoleModal && team && selectedMembership && (
         <RoleAssignmentModal
@@ -844,7 +893,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
       {/* Leave Team Confirmation Modal */}
       {showLeaveConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
@@ -883,7 +932,7 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
 
       {/* Kick Member Confirmation Modal */}
       {showKickConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">

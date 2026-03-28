@@ -174,15 +174,28 @@ export default function CreateTournamentPage() {
       if (formData.date && formData.start_time && formData.sport_type && !useCustomVenue) {
         setLoadingVenues(true);
         try {
-          const endTime = formData.end_time || formData.start_time;
+          // Use end_time if set, otherwise default to 1 hour after start_time
+          let endTime = formData.end_time;
+          if (!endTime && formData.start_time) {
+            const [h, m] = formData.start_time.split(':').map(Number);
+            const endDate = new Date(0, 0, 0, h + 1, m);
+            endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+          }
           const response = await venueService.getAvailableVenuesForTournament({
             date: formData.date,
             start_time: formData.start_time,
-            end_time: endTime,
+            end_time: endTime!,
             sport_type: formData.sport_type
           });
           console.log('Venues loaded:', response);
           setAvailableVenues(response.venues);
+          // Clear stale venue selection if it's no longer in the available list
+          if (formData.linked_venue_id) {
+            const stillAvailable = response.venues.some((v: any) => v.id === formData.linked_venue_id);
+            if (!stillAvailable) {
+              setFormData(prev => ({ ...prev, linked_venue_id: '', venue: '', venue_address: '' }));
+            }
+          }
         } catch (error) {
           console.error('Error loading available venues:', error);
           setAvailableVenues([]);
@@ -212,6 +225,27 @@ export default function CreateTournamentPage() {
     setIsLoading(true);
 
     try {
+      // Validate venue selection (not required for league tournaments - venues are per-match)
+      if (formData.tournament_type === 'league') {
+        // League tournaments don't need a venue at creation — set a placeholder if empty
+        if (!formData.venue.trim()) {
+          formData.venue = 'TBD - Assigned per match';
+        }
+      } else if (!useCustomVenue) {
+        if (!formData.linked_venue_id) {
+          throw new Error('Please select a venue from the available options, or use a custom venue');
+        }
+        // Confirm the selected venue is still in the available list (client-side guard)
+        const venueStillAvailable = availableVenues.some(v => v.id === formData.linked_venue_id);
+        if (!venueStillAvailable) {
+          throw new Error('The selected venue is no longer available. Please choose another venue');
+        }
+      } else {
+        if (!formData.venue.trim()) {
+          throw new Error('Please enter a venue name');
+        }
+      }
+
       // Validate tournament type
       if (!formData.tournament_type || (formData.tournament_type !== 'knockout' && formData.tournament_type !== 'league')) {
         throw new Error('Please select a valid tournament type (Knockout or League)');
@@ -702,6 +736,18 @@ export default function CreateTournamentPage() {
             </div>
 
             {/* Venue Information */}
+            {formData.tournament_type === 'league' ? (
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium text-gray-900">Venue</h3>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Venues are assigned per match for league tournaments</p>
+                    <p className="text-xs text-blue-700 mt-1">After generating the schedule, you can assign a venue to each individual match from the Schedule tab.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">Venue Selection</h3>
@@ -833,6 +879,7 @@ export default function CreateTournamentPage() {
                 </div>
               )}
             </div>
+            )} {/* end league/knockout venue conditional */}
 
             {/* Participants and Fees */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

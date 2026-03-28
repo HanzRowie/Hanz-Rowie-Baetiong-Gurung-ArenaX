@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, Edit2, Check, X, Trophy } from 'lucide-react';
+import { Calendar, Clock, MapPin, Edit2, Check, X, Trophy, Building2 } from 'lucide-react';
 
 export interface LeagueMatch {
   id: string;
@@ -16,6 +16,9 @@ export interface LeagueMatch {
   away_score?: number;
   scheduled_time?: string;
   venue?: string;
+  match_venue?: number | null;
+  match_venue_name?: string;
+  match_venue_display?: string | null;
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 }
 
@@ -24,6 +27,7 @@ interface LeagueScheduleTableProps {
   editable?: boolean;
   onEditMatch?: (matchId: string, updates: Partial<LeagueMatch>) => void;
   onEnterScore?: (matchId: string) => void;
+  onAssignVenue?: (matchId: string) => void;
   loading?: boolean;
 }
 
@@ -80,6 +84,7 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
   editable = false,
   onEditMatch,
   onEnterScore,
+  onAssignVenue,
   loading = false,
 }) => {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
@@ -98,8 +103,14 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
     setEditingMatchId(match.id);
     if (match.scheduled_time) {
       const date = new Date(match.scheduled_time);
-      setEditedDate(date.toISOString().split('T')[0]);
-      setEditedTime(date.toTimeString().slice(0, 5));
+      // Use local date/time so the inputs show what the user originally saved
+      const localYear = date.getFullYear();
+      const localMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const localDay = String(date.getDate()).padStart(2, '0');
+      const localHours = String(date.getHours()).padStart(2, '0');
+      const localMinutes = String(date.getMinutes()).padStart(2, '0');
+      setEditedDate(`${localYear}-${localMonth}-${localDay}`);
+      setEditedTime(`${localHours}:${localMinutes}`);
     } else {
       setEditedDate('');
       setEditedTime('');
@@ -108,8 +119,10 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
 
   const handleSaveEdit = (matchId: string) => {
     if (onEditMatch && editedDate && editedTime) {
-      const scheduledTime = `${editedDate}T${editedTime}:00`;
-      onEditMatch(matchId, { scheduled_time: scheduledTime });
+      // Build a Date from the local inputs, then convert to ISO string (UTC)
+      // This ensures the backend always receives UTC regardless of browser timezone
+      const localDate = new Date(`${editedDate}T${editedTime}:00`);
+      onEditMatch(matchId, { scheduled_time: localDate.toISOString() });
     }
     setEditingMatchId(null);
   };
@@ -207,7 +220,9 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
         <td className="hidden lg:table-cell px-4 py-4">
           <div className="flex items-center gap-1 text-sm text-gray-600">
             <MapPin className="w-4 h-4 text-gray-400" />
-            <span className="truncate">{match.venue || 'TBD'}</span>
+            <span className="truncate">
+              {match.match_venue_display || match.match_venue_name || match.venue || 'TBD'}
+            </span>
           </div>
         </td>
 
@@ -244,6 +259,16 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
                   >
                     <Edit2 className="w-3 h-3 md:w-4 md:h-4" />
                   </button>
+                  {onAssignVenue && (
+                    <button
+                      onClick={() => onAssignVenue(match.id)}
+                      className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Assign venue"
+                      aria-label="Assign venue for this match"
+                    >
+                      <Building2 className="w-3 h-3 md:w-4 md:h-4" />
+                    </button>
+                  )}
                   {onEnterScore && (
                     <button
                       onClick={() => onEnterScore(match.id)}

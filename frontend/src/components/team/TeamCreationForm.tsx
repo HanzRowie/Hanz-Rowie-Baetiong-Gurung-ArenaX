@@ -93,12 +93,16 @@ export const TeamCreationForm: React.FC<TeamCreationFormProps> = ({
       }
     } catch (error: any) {
       console.error('Error creating team:', error);
+      console.error('Error response data:', error.response?.data);
       
       if (error.response?.data?.errors) {
+        console.error('Validation errors:', error.response.data.errors);
         setErrors(error.response.data.errors);
       } else {
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to create team';
+        console.error('Error message:', errorMessage);
         setErrors({ 
-          general: error.response?.data?.error || error.message || 'Failed to create team' 
+          general: errorMessage
         });
       }
     } finally {

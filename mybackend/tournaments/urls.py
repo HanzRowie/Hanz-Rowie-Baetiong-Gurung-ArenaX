@@ -4,6 +4,7 @@ from . import views
 from . import futsal_scoring_views
 from .admin_views import AdminTournamentViewSet
 from .match_events_views import MatchEventViewSet
+from . import remarks_views
 
 router = DefaultRouter()
 router.register(r'tournaments', views.TournamentViewSet)
@@ -17,6 +18,9 @@ router.register(r'admin/tournaments', AdminTournamentViewSet, basename='admin-to
 
 # URL patterns for tournaments app
 urlpatterns = [
+    # Public shareable link (no auth required)
+    path('public/<uuid:share_token>/', views.public_tournament_detail, name='public_tournament_detail'),
+
     # Specific patterns first (before router) - these must come before any router patterns
     path('create/', views.create_tournament, name='create_tournament'),
     path('my/', views.my_tournaments, name='my_tournaments'),
@@ -46,6 +50,11 @@ urlpatterns = [
     # Futsal scoring endpoints
     path('<uuid:tournament_id>/matches/<uuid:match_id>/futsal-score/', futsal_scoring_views.record_futsal_match_score, name='record_futsal_score'),
     path('<uuid:tournament_id>/matches/<uuid:match_id>/details/', futsal_scoring_views.get_match_details, name='match_details'),
+
+    # Match remarks endpoints
+    path('<uuid:tournament_id>/matches/<uuid:match_id>/remarks/', remarks_views.match_remarks, name='match_remarks'),
+    path('<uuid:tournament_id>/matches/<uuid:match_id>/remarks/<uuid:remark_id>/', remarks_views.match_remark_detail, name='match_remark_detail'),
+    path('remarks/options/', remarks_views.remark_options, name='remark_options'),
     
     # Router patterns last
     path('', include(router.urls)),

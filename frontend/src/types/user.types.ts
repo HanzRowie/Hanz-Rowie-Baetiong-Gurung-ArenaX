@@ -33,6 +33,23 @@ export interface ExtendedUserProfile {
   business_registration?: string;
   business_contact?: string;
 
+  // Referee-specific fields
+  referee_profile?: {
+    certification_level: string;
+    sports_specialization: string[];
+    years_experience: number;
+    license_number?: string;
+    license_expiry?: string;
+    is_verified: boolean;
+    rating: number;
+    total_matches_officiated: number;
+  };
+  
+  // Referee booking stats
+  total_bookings?: number;
+  accepted_bookings?: number;
+  completed_bookings?: number;
+
   // Enhanced matching fields (for player search results)
   match_score?: number;
   match_reasons?: string[];

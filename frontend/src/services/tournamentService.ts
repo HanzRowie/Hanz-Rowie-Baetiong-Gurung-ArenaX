@@ -182,6 +182,17 @@ class TournamentService {
     return response.data;
   }
 
+  async scheduleMatch(
+    tournamentId: string,
+    matchId: string,
+    scheduledTime: string
+  ): Promise<{ match: Match; message: string }> {
+    const response = await api.put(API_ENDPOINTS.TOURNAMENTS.MATCH_RESULT(tournamentId, matchId), {
+      scheduled_time: scheduledTime,
+    });
+    return response.data;
+  }
+
   async recordFutsalMatchScore(
     tournamentId: string,
     matchId: string,

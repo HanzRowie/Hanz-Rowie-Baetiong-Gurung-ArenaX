@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/design-system/components/Card';
-import { Button } from '@/design-system/components/Button';
-import { MatchScorer } from './MatchScorer';
 import { LiveMatchScorer } from './LiveMatchScorer';
+import { MatchScorer } from './MatchScorer';
 import { tournamentService } from '@/services/tournamentService';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-hot-toast';
-import { Zap, FileText } from 'lucide-react';
+import {
+  Zap, FileText, Trophy, Clock, Calendar,
+  RefreshCw, ChevronDown, Swords, CheckCircle2,
+  Circle, AlertCircle
+} from 'lucide-react';
 
 interface Match {
   id: string;
@@ -19,34 +21,16 @@ interface Match {
   round_number: number;
   match_number: number;
   status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-  team1?: {
-    id: string;
-    name: string;
-  };
-  team2?: {
-    id: string;
-    name: string;
-  };
-  player1?: {
-    id: string;
-    name: string;
-  };
-  player2?: {
-    id: string;
-    name: string;
-  };
+  team1?: { id: string; name: string };
+  team2?: { id: string; name: string };
+  player1?: { id: string; name: string };
+  player2?: { id: string; name: string };
   team1_score?: number;
   team2_score?: number;
   player1_score?: number;
   player2_score?: number;
-  winning_team?: {
-    id: string;
-    name: string;
-  };
-  winner?: {
-    id: string;
-    name: string;
-  };
+  winning_team?: { id: string; name: string };
+  winner?: { id: string; name: string };
   scheduled_time?: string;
   actual_start_time?: string;
   actual_end_time?: string;
@@ -67,9 +51,48 @@ interface MatchScoringInterfaceProps {
   onMatchScored?: (match: Match) => void;
 }
 
+const STATUS_CONFIG = {
+  SCHEDULED:   { label: 'Scheduled',   icon: Circle,        cls: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  IN_PROGRESS: { label: 'Live',        icon: Zap,           cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  COMPLETED:   { label: 'Completed',   icon: CheckCircle2,  cls: 'bg-green-50 text-green-700 border border-green-200' },
+  CANCELLED:   { label: 'Cancelled',   icon: AlertCircle,   cls: 'bg-red-50 text-red-700 border border-red-200' },
+} as const;
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.SCHEDULED;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.cls}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
+function formatScheduled(iso?: string) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return {
+    date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
+function filterLabel(filter: 'all' | 'pending' | 'completed') {
+  if (filter === 'completed') return 'Completed Matches';
+  if (filter === 'pending') return 'Pending Matches';
+  return 'All Matches';
+}
+
+function emptyLabel(filter: 'all' | 'pending' | 'completed') {
+  if (filter === 'completed') return 'No completed matches yet';
+  if (filter === 'pending') return 'No pending matches';
+  return 'No matches found';
+}
+
 export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   tournamentId,
-  onMatchScored
+  onMatchScored,
 }) => {
   const { user } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -80,366 +103,348 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
   const [scoringMode, setScoringMode] = useState<'live' | 'detailed'>('live');
 
-  // Check if user is an organizer
   const isOrganizer = user?.role === 'ORGANIZER';
 
-  useEffect(() => {
-    if (isOrganizer) {
-      loadTournaments();
-    }
-  }, [isOrganizer]);
-
-  useEffect(() => {
-    if (selectedTournament) {
-      loadMatches();
-    }
-  }, [selectedTournament]);
+  useEffect(() => { if (isOrganizer) loadTournaments(); }, [isOrganizer]);
+  useEffect(() => { if (selectedTournament) loadMatches(); }, [selectedTournament]);
 
   const loadTournaments = async () => {
     try {
       const response = await tournamentService.getMyTournaments();
-      const organizedTournaments = response.organized_tournaments || [];
-      
-      // Map to our Tournament interface
-      const mappedTournaments: Tournament[] = organizedTournaments.map(t => ({
-        id: t.id,
-        title: t.title,
+      const mapped: Tournament[] = (response.organized_tournaments || []).map((t: any) => ({
+        id: t.id, title: t.title,
         sport_type: t.sport_type as 'FUTSAL' | 'BADMINTON',
-        tournament_type: (t as any).tournament_type,
-        registration_type: (t as any).registration_type || 'INDIVIDUAL',
-        status: t.status
+        tournament_type: t.tournament_type,
+        registration_type: t.registration_type || 'INDIVIDUAL',
+        status: t.status,
       }));
-      
-      setTournaments(mappedTournaments);
-      
-      if (!selectedTournament && mappedTournaments.length > 0) {
-        setSelectedTournament(mappedTournaments[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to load tournaments:', error);
-      toast.error('Failed to load tournaments');
-    }
+      setTournaments(mapped);
+      if (!selectedTournament && mapped.length > 0) setSelectedTournament(mapped[0].id);
+    } catch { toast.error('Failed to load tournaments'); }
   };
 
   const loadMatches = async () => {
     if (!selectedTournament) return;
-    
     setIsLoading(true);
     try {
-      // Get the selected tournament to check its type
-      const selectedTournamentData = tournaments.find(t => t.id === selectedTournament);
-      
-      console.log('Loading matches for tournament:', selectedTournamentData);
-      
-      let tournamentMatches = [];
-      
-      // Use different endpoint based on tournament type
-      if (selectedTournamentData?.tournament_type === 'league' || selectedTournamentData?.tournament_type === 'round_robin') {
-        // For league/round-robin tournaments, use the matches endpoint
-        console.log('Using matches endpoint for league/round-robin tournament');
-        const response = await tournamentService.getTournamentMatches(selectedTournament);
-        tournamentMatches = response.matches || [];
+      const t = tournaments.find(x => x.id === selectedTournament);
+      let raw: any[] = [];
+      if (t?.tournament_type === 'league' || t?.tournament_type === 'round_robin') {
+        raw = (await tournamentService.getTournamentMatches(selectedTournament)).matches || [];
       } else {
-        // For knockout tournaments, use the bracket endpoint
-        console.log('Using bracket endpoint for knockout tournament');
         try {
-          const response = await tournamentService.getTournamentBracket(selectedTournament);
-          tournamentMatches = response.matches || [];
-        } catch (error: any) {
-          // If bracket endpoint fails, fall back to matches endpoint
-          console.log('Bracket endpoint failed, falling back to matches endpoint');
-          const response = await tournamentService.getTournamentMatches(selectedTournament);
-          tournamentMatches = response.matches || [];
+          raw = (await tournamentService.getTournamentBracket(selectedTournament)).matches || [];
+        } catch {
+          raw = (await tournamentService.getTournamentMatches(selectedTournament)).matches || [];
         }
       }
-      
-      // Map to our Match interface
-      const mappedMatches: Match[] = tournamentMatches.map((m: any) => ({
-        id: m.id,
-        tournament: {
-          id: selectedTournament,
-          title: tournaments.find(t => t.id === selectedTournament)?.title || '',
-          sport_type: tournaments.find(t => t.id === selectedTournament)?.sport_type || 'FUTSAL',
-          registration_type: tournaments.find(t => t.id === selectedTournament)?.registration_type || 'INDIVIDUAL'
-        },
-        round_number: m.round_number,
-        match_number: m.match_number,
-        status: m.status,
-        team1: m.team1,
-        team2: m.team2,
-        player1: m.player1,
-        player2: m.player2,
-        team1_score: m.team1_score,
-        team2_score: m.team2_score,
-        player1_score: m.player1_score,
-        player2_score: m.player2_score,
-        winning_team: m.winning_team,
-        winner: m.winner,
-        scheduled_time: m.scheduled_time,
-        actual_start_time: m.actual_start_time,
-        actual_end_time: m.actual_end_time,
-        notes: m.notes
-      }));
-      
-      setMatches(mappedMatches);
-    } catch (error) {
-      console.error('Failed to load matches:', error);
-      toast.error('Failed to load matches');
-    } finally {
-      setIsLoading(false);
-    }
+      const tInfo = { id: selectedTournament, title: t?.title || '', sport_type: t?.sport_type || 'FUTSAL', registration_type: t?.registration_type || 'INDIVIDUAL' };
+      setMatches(raw.map((m: any) => ({ ...m, tournament: tInfo })));
+    } catch { toast.error('Failed to load matches'); }
+    finally { setIsLoading(false); }
   };
 
-  const handleMatchScored = (updatedMatch: Match) => {
-    setMatches(prev => prev.map(match => 
-      match.id === updatedMatch.id ? updatedMatch : match
-    ));
-    
-    if (onMatchScored) {
-      onMatchScored(updatedMatch);
-    }
-    
-    // Close live scorer if match is completed
-    if (updatedMatch.status === 'COMPLETED') {
-      setLiveMatchId(null);
-    }
-    
-    toast.success('Match score updated successfully');
+  const handleMatchScored = (updated: Match) => {
+    setMatches(prev => prev.map(m => m.id === updated.id ? updated : m));
+    if (onMatchScored) onMatchScored(updated);
+    if (updated.status === 'COMPLETED') setLiveMatchId(null);
+    toast.success('Match score updated');
   };
 
-  const handleOpenLiveScorer = (matchId: string) => {
-    setLiveMatchId(matchId);
-  };
-
-  const handleCloseLiveScorer = () => {
-    setLiveMatchId(null);
-    loadMatches(); // Refresh matches
-  };
-
-  const getFilteredMatches = () => {
-    switch (filter) {
-      case 'pending':
-        return matches.filter(match => match.status !== 'COMPLETED' && match.status !== 'CANCELLED');
-      case 'completed':
-        return matches.filter(match => match.status === 'COMPLETED');
-      default:
-        return matches;
-    }
-  };
-
-  const getMatchStatusColor = (status: string) => {
-    switch (status) {
-      case 'COMPLETED':
-        return 'bg-green-100 text-green-800';
-      case 'IN_PROGRESS':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'SCHEDULED':
-        return 'bg-blue-100 text-blue-800';
-      case 'CANCELLED':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getFiltered = () => {
+    if (filter === 'pending') return matches.filter(m => m.status !== 'COMPLETED' && m.status !== 'CANCELLED');
+    if (filter === 'completed') return matches.filter(m => m.status === 'COMPLETED');
+    return matches;
   };
 
   if (!isOrganizer) {
     return (
-      <Card>
-        <CardContent className="text-center py-8">
-          <p className="text-gray-600">Only tournament organizers can access match scoring.</p>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Trophy className="w-12 h-12 text-gray-300 mb-3" />
+        <p className="text-gray-500 font-medium">Only tournament organizers can access match scoring.</p>
+      </div>
     );
   }
 
-  // Show live scorer if a match is selected
   const selectedMatch = matches.find(m => m.id === liveMatchId);
   if (selectedMatch && scoringMode === 'live') {
+    // Cast to satisfy LiveMatchScorer's stricter Match type (team1/team2 required)
     return (
       <LiveMatchScorer
-        match={selectedMatch}
-        onMatchUpdated={handleMatchScored}
-        onClose={handleCloseLiveScorer}
+        match={selectedMatch as any}
+        onMatchUpdated={handleMatchScored as any}
+        onClose={() => { setLiveMatchId(null); loadMatches(); }}
       />
     );
   }
 
+  const filtered = getFiltered();
+  const selectedTournamentData = tournaments.find(t => t.id === selectedTournament);
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Match Scoring Interface</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+
+      {/* ── Controls card ── */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-gray-200">
+          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Swords className="w-4 h-4 text-purple-600" />
+            Match Scoring
+          </h3>
+        </div>
+        <div className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Tournament selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Tournament
+              <label htmlFor="tournament-select" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Tournament
               </label>
-              <select
-                value={selectedTournament}
-                onChange={(e) => setSelectedTournament(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select a tournament...</option>
-                {tournaments.map(tournament => (
-                  <option key={tournament.id} value={tournament.id}>
-                    {tournament.title} ({tournament.sport_type})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="tournament-select"
+                  value={selectedTournament}
+                  onChange={e => setSelectedTournament(e.target.value)}
+                  className="w-full appearance-none pl-3 pr-8 py-2.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-800"
+                >
+                  <option value="">Select a tournament…</option>
+                  {tournaments.map(t => (
+                    <option key={t.id} value={t.id}>{t.title} ({t.sport_type})</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
             </div>
-            
+
+            {/* Filter selector */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter Matches
+              <label htmlFor="filter-select" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+                Show
               </label>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as 'all' | 'pending' | 'completed')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Matches</option>
-                <option value="pending">Pending Matches</option>
-                <option value="completed">Completed Matches</option>
-              </select>
+              <div className="relative">
+                <select
+                  id="filter-select"
+                  value={filter}
+                  onChange={e => setFilter(e.target.value as 'all' | 'pending' | 'completed')}
+                  className="w-full appearance-none pl-3 pr-8 py-2.5 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-800"
+                >
+                  <option value="all">All Matches</option>
+                  <option value="pending">Pending Matches</option>
+                  <option value="completed">Completed Matches</option>
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
             </div>
           </div>
-          
-          {selectedTournament && (
-            <div className="flex justify-end">
-              <Button
-                onClick={loadMatches}
-                variant="secondary"
-                size="sm"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Loading...' : 'Refresh Matches'}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
+      {/* ── Match list ── */}
       {selectedTournament && (
         <div className="space-y-4">
-          {isLoading ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-600">Loading matches...</p>
-              </CardContent>
-            </Card>
-          ) : getFilteredMatches().length === 0 ? (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-gray-600">
-                  {filter === 'pending' ? 'No pending matches found.' :
-                   filter === 'completed' ? 'No completed matches found.' :
-                   'No matches found for this tournament.'}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
-                  {filter === 'pending' ? 'Pending Matches' :
-                   filter === 'completed' ? 'Completed Matches' :
-                   'All Matches'} ({getFilteredMatches().length})
-                </h3>
-                
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Scoring Mode:</span>
-                  <div className="flex bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setScoringMode('live')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                        scoringMode === 'live'
-                          ? 'bg-white text-purple-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      <Zap className="w-4 h-4" />
-                      Live
-                    </button>
-                    <button
-                      onClick={() => setScoringMode('detailed')}
-                      className={`px-3 py-1 rounded-md text-sm font-medium transition-colors flex items-center gap-1 ${
-                        scoringMode === 'detailed'
-                          ? 'bg-white text-purple-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900'
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      Detailed
-                    </button>
+
+          {/* List header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">
+                {filterLabel(filter)}
+                {!isLoading && <span className="ml-2 text-sm font-normal text-gray-500">({filtered.length})</span>}
+              </h3>
+              {selectedTournamentData && (
+                <p className="text-xs text-gray-400 mt-0.5">{selectedTournamentData.title}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Scoring mode toggle */}
+              <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
+                <button
+                  onClick={() => setScoringMode('live')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    scoringMode === 'live' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5" /> Live
+                </button>
+                <button
+                  onClick={() => setScoringMode('detailed')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                    scoringMode === 'detailed' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" /> Detailed
+                </button>
+              </div>
+
+              {/* Refresh */}
+              <button
+                onClick={loadMatches}
+                disabled={isLoading}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-purple-600 hover:border-purple-300 hover:bg-purple-50 transition-colors disabled:opacity-40"
+                title="Refresh matches"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Loading skeleton */}
+          {isLoading && (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 animate-pulse">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3 w-28 bg-gray-200 rounded" />
+                      <div className="h-4 w-36 bg-gray-200 rounded" />
+                      <div className="h-4 w-32 bg-gray-200 rounded" />
+                    </div>
+                    <div className="h-10 w-28 bg-gray-200 rounded-lg" />
                   </div>
                 </div>
-              </div>
-              
-              <div className="space-y-4">
-                {getFilteredMatches().map(match => (
-                  scoringMode === 'live' ? (
-                    <Card key={match.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-gray-500">
-                                Round {match.round_number} • Match {match.match_number}
-                              </span>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getMatchStatusColor(match.status)}`}>
-                                {match.status}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="font-semibold text-gray-900">
-                                  {match.team1?.name || match.player1?.name || 'TBD'}
-                                </div>
-                                <div className="font-semibold text-gray-900 mt-1">
-                                  {match.team2?.name || match.player2?.name || 'TBD'}
-                                </div>
-                              </div>
-                              <div className="text-center px-6">
-                                <div className="text-3xl font-bold text-gray-900">
-                                  {match.team1_score ?? match.player1_score ?? 0}
-                                </div>
-                                <div className="text-sm text-gray-400 my-1">-</div>
-                                <div className="text-3xl font-bold text-gray-900">
-                                  {match.team2_score ?? match.player2_score ?? 0}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="ml-6">
-                            <button
-                              onClick={() => handleOpenLiveScorer(match.id)}
-                              disabled={match.status === 'COMPLETED'}
-                              className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <Zap className="w-4 h-4" />
-                              {match.status === 'COMPLETED' ? 'Completed' : 'Score Live'}
-                            </button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <MatchScorer
-                      key={match.id}
-                      match={match}
-                      onScoreRecorded={handleMatchScored}
-                    />
-                  )
-                ))}
-              </div>
-            </>
+              ))}
+            </div>
           )}
+
+          {/* Empty state */}
+          {!isLoading && filtered.length === 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 py-14 flex flex-col items-center text-center">
+              <Trophy className="w-10 h-10 text-gray-300 mb-3" />
+              <p className="text-sm font-medium text-gray-500">
+                {emptyLabel(filter)}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Generate a bracket or schedule to see matches here.</p>
+            </div>
+          )}
+
+          {/* Match cards */}
+          {!isLoading && filtered.length > 0 && (
+            <div className="space-y-3">
+              {filtered.map(match => {
+                if (scoringMode === 'detailed') {
+                  return <MatchScorer key={match.id} match={match as any} onScoreRecorded={handleMatchScored as any} />;
+                }
+                return (
+                  <MatchCard
+                    key={match.id}
+                    match={match}
+                    onScore={() => setLiveMatchId(match.id)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No tournament selected */}
+      {!selectedTournament && (
+        <div className="bg-white rounded-xl border border-gray-200 py-14 flex flex-col items-center text-center">
+          <Swords className="w-10 h-10 text-gray-300 mb-3" />
+          <p className="text-sm font-medium text-gray-500">Select a tournament to manage match scoring</p>
         </div>
       )}
     </div>
   );
 };
+
+/* ─── Individual match card ─────────────────────────────────── */
+function MatchCard({ match, onScore }: { match: Match; onScore: () => void }) {
+  const home = match.team1?.name || match.player1?.name || 'TBD';
+  const away = match.team2?.name || match.player2?.name || 'TBD';
+  const homeScore = match.team1_score ?? match.player1_score ?? 0;
+  const awayScore = match.team2_score ?? match.player2_score ?? 0;
+  const scheduled = formatScheduled(match.scheduled_time);
+  const isCompleted = match.status === 'COMPLETED';
+  const isLive = match.status === 'IN_PROGRESS';
+
+  const homeWon = isCompleted && homeScore > awayScore;
+  const awayWon = isCompleted && awayScore > homeScore;
+
+  return (
+    <div className={`bg-white rounded-xl border transition-shadow hover:shadow-md overflow-hidden ${
+      isLive ? 'border-amber-300 shadow-amber-100 shadow-sm' : 'border-gray-200'
+    }`}>
+      {/* Live pulse bar */}
+      {isLive && (
+        <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-400 animate-pulse" />
+      )}
+
+      <div className="p-5">
+        <div className="flex items-center justify-between gap-4">
+
+          {/* Left: round info + teams */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-gray-400 font-medium">
+                Round {match.round_number} · Match {match.match_number}
+              </span>
+              <StatusBadge status={match.status} />
+            </div>
+
+            {/* Teams vs score */}
+            <div className="flex items-center gap-3">
+              {/* Team names */}
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className={`flex items-center gap-2 ${homeWon ? 'text-gray-900' : 'text-gray-600'}`}>
+                  {homeWon && <Trophy className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
+                  <span className={`text-sm truncate ${homeWon ? 'font-bold' : 'font-medium'}`}>{home}</span>
+                </div>
+                <div className={`flex items-center gap-2 ${awayWon ? 'text-gray-900' : 'text-gray-600'}`}>
+                  {awayWon && <Trophy className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
+                  <span className={`text-sm truncate ${awayWon ? 'font-bold' : 'font-medium'}`}>{away}</span>
+                </div>
+              </div>
+
+              {/* Score */}
+              <div className="flex flex-col items-center gap-1 px-4">
+                <span className={`text-2xl font-bold leading-none ${homeWon ? 'text-purple-600' : 'text-gray-800'}`}>
+                  {homeScore}
+                </span>
+                <span className="text-xs text-gray-300 font-medium">vs</span>
+                <span className={`text-2xl font-bold leading-none ${awayWon ? 'text-purple-600' : 'text-gray-800'}`}>
+                  {awayScore}
+                </span>
+              </div>
+            </div>
+
+            {/* Scheduled time */}
+            {scheduled && (
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+                <span className="flex items-center gap-1 text-xs text-gray-400">
+                  <Calendar className="w-3 h-3" /> {scheduled.date}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-gray-400">
+                  <Clock className="w-3 h-3" /> {scheduled.time}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Right: action button */}
+          <div className="flex-shrink-0">
+            {isCompleted ? (
+              <div className="flex flex-col items-center gap-1 px-4 py-2 bg-green-50 rounded-lg border border-green-100">
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                <span className="text-xs font-semibold text-green-600">Done</span>
+              </div>
+            ) : (
+              <button
+                onClick={onScore}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-white shadow-sm transition-all active:scale-95 ${
+                  isLive
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-amber-200'
+                    : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 shadow-purple-200'
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                {isLive ? 'Continue' : 'Score Live'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default MatchScoringInterface;

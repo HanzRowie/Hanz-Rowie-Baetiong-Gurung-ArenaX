@@ -961,6 +961,49 @@ def get_user_profile(request, user_id=None):
                 "tournaments_organized": organized_tournaments.count(),
                 "total_participants": sum(t.registered_count for t in organized_tournaments)
             })
+        
+        elif user.role == 'REFEREE':
+            # Referee profile and statistics
+            from referees.models import RefereeProfile, RefereeBooking
+            try:
+                referee_profile = RefereeProfile.objects.get(user=user)
+                profile_data.update({
+                    "referee_profile": {
+                        "certification_level": referee_profile.certification_level,
+                        "sports_specialization": referee_profile.sports_specialization,
+                        "years_experience": referee_profile.years_experience,
+                        "license_number": referee_profile.license_number if is_own_profile else None,
+                        "license_expiry": referee_profile.license_expiry.isoformat() if referee_profile.license_expiry else None,
+                        "is_verified": referee_profile.is_verified,
+                        "rating": referee_profile.rating,
+                        "total_matches_officiated": referee_profile.total_matches_officiated,
+                        "default_fee_per_match": float(referee_profile.default_fee_per_match),
+                        "default_fee_per_session": float(referee_profile.default_fee_per_session),
+                    }
+                })
+            except RefereeProfile.DoesNotExist:
+                # Create default referee profile if it doesn't exist
+                referee_profile = RefereeProfile.objects.create(user=user)
+                profile_data.update({
+                    "referee_profile": {
+                        "certification_level": "LEVEL_1",
+                        "sports_specialization": [],
+                        "years_experience": 0,
+                        "license_number": "",
+                        "license_expiry": None,
+                        "is_verified": False,
+                        "rating": 0.0,
+                        "total_matches_officiated": 0,
+                    }
+                })
+            
+            # Add booking statistics
+            bookings = RefereeBooking.objects.filter(referee=user)
+            profile_data.update({
+                "total_bookings": bookings.count(),
+                "accepted_bookings": bookings.filter(status='ACCEPTED').count(),
+                "completed_bookings": bookings.filter(status='COMPLETED').count(),
+            })
 
         return Response({"profile": profile_data})
 
@@ -993,6 +1036,84 @@ def update_user_profile(request):
         for field in updatable_fields:
             if field in data:
                 setattr(user, field, data[field])
+
+        # Handle referee-specific fields
+        if user.role == 'REFEREE':
+            from referees.models import RefereeProfile
+            
+            # Get or create referee profile
+            referee_profile, created = RefereeProfile.objects.get_or_create(user=user)
+            
+            # Update referee-specific fields
+            if 'sports_specialization' in data:
+                try:
+                    import json
+                    sports_value = data['sports_specialization']
+                    
+                    if isinstance(sports_value, str):
+                        # Handle string values
+                        sports_value = sports_value.strip()
+                        if not sports_value or sports_value == '':
+                            # Empty string - set to empty array
+                            referee_profile.sports_specialization = []
+                        else:
+                            # Try to parse as JSON
+                            try:
+                                referee_profile.sports_specialization = json.loads(sports_value)
+                            except json.JSONDecodeError:
+                                # If it's not valid JSON, treat as single item
+                                referee_profile.sports_specialization = [sports_value]
+                    elif isinstance(sports_value, list):
+                        # Already a list - use directly
+                        referee_profile.sports_specialization = sports_value
+                    elif sports_value is None:
+                        # None value - set to empty array
+                        referee_profile.sports_specialization = []
+                    else:
+                        # Other types - convert to string and wrap in array
+                        referee_profile.sports_specialization = [str(sports_value)]
+                        
+                except Exception as e:
+                    print(f"Error parsing sports_specialization: {e}, value: {data.get('sports_specialization')}, type: {type(data.get('sports_specialization'))}")
+                    # Don't fail - just set to empty array
+                    referee_profile.sports_specialization = []
+            
+            if 'certification_level' in data:
+                referee_profile.certification_level = data['certification_level']
+            
+            if 'years_experience' in data:
+                try:
+                    referee_profile.years_experience = int(data['years_experience'])
+                except (ValueError, TypeError):
+                    return Response({
+                        "error": "Invalid format for years_experience"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if 'license_number' in data:
+                referee_profile.license_number = data['license_number']
+            
+            if 'license_expiry' in data and data['license_expiry']:
+                try:
+                    from datetime import datetime
+                    referee_profile.license_expiry = datetime.strptime(data['license_expiry'], '%Y-%m-%d').date()
+                except (ValueError, TypeError) as e:
+                    return Response({
+                        "error": f"Invalid date format for license_expiry: {str(e)}"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if 'default_fee_per_match' in data:
+                try:
+                    referee_profile.default_fee_per_match = float(data['default_fee_per_match'])
+                except (ValueError, TypeError):
+                    pass
+
+            if 'default_fee_per_session' in data:
+                try:
+                    referee_profile.default_fee_per_session = float(data['default_fee_per_session'])
+                except (ValueError, TypeError):
+                    pass
+
+            referee_profile.save()
 
         # Handle date_of_birth separately (needs parsing)
         if 'date_of_birth' in data and data['date_of_birth']:

@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from accounts.decorators import jwt_required
@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 import uuid
 
 from .models import Tournament, TournamentRegistration, Match, TournamentRefereeAvailability
-from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer, TournamentRefereeAvailabilitySerializer
+from .serializers import TournamentSerializer, TournamentRegistrationSerializer, MatchSerializer, TournamentRefereeAvailabilitySerializer, PublicTournamentSerializer
 from .permissions import ApprovalStatusPermission, filter_tournaments_by_approval_status
 from referees.models import RefereeBooking
 from referees.serializers import RefereeBookingSerializer
@@ -662,6 +662,12 @@ def create_tournament(request):
             try:
                 venue = Venue.objects.get(id=linked_venue_id)
                 
+                # Validate venue is approved and active
+                if venue.approval_status != 'APPROVED':
+                    return Response({'error': 'Selected venue is not approved for bookings'}, status=status.HTTP_400_BAD_REQUEST)
+                if not venue.is_active:
+                    return Response({'error': 'Selected venue is not currently active'}, status=status.HTTP_400_BAD_REQUEST)
+                
                 start_time_str = data.get('start_time')
                 end_time_str = data.get('end_time')
                 
@@ -687,6 +693,41 @@ def create_tournament(request):
                     date_obj = datetime.strptime(data.get('date'), '%Y-%m-%d').date()
                 else:
                     date_obj = data.get('date')
+                
+                # Re-validate venue availability at submission time (prevent race conditions)
+                from venues.models import VenueAvailability
+                from django.utils import timezone as tz
+                
+                # Check operating day
+                weekday = date_obj.weekday() + 1
+                if venue.operating_days and weekday not in venue.operating_days:
+                    return Response({'error': 'Selected venue does not operate on the chosen day'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check operating hours (date override or defaults)
+                date_override = VenueAvailability.objects.filter(venue=venue, date=date_obj).first()
+                if date_override:
+                    if not date_override.is_available:
+                        return Response({'error': 'Selected venue is not available on the chosen date'}, status=status.HTTP_400_BAD_REQUEST)
+                    if not (date_override.opening_time <= start_time_obj and date_override.closing_time >= end_time_obj):
+                        return Response({'error': 'Selected venue is not available during the requested time window'}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    if not (venue.default_opening_time <= start_time_obj and venue.default_closing_time >= end_time_obj):
+                        return Response({'error': 'Selected venue is not available during the requested time window'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check for conflicting bookings
+                conflicting = VenueBooking.objects.filter(
+                    venue=venue,
+                    date=date_obj,
+                    status__in=['PENDING', 'CONFIRMED']
+                ).exclude(
+                    status='PENDING',
+                    payment_expires_at__lt=tz.now()
+                ).filter(
+                    start_time__lt=end_time_obj,
+                    end_time__gt=start_time_obj
+                )
+                if conflicting.exists():
+                    return Response({'error': 'Selected venue is already booked for the chosen time slot'}, status=status.HTTP_400_BAD_REQUEST)
                 
                 # Calculate booking amount
                 start_minutes = start_time_obj.hour * 60 + start_time_obj.minute
@@ -912,24 +953,60 @@ def update_match_result(request, tournament_id, match_id):
             return Response({
                 'error': 'Only tournament organizers can update match results'
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
+        # Prevent editing completed matches
+        if match.status == 'COMPLETED':
+            return Response({
+                'error': 'This match has already been completed and cannot be edited.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Get the data from request
         data = request.data
-        
+
         # Update scheduled_time if provided (for rescheduling matches)
-        if 'scheduled_time' in data:
+        # Scheduling is allowed as long as the match hasn't started yet
+        if 'scheduled_time' in data and len(data) == 1:
+            if match.status in ('IN_PROGRESS', 'COMPLETED'):
+                return Response({
+                    'error': 'Cannot reschedule a match that has already started or been completed.'
+                }, status=status.HTTP_400_BAD_REQUEST)
             from django.utils.dateparse import parse_datetime
             scheduled_time = parse_datetime(data['scheduled_time'])
-            if scheduled_time:
-                match.scheduled_time = scheduled_time
-                match.save()
+            if not scheduled_time:
                 return Response({
-                    'message': 'Match rescheduled successfully',
-                    'match': {
-                        'id': str(match.id),
-                        'scheduled_time': match.scheduled_time.isoformat() if match.scheduled_time else None
-                    }
-                }, status=status.HTTP_200_OK)
+                    'error': 'Invalid datetime format. Use ISO 8601 (e.g. 2026-04-01T14:30:00).'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            match.scheduled_time = scheduled_time
+            match.save()
+            serializer = MatchSerializer(match)
+            return Response({
+                'message': 'Match scheduled successfully',
+                'match': serializer.data
+            }, status=status.HTTP_200_OK)
+
+        # Update venue if provided (league tournaments: per-match venue assignment)
+        venue_keys = {'match_venue_id', 'match_venue_name'}
+        if venue_keys.intersection(data.keys()) and not (set(data.keys()) - venue_keys):
+            if 'match_venue_id' in data:
+                if data['match_venue_id']:
+                    from venues.models import Venue
+                    try:
+                        venue_obj = Venue.objects.get(id=data['match_venue_id'])
+                        match.match_venue = venue_obj
+                        match.match_venue_name = ''  # clear custom name when linked venue set
+                    except Venue.DoesNotExist:
+                        return Response({'error': 'Venue not found'}, status=status.HTTP_404_NOT_FOUND)
+                else:
+                    match.match_venue = None
+            if 'match_venue_name' in data:
+                match.match_venue_name = data['match_venue_name']
+                match.match_venue = None  # clear linked venue when custom name set
+            match.save()
+            serializer = MatchSerializer(match)
+            return Response({
+                'message': 'Match venue updated successfully',
+                'match': serializer.data
+            }, status=status.HTTP_200_OK)
         
         # Update scores based on tournament type
         if tournament.registration_type == 'TEAM':
@@ -1126,7 +1203,13 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({
                 'error': 'Only tournament organizers can submit match results'
             }, status=status.HTTP_403_FORBIDDEN)
-        
+
+        # Prevent editing completed matches
+        if match.status == 'COMPLETED':
+            return Response({
+                'error': 'This match has already been completed and cannot be edited.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate tournament type
         if tournament.tournament_type != 'league':
             return Response({
@@ -3159,3 +3242,15 @@ def reject_team_participant(request, tournament_id, registration_id):
         
     except TeamTournamentRegistration.DoesNotExist:
         return Response({'error': 'Team registration not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_tournament_detail(request, share_token):
+    """
+    Public read-only endpoint for viewing a tournament via its shareable link.
+    No authentication required — guests can view tournament details.
+    """
+    tournament = get_object_or_404(Tournament, share_token=share_token, approval_status='APPROVED')
+    serializer = PublicTournamentSerializer(tournament, context={'request': request})
+    return Response(serializer.data)

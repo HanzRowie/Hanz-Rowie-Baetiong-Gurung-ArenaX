@@ -136,7 +136,22 @@ class Refund(models.Model):
     )
 
     original_payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='refunds')
-    refund_payment = models.OneToOneField(Payment, on_delete=models.CASCADE, related_name='original_refund')
+    refund_payment = models.OneToOneField(
+        Payment, on_delete=models.CASCADE, related_name='original_refund',
+        null=True, blank=True
+    )
+
+    # Who initiated the refund (organizer)
+    initiated_by = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='initiated_refunds'
+    )
+
+    # Optional link to the tournament registration being refunded
+    tournament_registration = models.ForeignKey(
+        'tournaments.TournamentRegistration', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='refunds'
+    )
 
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     reason = models.TextField(blank=True)
@@ -153,4 +168,4 @@ class Refund(models.Model):
         ordering = ['-requested_at']
 
     def __str__(self):
-        return f"Refund for {self.original_payment.id} - ${self.amount}"
+        return f"Refund for {self.original_payment.id} - {self.amount} ({self.status})"

@@ -13,6 +13,7 @@ export default function PlayerFinderPage() {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
+  const [connectedPlayers, setConnectedPlayers] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'compatibility' | 'recent' | 'location'>('compatibility');
 
   // Search filters
@@ -33,9 +34,34 @@ export default function PlayerFinderPage() {
   };
 
   useEffect(() => {
+    // Load existing requests and connections on mount
+    loadExistingRequestsAndConnections();
+  }, []);
+
+  useEffect(() => {
     // Load players on mount and when filters change
     handleFilteredSearch();
   }, [selectedSport, selectedSkill, selectedLocation]);
+
+  const loadExistingRequestsAndConnections = async () => {
+    try {
+      // Load sent requests
+      const requestsData = await profileService.getMyJoinRequests();
+      const sentPlayerIds = requestsData.sent_requests
+        .filter(req => req.status.toLowerCase() === 'pending')
+        .map(req => req.to_player.id);
+      setSentRequests(new Set(sentPlayerIds));
+
+      // Load existing connections
+      const connectionsData = await profileService.getPlayerConnections();
+      const connectedIds = connectionsData.connections.map(conn => conn.id);
+      setConnectedPlayers(new Set(connectedIds));
+    } catch (error) {
+      console.error('Failed to load existing requests and connections:', error);
+      // Don't show error to user - this is a background operation
+      // The page will still work, just won't show existing request states
+    }
+  };
 
   const handleFilteredSearch = async () => {
     setLoading(true);
@@ -102,9 +128,25 @@ export default function PlayerFinderPage() {
       const playerName = searchResults.find(p => p.id === playerId)?.full_name || 'Player';
       // You could add a toast notification here
       console.log(`Connection request sent to ${playerName}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send join request:', error);
-      // You could add error toast notification here
+      
+      // Handle specific error cases
+      if (error.response?.data?.error) {
+        const errorMsg = error.response.data.error;
+        const errorStatus = error.response.data.status;
+        
+        // If request already exists, update UI accordingly
+        if (errorStatus === 'pending' || errorMsg.includes('already sent')) {
+          setSentRequests(prev => new Set([...prev, playerId]));
+        } else if (errorStatus === 'accepted' || errorMsg.includes('already connected')) {
+          setConnectedPlayers(prev => new Set([...prev, playerId]));
+        }
+        
+        alert(errorMsg);
+      } else {
+        alert('Failed to send connection request. Please try again.');
+      }
     }
   };
 
@@ -431,26 +473,36 @@ export default function PlayerFinderPage() {
                             <Users className="h-4 w-4" />
                             View Profile
                           </button>
-                          <button
-                            onClick={() => handleSendJoinRequest(player.id)}
-                            disabled={sentRequests.has(player.id)}
-                            className={`flex items-center gap-1 px-4 py-2 rounded-lg transition-colors text-sm ${sentRequests.has(player.id)
-                              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                          >
-                            {sentRequests.has(player.id) ? (
-                              <>
-                                <CheckCircle className="h-4 w-4" />
-                                Request Sent
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus className="h-4 w-4" />
-                                Connect
-                              </>
-                            )}
-                          </button>
+                          {connectedPlayers.has(player.id) ? (
+                            <button
+                              disabled
+                              className="flex items-center gap-1 px-4 py-2 rounded-lg bg-green-100 text-green-700 cursor-not-allowed text-sm"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Connected
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleSendJoinRequest(player.id)}
+                              disabled={sentRequests.has(player.id)}
+                              className={`flex items-center gap-1 px-4 py-2 rounded-lg transition-colors text-sm ${sentRequests.has(player.id)
+                                ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                            >
+                              {sentRequests.has(player.id) ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4" />
+                                  Request Sent
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus className="h-4 w-4" />
+                                  Connect
+                                </>
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={() => navigate(`/chats/${player.id}`)}
                             className="flex items-center gap-1 px-3 py-2 text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition-colors text-sm"

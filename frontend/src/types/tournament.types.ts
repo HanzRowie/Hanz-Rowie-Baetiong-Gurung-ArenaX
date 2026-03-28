@@ -32,6 +32,7 @@ export interface Tournament {
   matches?: Match[];
   created_at: string;
   updated_at?: string;
+  share_token?: string;
   // Enhanced bracket data
   bracket?: TournamentBracket;
   current_round?: number;

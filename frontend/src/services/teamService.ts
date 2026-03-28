@@ -57,6 +57,13 @@ export class TeamService {
     return response.data;
   }
 
+  static async addMembers(teamId: string, playerIds: string[]): Promise<ApiResponse<any>> {
+    const response = await api.post(`${this.BASE_URL}/${teamId}/members/add/`, {
+      player_ids: playerIds
+    });
+    return response.data;
+  }
+
   static async removeMember(teamId: string, playerId: string): Promise<ApiResponse<void>> {
     const response = await api.delete(`${this.BASE_URL}/${teamId}/members/${playerId}/remove/`);
     return response.data;

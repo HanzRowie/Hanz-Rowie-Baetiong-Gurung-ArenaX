@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     RefereeProfile, RefereeAvailability, RefereeBooking,
     RefereeRating, RefereeCertification, RefereeMatchReport,
-    RefereeGeneralAvailability
+    RefereeGeneralAvailability, RefereePaymentRecord
 )
 
 class RefereeProfileSerializer(serializers.ModelSerializer):
@@ -28,6 +28,27 @@ class RefereeAvailabilitySerializer(serializers.ModelSerializer):
         model = RefereeAvailability
         fields = '__all__'
         read_only_fields = ('referee',)  # Referee is set automatically in the view
+
+
+class RefereePaymentRecordSerializer(serializers.ModelSerializer):
+    referee_name = serializers.CharField(source='referee.full_name', read_only=True)
+    tournament_title = serializers.CharField(source='tournament.title', read_only=True)
+    match_details = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = RefereePaymentRecord
+        fields = '__all__'
+        read_only_fields = ('referee', 'created_at', 'updated_at')
+    
+    def get_match_details(self, obj):
+        if not obj.match:
+            return None
+        return {
+            'id': str(obj.match.id),
+            'round_number': obj.match.round_number,
+            'match_number': obj.match.match_number,
+            'scheduled_time': obj.match.scheduled_time.isoformat() if obj.match.scheduled_time else None,
+        }
 
 class RefereeBookingSerializer(serializers.ModelSerializer):
     referee_name = serializers.CharField(source='referee.full_name', read_only=True)

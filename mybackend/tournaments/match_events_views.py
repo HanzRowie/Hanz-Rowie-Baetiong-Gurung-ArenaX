@@ -177,7 +177,14 @@ class MatchEventViewSet(viewsets.ViewSet):
                 {'error': 'Only the tournament organizer can add match events'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # Prevent editing completed matches
+        if match.status == 'COMPLETED':
+            return Response(
+                {'error': 'This match has already been completed and cannot be edited.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validate match is futsal
         if match.tournament.sport_type != 'FUTSAL':
             return Response(
@@ -264,7 +271,14 @@ class MatchEventViewSet(viewsets.ViewSet):
                 {'error': 'Only the tournament organizer can add match events'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+
+        # Prevent editing completed matches
+        if match.status == 'COMPLETED':
+            return Response(
+                {'error': 'This match has already been completed and cannot be edited.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validate match is futsal
         if match.tournament.sport_type != 'FUTSAL':
             return Response(

@@ -241,10 +241,11 @@ def delete_team(request, team_id):
 @team_error_handler('add_team_member')
 def add_team_member(request, team_id):
     """
-    Add a member to the team. Only team owner and leaders can add members.
+    Add member(s) to the team. Only team owner and leaders can add members.
     
-    Required fields:
-    - player_id: UUID of the player to add
+    Required fields (one of):
+    - player_id: UUID of a single player to add
+    - player_ids: List of UUIDs for bulk addition
     """
     serializer = TeamMemberAddSerializer(data=request.data)
     
@@ -254,7 +255,36 @@ def add_team_member(request, team_id):
             'errors': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # Add member using TeamManager service
+    # Handle bulk addition
+    if 'player_ids' in serializer.validated_data:
+        player_ids = serializer.validated_data['player_ids']
+        added_members = []
+        failed_additions = []
+        
+        for player_id in player_ids:
+            try:
+                membership = TeamManager.add_member(
+                    team_id=str(team_id),
+                    player_id=str(player_id),
+                    added_by_id=str(request.user.id)
+                )
+                added_members.append(membership)
+            except Exception as e:
+                failed_additions.append({
+                    'player_id': str(player_id),
+                    'error': str(e)
+                })
+        
+        # Return bulk addition results
+        membership_serializer = TeamMembershipSerializer(added_members, many=True)
+        return Response({
+            'success': True,
+            'data': membership_serializer.data,
+            'message': f'{len(added_members)} member(s) added successfully',
+            'failed': failed_additions if failed_additions else None
+        }, status=status.HTTP_201_CREATED)
+    
+    # Handle single addition
     membership = TeamManager.add_member(
         team_id=str(team_id),
         player_id=str(serializer.validated_data['player_id']),

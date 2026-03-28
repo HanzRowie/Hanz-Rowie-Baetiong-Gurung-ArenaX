@@ -192,7 +192,10 @@ api.interceptors.response.use(
         error: apiError
       });
 
-      throw new Error(apiError.message);
+      const enhancedError: any = new Error(apiError.message);
+      enhancedError.response = error.response;
+      enhancedError.apiError = apiError;
+      throw enhancedError;
     }
 
     // Handle 500 Server Error - show generic error
@@ -210,7 +213,10 @@ api.interceptors.response.use(
         error: apiError
       });
 
-      throw new Error(apiError.message);
+      const enhancedError: any = new Error(apiError.message);
+      enhancedError.response = error.response;
+      enhancedError.apiError = apiError;
+      throw enhancedError;
     }
 
     // Handle other HTTP errors
@@ -230,7 +236,11 @@ api.interceptors.response.use(
       originalResponse: responseData
     });
 
-    throw new Error(apiError.message);
+    // Preserve the original error structure so components can access response.data
+    const enhancedError: any = new Error(apiError.message);
+    enhancedError.response = error.response;
+    enhancedError.apiError = apiError;
+    throw enhancedError;
   }
 );
 

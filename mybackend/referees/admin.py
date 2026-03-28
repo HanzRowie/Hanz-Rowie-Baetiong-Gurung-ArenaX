@@ -4,7 +4,8 @@ from .models import (
     RefereeAvailability,
     RefereeBooking,
     RefereeRating,
-    RefereeMatchReport
+    RefereeMatchReport,
+    RefereePaymentRecord
 )
 
 @admin.register(RefereeProfile)
@@ -123,6 +124,35 @@ class RefereeMatchReportAdmin(admin.ModelAdmin):
         }),
         ('Timestamps', {
             'fields': ('submitted_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+
+@admin.register(RefereePaymentRecord)
+class RefereePaymentRecordAdmin(admin.ModelAdmin):
+    list_display = ('referee', 'tournament', 'amount', 'currency', 'payment_status', 'created_at', 'paid_at')
+    list_filter = ('payment_status', 'currency', 'created_at', 'paid_at')
+    search_fields = ('referee__full_name', 'tournament__title', 'description')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('Payment Information', {
+            'fields': ('id', 'referee', 'booking', 'tournament', 'match')
+        }),
+        ('Amount & Status', {
+            'fields': ('amount', 'currency', 'payment_status', 'paid_at')
+        }),
+        ('Payment Link', {
+            'fields': ('payment',)
+        }),
+        ('Additional Details', {
+            'fields': ('description', 'notes')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
     )

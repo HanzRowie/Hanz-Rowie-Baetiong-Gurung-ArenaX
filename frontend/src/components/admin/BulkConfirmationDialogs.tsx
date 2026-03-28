@@ -35,7 +35,7 @@ export const BulkApprovalDialog: React.FC<BulkApprovalDialogProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bulk-approval-title"
@@ -144,7 +144,7 @@ export const BulkRejectionDialog: React.FC<BulkRejectionDialogProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bulk-rejection-title"
@@ -274,7 +274,7 @@ export const BulkOperationSummaryDialog: React.FC<BulkOperationSummaryDialogProp
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="bulk-summary-title"

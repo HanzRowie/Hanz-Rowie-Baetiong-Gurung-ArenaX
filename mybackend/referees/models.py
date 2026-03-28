@@ -22,12 +22,22 @@ class RefereeProfile(models.Model):
     verification_date = models.DateTimeField(null=True, blank=True)
     rating = models.FloatField(default=0.0)  # Average rating from organizers
     total_matches_officiated = models.IntegerField(default=0)
+    
+    # Default fee structure
+    default_fee_per_match = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Default fee per match')
+    default_fee_per_session = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Default fee per session')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.full_name} - {self.certification_level}"
+    
+    def has_sport_specialization(self, sport_type):
+        """Check if referee is specialized in a specific sport"""
+        if not self.sports_specialization:
+            return False
+        return sport_type.upper() in [s.upper() for s in self.sports_specialization]
 
 class RefereeGeneralAvailability(models.Model):
     """General weekly availability pattern for referees"""
@@ -93,6 +103,10 @@ class RefereeAvailability(models.Model):
     end_time = models.TimeField(null=True, blank=True)    # If null, available all day
     is_available = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    
+    # Fee structure for this specific availability slot
+    fee_per_match = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Fee charged per match')
+    fee_per_session = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Fee charged per session/day')
 
     class Meta:
         unique_together = ('referee', 'available_date', 'start_time', 'end_time')  # Prevent duplicate slots
@@ -220,3 +234,48 @@ class RefereeMatchReport(models.Model):
 
     def __str__(self):
         return f"Report for {self.match} by {self.referee.full_name}"
+
+
+class RefereePaymentRecord(models.Model):
+    """Track payments made to referees"""
+    PAYMENT_STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('HELD_IN_ESCROW', 'Held in Escrow'),
+        ('PROCESSING', 'Processing'),
+        ('PAID', 'Paid'),
+        ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    referee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='payment_records', limit_choices_to={'role':'REFEREE'})
+    booking = models.ForeignKey(RefereeBooking, on_delete=models.CASCADE, related_name='payment_tracking', null=True, blank=True)
+    tournament = models.ForeignKey('tournaments.Tournament', on_delete=models.CASCADE, related_name='referee_payments', null=True, blank=True)
+    match = models.ForeignKey('tournaments.Match', on_delete=models.SET_NULL, related_name='referee_payments', null=True, blank=True)
+    
+    # Payment details
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='NPR')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
+    
+    # Link to main payment system
+    payment = models.ForeignKey('payments.Payment', on_delete=models.SET_NULL, null=True, blank=True, related_name='referee_payment_records')
+    
+    # Payment metadata
+    description = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['referee', 'payment_status']),
+            models.Index(fields=['tournament']),
+        ]
+    
+    def __str__(self):
+        return f"Payment to {self.referee.full_name} - {self.amount} {self.currency} ({self.payment_status})"

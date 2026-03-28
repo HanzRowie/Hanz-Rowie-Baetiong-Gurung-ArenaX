@@ -235,7 +235,26 @@ class ActivityHistorySerializer(serializers.ModelSerializer):
 
 class TeamMemberAddSerializer(serializers.Serializer):
     """Serializer for adding team members"""
-    player_id = serializers.UUIDField()
+    player_id = serializers.UUIDField(required=False, allow_null=True)
+    player_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_null=True,
+        help_text="List of player IDs to add (for bulk addition)"
+    )
+    
+    def validate(self, data):
+        """Validate that either player_id or player_ids is provided"""
+        player_id = data.get('player_id')
+        player_ids = data.get('player_ids')
+        
+        if not player_id and not player_ids:
+            raise serializers.ValidationError("Either player_id or player_ids must be provided")
+        
+        if player_id and player_ids:
+            raise serializers.ValidationError("Provide either player_id or player_ids, not both")
+        
+        return data
     
     def validate_player_id(self, value):
         """Validate that player exists and is a player"""

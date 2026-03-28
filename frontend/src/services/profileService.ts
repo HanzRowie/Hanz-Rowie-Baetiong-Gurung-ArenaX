@@ -52,6 +52,13 @@ export interface JoinRequestResponse {
   pending_count: number;
 }
 
+export interface PlayerConnectionsResponse {
+  connections: ExtendedUserProfile[];
+  total_connections: number;
+  recent_connections?: ExtendedUserProfile[];
+  mutual_connections?: ExtendedUserProfile[];
+}
+
 class ProfileService {
   async getUserProfile(userId?: string): Promise<{ profile: ExtendedUserProfile }> {
     const url = userId ? `/api/accounts/users/profile/${userId}` : API_ENDPOINTS.USERS.ME;
@@ -134,6 +141,11 @@ class ProfileService {
     }
   }
 
+  async getPlayerConnections(): Promise<PlayerConnectionsResponse> {
+    const response = await api.get('/api/accounts/users/connections/');
+    return response.data;
+  }
+
   // Enhanced activity history and statistics endpoints
   async getUserActivityHistory(userId?: string): Promise<{
     tournaments: Array<{
@@ -148,215 +160,34 @@ class ProfileService {
     matches: Array<{
       id: string;
       tournament_title: string;
-      opponent_name: string;
-      result: 'won' | 'lost' | 'pending';
+      opponent: string;
+      result: 'won' | 'lost' | 'draw';
       date: string;
-      score?: string;
     }>;
-    join_requests: Array<{
-      id: string;
-      other_player: string;
-      status: string;
-      created_at: string;
-      type: 'sent' | 'received';
-    }>;
-    total_activities: number;
   }> {
-    if (userId) {
-      // Note: User activity history by ID endpoint may not be implemented in backend yet
-      try {
-        const response = await api.get(`/api/accounts/users/${userId}/activity/`);
-        return response.data;
-      } catch (error) {
-        console.warn('User activity history by ID endpoint not implemented');
-        return { tournaments: [], matches: [], join_requests: [], total_activities: 0 };
-      }
-    } else {
-      const response = await api.get(API_ENDPOINTS.USERS.ACTIVITY);
-      return response.data;
-    }
-  }
-
-  async getUserStatistics(userId?: string): Promise<{
-    tournaments_participated: number;
-    tournaments_organized: number;
-    matches_played: number;
-    matches_won: number;
-    matches_lost: number;
-    win_rate: number;
-    favorite_sports: string[];
-    recent_achievements: string[];
-    activity_streak: number;
-    total_connections: number;
-    profile_completion: number;
-  }> {
-    if (userId) {
-      // Note: User statistics by ID endpoint may not be implemented in backend yet
-      try {
-        const response = await api.get(`/api/accounts/users/${userId}/statistics/`);
-        return response.data;
-      } catch (error) {
-        console.warn('User statistics by ID endpoint not implemented');
-        return {
-          tournaments_participated: 0,
-          tournaments_organized: 0,
-          matches_played: 0,
-          matches_won: 0,
-          matches_lost: 0,
-          win_rate: 0,
-          favorite_sports: [],
-          recent_achievements: [],
-          activity_streak: 0,
-          total_connections: 0,
-          profile_completion: 0,
-        };
-      }
-    } else {
-      const response = await api.get(API_ENDPOINTS.USERS.STATISTICS);
-      return response.data;
-    }
-  }
-
-  async getUserAchievements(userId?: string): Promise<{
-    achievements: Array<{
-      id: string;
-      title: string;
-      description: string;
-      icon: string;
-      earned_at: string;
-      category: string;
-    }>;
-    total_points: number;
-    rank: string;
-    next_achievement?: {
-      title: string;
-      progress: number;
-      target: number;
-    };
-  }> {
-    if (userId) {
-      // Note: User achievements by ID endpoint may not be implemented in backend yet
-      try {
-        const response = await api.get(`/api/accounts/users/${userId}/achievements/`);
-        return response.data;
-      } catch (error) {
-        console.warn('User achievements by ID endpoint not implemented');
-        return {
-          achievements: [],
-          total_points: 0,
-          rank: 'Unranked',
-        };
-      }
-    } else {
-      const response = await api.get(API_ENDPOINTS.USERS.ACHIEVEMENTS);
-      return response.data;
-    }
-  }
-
-  async getPlayerConnections(userId?: string): Promise<{
-    connections: ExtendedUserProfile[];
-    total_connections: number;
-    recent_connections: ExtendedUserProfile[];
-    mutual_connections?: ExtendedUserProfile[];
-  }> {
-    if (userId) {
-      // Note: User connections by ID endpoint may not be implemented in backend yet
-      try {
-        const response = await api.get(`/api/accounts/users/${userId}/connections/`);
-        return response.data;
-      } catch (error) {
-        console.warn('User connections by ID endpoint not implemented');
-        return { connections: [], total_connections: 0, recent_connections: [] };
-      }
-    } else {
-      const response = await api.get('/api/accounts/users/connections/');
-      return response.data;
-    }
-  }
-
-  async getRecentActivity(userId?: string, limit: number = 10): Promise<{
-    activities: Array<{
-      id: string;
-      type: 'tournament_join' | 'match_result' | 'connection_made' | 'achievement_earned';
-      title: string;
-      description: string;
-      timestamp: string;
-      related_object?: any;
-    }>;
-    has_more: boolean;
-  }> {
-    if (userId) {
-      // Note: User recent activity by ID endpoint may not be implemented in backend yet
-      try {
-        const response = await api.get(`/api/accounts/users/${userId}/recent-activity/?limit=${limit}`);
-        return response.data;
-      } catch (error) {
-        console.warn('User recent activity by ID endpoint not implemented');
-        return { activities: [], has_more: false };
-      }
-    } else {
-      const response = await api.get(`/api/accounts/users/recent-activity/?limit=${limit}`);
-      return response.data;
-    }
-  }
-
-  async getPlayerRankings(sport?: string, location?: string): Promise<{
-    rankings: Array<{
-      rank: number;
-      user: ExtendedUserProfile;
-      points: number;
-      tournaments_won: number;
-      win_rate: number;
-    }>;
-    user_rank?: number;
-    total_players: number;
-  }> {
-    // Note: This endpoint may not be implemented in backend yet
-    try {
-      const params = new URLSearchParams();
-      if (sport) params.append('sport', sport);
-      if (location) params.append('location', location);
-
-      const response = await api.get(`/api/accounts/users/rankings/?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      console.warn('Player rankings endpoint not implemented');
-      return { rankings: [], total_players: 0 };
-    }
-  }
-
-  // Enhanced player statistics and rankings
-  async getPlayerStats(playerId?: string, sport?: string) {
-    const params = new URLSearchParams();
-    if (sport) params.append('sport', sport);
+    const url = userId 
+      ? `/api/accounts/users/${userId}/activity/` 
+      : '/api/accounts/users/me/activity/';
     
-    const url = playerId 
-      ? `/api/accounts/players/${playerId}/stats/?${params.toString()}`
-      : `/api/accounts/players/stats/?${params.toString()}`;
-      
     const response = await api.get(url);
     return response.data;
   }
 
-  async getSportLeaderboard(sport: string, category: string = 'overall', limit: number = 50) {
-    const params = new URLSearchParams({
-      sport,
-      category,
-      limit: limit.toString()
-    });
+  async getUserStatistics(userId?: string): Promise<{
+    total_tournaments: number;
+    total_matches: number;
+    win_rate: number;
+    favorite_sport: string;
+    achievements: string[];
+  }> {
+    const url = userId 
+      ? `/api/accounts/users/${userId}/statistics/` 
+      : '/api/accounts/users/me/statistics/';
     
-    const response = await api.get(`/api/accounts/players/leaderboard/?${params.toString()}`);
-    return response.data;
-  }
-
-  async getPlayerRankingsBySport(playerId?: string) {
-    const url = playerId 
-      ? `/api/accounts/players/${playerId}/rankings/`
-      : `/api/accounts/players/rankings/`;
-      
     const response = await api.get(url);
     return response.data;
   }
 }
 
 export const profileService = new ProfileService();
+export default profileService;

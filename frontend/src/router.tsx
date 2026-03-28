@@ -29,6 +29,7 @@ import {
   PlayerStatisticsPage,
   RefereeAvailabilityPage,
   RefereeBookingsPage,
+  RefereePaymentsPage,
   RefereeManagementPage,
   RefereeSchedulePage,
   RefereeSelectionPage,
@@ -42,12 +43,14 @@ import {
   BookingsPage,
   GlobalSearchPage,
   WalletPage,
+  PublicTournamentPage,
 } from './pages';
 
 
 import AccountStatusPage from './pages/AccountStatusPage';
 import PaymentCallbackPage from './pages/PaymentCallbackPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import OrganizerRefundPage from './pages/OrganizerRefundPage';
 import RefereeRatingsPage from './pages/RefereeRatingsPage';
 import VenueBookingPage from './pages/VenueBookingPage';
 
@@ -97,6 +100,10 @@ export const router = createBrowserRouter([
   {
     path: '/payment/success',
     element: <PaymentCallbackPage />,
+  },
+  {
+    path: '/t/:shareToken',
+    element: <PublicTournamentPage />,
   },
   // Admin routes with role-based access control
   {
@@ -243,6 +250,10 @@ export const router = createBrowserRouter([
         element: <RefereeBookingsPage />,
       },
       {
+        path: 'referee/payments',
+        element: <RefereePaymentsPage />,
+      },
+      {
         path: 'referee/ratings',
         element: <RefereeRatingsPage />,
       },
@@ -320,6 +331,10 @@ export const router = createBrowserRouter([
       {
         path: 'payment-history',
         element: <PaymentHistoryPage />,
+      },
+      {
+        path: 'refunds',
+        element: <OrganizerRefundPage />,
       },
       // Search routes
       {

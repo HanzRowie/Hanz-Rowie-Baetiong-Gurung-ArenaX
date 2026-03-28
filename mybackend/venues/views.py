@@ -706,11 +706,21 @@ def available_venues_for_tournament(request):
         start_time_obj = datetime.strptime(start_time, '%H:%M').time()
         end_time_obj = datetime.strptime(end_time, '%H:%M').time()
         
-        # Get all venues and filter by approval status
+        # Get only active, approved venues
         from venues.permissions import filter_venues_by_approval_status
-        venues = Venue.objects.all()
+        from django.utils import timezone as tz
+        from datetime import date as date_type
+        venues = Venue.objects.filter(is_active=True)
         venues = filter_venues_by_approval_status(venues, request.user)
+        # Only APPROVED venues should appear in tournament venue selection
+        venues = venues.filter(approval_status='APPROVED')
         
+        # Parse the requested date for operating day checks
+        try:
+            requested_date = datetime.strptime(date, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Filter by sport type if provided
         # sport_types is a JSONField (list); filter in Python for SQLite compatibility
         if sport_type:
@@ -720,50 +730,29 @@ def available_venues_for_tournament(request):
         available_venues = []
         
         for venue in venues:
-            # Check if venue has availability slots for this date
-            has_availability_slots = VenueAvailability.objects.filter(venue=venue, date=date).exists()
-            
-            if has_availability_slots:
-                # Check if the requested time is fully covered by available slots
-                # We need to check if there are available slots that collectively cover the entire time range
-                available_slots = VenueAvailability.objects.filter(
-                    venue=venue,
-                    date=date,
-                    is_available=True
-                ).order_by('opening_time')
-                
-                # Check if slots cover the entire requested time range
-                time_covered = False
-                
-                # Simple approach: check if any single slot covers the entire range
-                for slot in available_slots:
-                    if slot.opening_time <= start_time_obj and slot.closing_time >= end_time_obj:
-                        time_covered = True
-                        break
-                
-                # If no single slot covers it, check if multiple consecutive slots cover it
-                if not time_covered and available_slots.exists():
-                    # Sort slots and check for coverage
-                    current_time = start_time_obj
-                    for slot in available_slots:
-                        # If this slot starts at or before current_time and extends beyond it
-                        if slot.opening_time <= current_time and slot.closing_time > current_time:
-                            current_time = slot.closing_time
-                            if current_time >= end_time_obj:
-                                time_covered = True
-                                break
-                
-                if not time_covered:
+            # Check if venue operates on the requested day
+            weekday = requested_date.weekday() + 1  # 1=Monday ... 7=Sunday
+            if venue.operating_days and weekday not in venue.operating_days:
+                continue
+
+            # Check date-specific availability override
+            date_override = VenueAvailability.objects.filter(venue=venue, date=requested_date).first()
+            if date_override:
+                if not date_override.is_available:
+                    # Venue explicitly marked unavailable on this date
+                    continue
+                # Check requested time fits within the override window
+                if not (date_override.opening_time <= start_time_obj and date_override.closing_time >= end_time_obj):
                     continue
             else:
-                # If no availability slots exist, assume venue is available (legacy venues)
-                pass
+                # Fall back to default operating hours
+                if not (venue.default_opening_time <= start_time_obj and venue.default_closing_time >= end_time_obj):
+                    continue
             
             # Check for conflicting bookings (skip expired PENDING bookings)
-            from django.utils import timezone as tz
             conflicting_bookings = VenueBooking.objects.filter(
                 venue=venue,
-                date=date,
+                date=requested_date,
                 status__in=['PENDING', 'CONFIRMED']
             ).exclude(
                 status='PENDING',

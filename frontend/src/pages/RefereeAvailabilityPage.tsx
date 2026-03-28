@@ -22,6 +22,8 @@ interface AvailabilitySlot {
   end_time: string | null;
   is_available: boolean;
   notes: string;
+  fee_per_match: number;
+  fee_per_session: number;
 }
 
 const RefereeAvailabilityPage: React.FC = () => {
@@ -30,6 +32,11 @@ const RefereeAvailabilityPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFeeSettings, setShowFeeSettings] = useState(false);
+  
+  // Default fee settings
+  const [defaultFeePerMatch, setDefaultFeePerMatch] = useState<number>(0);
+  const [defaultFeePerSession, setDefaultFeePerSession] = useState<number>(0);
   
   // General availability settings
   const [generalAvailability, setGeneralAvailability] = useState<GeneralAvailability>({

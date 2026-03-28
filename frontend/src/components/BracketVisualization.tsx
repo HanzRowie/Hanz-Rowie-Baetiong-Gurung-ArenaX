@@ -3,6 +3,8 @@ import {
   Trophy,
   Clock,
   Edit,
+  Lock,
+  Calendar,
   X,
   User,
   Crown,
@@ -55,7 +57,7 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave, isTeamTournament }: 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">Enter Match Result</h3>
@@ -154,10 +156,101 @@ const MatchResultModal = ({ match, isOpen, onClose, onSave, isTeamTournament }: 
   );
 };
 
+interface ScheduleMatchModalProps {
+  match: Match;
+  tournamentId: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+const ScheduleMatchModal = ({ match, tournamentId, isOpen, onClose, onSaved }: ScheduleMatchModalProps) => {
+  // Convert existing scheduled_time to local datetime-local input format
+  const toLocalInput = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const [datetime, setDatetime] = useState(toLocalInput(match.scheduled_time));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!datetime) {
+      toastService.error('Please select a date and time');
+      return;
+    }
+    // Convert local datetime-local value to ISO string
+    const iso = new Date(datetime).toISOString();
+    setSaving(true);
+    try {
+      await tournamentService.scheduleMatch(tournamentId, match.id, iso);
+      toastService.success('Match scheduled successfully');
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toastService.error(err?.response?.data?.error || 'Failed to schedule match');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-purple-600" />
+            Schedule Match
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-4">
+          Match {match.match_number} — Round {match.round_number}
+        </p>
+
+        <div className="space-y-3">
+          <label htmlFor="match-schedule-dt" className="block text-sm font-medium text-gray-700">Date &amp; Time</label>
+          <input
+            id="match-schedule-dt"
+            type="datetime-local"
+            value={datetime}
+            onChange={(e) => setDatetime(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save Schedule'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function BracketVisualization({ tournament, onMatchUpdate, isOrganizer = false }: BracketVisualizationProps) {
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
   const [showMatchScorer, setShowMatchScorer] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   const isTeamTournament = tournament.participation_type === 'TEAM';
 
@@ -395,7 +488,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             <h3 className="text-lg font-semibold text-gray-900">Tournament Bracket</h3>
             {isOrganizer && (
               <div className="text-sm text-gray-600">
-                Click on matches to enter results
+                Click on incomplete matches to enter results
               </div>
             )}
           </div>
@@ -454,6 +547,24 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                                       (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2)) && (
                                         <Edit className="h-3 w-3 text-gray-400" />
                                       )}
+                                    {isOrganizer && match.status === 'COMPLETED' && (
+                                      <span title="Match completed — locked">
+                                        <Lock className="h-3 w-3 text-green-500" />
+                                      </span>
+                                    )}
+                                    {isOrganizer && match.status !== 'COMPLETED' && match.status !== 'IN_PROGRESS' && (
+                                      <button
+                                        title="Schedule match"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedMatch(match);
+                                          setShowScheduleModal(true);
+                                        }}
+                                        className="p-0.5 rounded hover:bg-purple-100 transition-colors"
+                                      >
+                                        <Calendar className="h-3 w-3 text-purple-500" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -491,14 +602,21 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                               </div>
 
                               {/* Match Footer */}
-                              {match.scheduled_time && (
+                              {match.scheduled_time ? (
                                 <div className="bg-gray-50 px-4 py-2 border-t border-gray-200">
                                   <div className="flex items-center gap-2 text-xs text-gray-600">
                                     <Clock className="h-3 w-3" />
                                     {new Date(match.scheduled_time).toLocaleString()}
                                   </div>
                                 </div>
-                              )}
+                              ) : isOrganizer && match.status === 'SCHEDULED' ? (
+                                <div className="bg-yellow-50 px-4 py-2 border-t border-yellow-100">
+                                  <div className="flex items-center gap-2 text-xs text-yellow-700">
+                                    <Calendar className="h-3 w-3" />
+                                    No date set — click <Calendar className="h-3 w-3 inline" /> to schedule
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
 
                             {/* Connection Line to Next Round */}
@@ -556,7 +674,7 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
 
       {/* Match Scorer for Futsal */}
       {selectedMatch && showMatchScorer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -597,6 +715,22 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
             </div>
           </div>
         </div>
+      )}
+
+      {/* Schedule Match Modal */}
+      {selectedMatch && showScheduleModal && (
+        <ScheduleMatchModal
+          match={selectedMatch}
+          tournamentId={tournament.id}
+          isOpen={showScheduleModal}
+          onClose={() => {
+            setShowScheduleModal(false);
+            setSelectedMatch(null);
+          }}
+          onSaved={() => {
+            onMatchUpdate?.();
+          }}
+        />
       )}
     </div>
   );
