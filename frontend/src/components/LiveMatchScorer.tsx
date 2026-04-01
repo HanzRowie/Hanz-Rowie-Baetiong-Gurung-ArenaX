@@ -114,7 +114,7 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
       if (team1Players.length === 0) {
         try {
           const team1Response = await api.get(`/api/teams/${match.team1.id}/members/`);
-          setTeam1Players(team1Response.data.members || []);
+          setTeam1Players(team1Response.data.data || team1Response.data.members || []);
         } catch (err) {
           console.log('Could not load team1 members directly, using registration data');
         }
@@ -123,7 +123,7 @@ export const LiveMatchScorer: React.FC<LiveMatchScorerProps> = ({
       if (team2Players.length === 0) {
         try {
           const team2Response = await api.get(`/api/teams/${match.team2.id}/members/`);
-          setTeam2Players(team2Response.data.members || []);
+          setTeam2Players(team2Response.data.data || team2Response.data.members || []);
         } catch (err) {
           console.log('Could not load team2 members directly, using registration data');
         }

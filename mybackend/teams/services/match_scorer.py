@@ -547,6 +547,14 @@ class MatchScorer:
                 
             tournament.save()
             print(f"Tournament {tournament.title} completed. Winner: {winner}")
+
+            # Release referee escrow now that the tournament is fully complete
+            try:
+                from tournaments.views import _release_referee_escrow_for_tournament
+                _release_referee_escrow_for_tournament(tournament)
+            except Exception as e:
+                print(f"Warning: Could not release referee escrow on tournament completion: {e}")
+
             return
         
         print(f"Found {next_round_matches.count()} matches in round {next_round}")

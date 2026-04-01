@@ -73,34 +73,25 @@ export const BadmintonScoreForm: React.FC<BadmintonScoreFormProps> = ({
 
     // Validate each set
     setsData.forEach((set, index) => {
-      if (!validateBWFRules(set.home_score, set.away_score)) {
-        newErrors.push(`Set ${index + 1}: Invalid score according to BWF rules`);
+      if (set.home_score < 0 || set.away_score < 0) {
+        newErrors.push(`Set ${index + 1}: Scores cannot be negative`);
       }
-
-      if (set.duration <= 0) {
-        newErrors.push(`Set ${index + 1}: Duration must be greater than 0 minutes`);
+      if (set.home_score > 30 || set.away_score > 30) {
+        newErrors.push(`Set ${index + 1}: Score cannot exceed 30`);
       }
     });
 
-    // Validate match result
+    // Validate match result only if sets are complete
     if (setsData.length > 0) {
-      const homeSetsWon = setsData.filter(set => {
-        const maxScore = Math.max(set.home_score, set.away_score);
-        return set.home_score === maxScore && set.home_score !== set.away_score;
-      }).length;
+      const homeSetsWon = setsData.filter(set => set.home_score > set.away_score).length;
+      const awaySetsWon = setsData.filter(set => set.away_score > set.home_score).length;
+      const totalDecided = homeSetsWon + awaySetsWon;
 
-      const awaySetsWon = setsData.filter(set => {
-        const maxScore = Math.max(set.home_score, set.away_score);
-        return set.away_score === maxScore && set.home_score !== set.away_score;
-      }).length;
-
-      if (setsData.length === 2) {
-        // 2-0 result required
+      if (totalDecided > 0 && setsData.length === 2 && totalDecided === 2) {
         if (!((homeSetsWon === 2 && awaySetsWon === 0) || (homeSetsWon === 0 && awaySetsWon === 2))) {
           newErrors.push('For 2-set match, one player/team must win both sets');
         }
-      } else if (setsData.length === 3) {
-        // 2-1 result required
+      } else if (setsData.length === 3 && totalDecided === 3) {
         if (!((homeSetsWon === 2 && awaySetsWon === 1) || (homeSetsWon === 1 && awaySetsWon === 2))) {
           newErrors.push('For 3-set match, final result must be 2-1');
         }

@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, Building2, Calendar, Gavel } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, Building2, Calendar, Gavel, Wallet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -57,6 +57,13 @@ export default function BottomNavigation() {
           icon: Gavel,
           path: '/referee/management',
           active: location.pathname.startsWith('/referee/management') || location.pathname.startsWith('/referee/bookings'),
+        },
+        {
+          id: 'wallet',
+          label: 'Wallet',
+          icon: Wallet,
+          path: '/referee/wallet',
+          active: location.pathname === '/referee/wallet',
         },
         {
           id: 'availability',

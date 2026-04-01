@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search, MapPin, DollarSign, Star,
+  Search, MapPin, Star,
   Users, Building2, Heart,
   Grid3X3, List, SlidersHorizontal,
-  Filter, X, Check, Coffee, Wifi, Car, Zap, Trophy
+  Check, Coffee, Wifi, Car, Zap, Trophy, Calendar, Clock
 } from 'lucide-react';
-import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import toastService from '@/services/toastService';
 import { venueService } from '@/services/venueService';
+import { api } from '@/services/api';
 import BottomNavigation from '@/components/BottomNavigation';
 
 export default function VenueSearchPage() {
@@ -32,6 +32,19 @@ export default function VenueSearchPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [activeSport, setActiveSport] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('relevant');
+  const [activeTab, setActiveTab] = useState<'find' | 'bookings'>('find');
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'bookings' && user) {
+      setBookingsLoading(true);
+      api.get('/api/venues/my-bookings/')
+        .then(res => setMyBookings(res.data.bookings || []))
+        .catch(() => setMyBookings([]))
+        .finally(() => setBookingsLoading(false));
+    }
+  }, [activeTab, user]);
 
   useEffect(() => {
     // Determine if we should redirect based on auth
@@ -52,8 +65,6 @@ export default function VenueSearchPage() {
         setVenues(response);
       } else if (response && Array.isArray(response.venues)) {
         setVenues(response.venues);
-      } else if (response && Array.isArray(response.data)) {
-        setVenues(response.data);
       } else {
         setVenues([]);
       }
@@ -135,18 +146,35 @@ export default function VenueSearchPage() {
       {/* Header Section */}
       <div className="bg-white border-b border-purple-100 pt-8 pb-6 px-4 sm:px-6 lg:px-8 shadow-sm">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-purple-900 tracking-tight">Find Venues</h1>
+              <h1 className="text-3xl font-bold text-purple-900 tracking-tight">Venues</h1>
               <p className="mt-2 text-gray-500 max-w-2xl">
                 Discover world-class facilities for your next match or tournament.
               </p>
             </div>
           </div>
 
+          {/* Tab switcher */}
+          {user && (
+            <div className="flex border-b border-gray-200 -mb-6 mb-2">
+              <button
+                onClick={() => setActiveTab('find')}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'find' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                Find Venues
+              </button>
+              <button
+                onClick={() => setActiveTab('bookings')}
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'bookings' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                My Bookings
+              </button>
+            </div>
+          )}
+
           {/* Search & Main Filters */}
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="relative flex-1">
+          <div className="flex flex-col lg:flex-row gap-4">            <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-purple-400" />
               <input
                 type="text"
@@ -295,7 +323,46 @@ export default function VenueSearchPage() {
         </div>
       </div>
 
+      {/* My Bookings Tab */}
+      {activeTab === 'bookings' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {bookingsLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" /></div>
+          ) : myBookings.length === 0 ? (
+            <div className="text-center py-16">
+              <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-lg font-medium text-gray-600 mb-2">No bookings yet</p>
+              <p className="text-sm text-gray-400 mb-4">Book a venue from the Find Venues tab.</p>
+              <button onClick={() => setActiveTab('find')} className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors">Find a Venue</button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {myBookings.map((b: any) => (
+                <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-lg">{b.venue_details?.name || b.venue_name || 'Venue'}</h3>
+                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-0.5"><MapPin className="w-3.5 h-3.5" /><span>{b.venue_details?.location || b.venue_location || '—'}</span></div>
+                      <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-600">
+                        <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-purple-400" />{b.date}</span>
+                        <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-purple-400" />{b.start_time?.slice(0,5)} – {b.end_time?.slice(0,5)}</span>
+                        {b.purpose && <span className="flex items-center gap-1.5"><Trophy className="w-4 h-4 text-purple-400" />{b.purpose}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right ml-4 flex-shrink-0">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${b.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : b.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>{b.status}</span>
+                      {b.amount && <p className="text-base font-bold text-gray-900 mt-1.5">NPR {parseFloat(b.amount).toLocaleString()}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Content */}
+      {activeTab === 'find' && (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Results Count */}
@@ -524,6 +591,7 @@ export default function VenueSearchPage() {
           </div>
         )}
       </div>
+      )}
 
       <BottomNavigation />
     </div>

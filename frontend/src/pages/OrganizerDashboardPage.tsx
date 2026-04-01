@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Eye, Trophy, Users, Calendar,
-  Clock, MapPin, Sun
+  Clock, MapPin, Sun, TrendingUp
 } from 'lucide-react';
 import { organizerDashboardService, type OrganizerStats, type RecentMatch, type RecentActivity } from '@/services/organizerDashboardService';
 import toastService from '@/services/toastService';
@@ -168,7 +168,7 @@ export default function OrganizerDashboardPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
               {/* My Tournaments */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-4">
@@ -222,6 +222,27 @@ export default function OrganizerDashboardPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-900 mb-1">Completed</p>
                   <p className="text-xs text-gray-500">Successfully finished</p>
+                </div>
+              </div>
+
+              {/* Registration Earnings */}
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 shadow-sm border border-emerald-100">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  {stats.revenueGrowth > 0 && (
+                    <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      +{stats.revenueGrowth}%
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 mb-1">Registration Earnings</p>
+                  <p className="text-xl font-bold text-emerald-700">
+                    NPR {stats.totalRevenue.toLocaleString('en-NP')}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">From team & player registrations</p>
                 </div>
               </div>
             </div>

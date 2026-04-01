@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, MapPin, Edit2, Check, X, Trophy, Building2 } from 'lucide-react';
+import MatchDetailModal from './MatchDetailModal';
 
 export interface LeagueMatch {
   id: string;
@@ -24,11 +25,14 @@ export interface LeagueMatch {
 
 interface LeagueScheduleTableProps {
   matches: LeagueMatch[];
+  tournamentId?: string;
   editable?: boolean;
   onEditMatch?: (matchId: string, updates: Partial<LeagueMatch>) => void;
   onEnterScore?: (matchId: string) => void;
   onAssignVenue?: (matchId: string) => void;
   loading?: boolean;
+  tournamentStartDate?: string;
+  isTeamTournament?: boolean;
 }
 
 // Loading skeleton component
@@ -81,15 +85,19 @@ const ScheduleTableSkeleton: React.FC = () => {
 
 const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
   matches,
+  tournamentId,
   editable = false,
   onEditMatch,
   onEnterScore,
   onAssignVenue,
   loading = false,
+  tournamentStartDate,
+  isTeamTournament = true,
 }) => {
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [editedDate, setEditedDate] = useState<string>('');
   const [editedTime, setEditedTime] = useState<string>('');
+  const [detailMatch, setDetailMatch] = useState<LeagueMatch | null>(null);
 
   if (loading) {
     return <ScheduleTableSkeleton />;
@@ -119,9 +127,36 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
 
   const handleSaveEdit = (matchId: string) => {
     if (onEditMatch && editedDate && editedTime) {
-      // Build a Date from the local inputs, then convert to ISO string (UTC)
-      // This ensures the backend always receives UTC regardless of browser timezone
       const localDate = new Date(`${editedDate}T${editedTime}:00`);
+
+      // Validate: must be after tournament start date
+      if (tournamentStartDate) {
+        const tournamentStart = new Date(tournamentStartDate);
+        if (localDate < tournamentStart) {
+          alert(`Match date must be on or after the tournament start date (${tournamentStart.toLocaleDateString()}).`);
+          return;
+        }
+      }
+
+      // Validate: must be after the previous match's scheduled time (same round or earlier round)
+      const currentMatch = matches.find(m => m.id === matchId);
+      if (currentMatch) {
+        const previousMatches = matches.filter(m =>
+          m.id !== matchId &&
+          m.scheduled_time &&
+          m.round_number <= currentMatch.round_number
+        );
+        const latestPrevious = previousMatches.reduce<Date | null>((latest, m) => {
+          const d = new Date(m.scheduled_time!);
+          return !latest || d > latest ? d : latest;
+        }, null);
+
+        if (latestPrevious && localDate < latestPrevious) {
+          alert(`Match date must be after the previous match (${latestPrevious.toLocaleString()}).`);
+          return;
+        }
+      }
+
       onEditMatch(matchId, { scheduled_time: localDate.toISOString() });
     }
     setEditingMatchId(null);
@@ -155,7 +190,10 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
     const isDateTimeTBD = dateTime === 'TBD';
 
     return (
-      <tr key={match.id} className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${isCompleted ? 'bg-gray-50' : ''}`}>
+      <tr key={match.id} className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${isCompleted ? 'bg-gray-50 cursor-pointer hover:bg-green-50' : ''}`}
+        onClick={isCompleted ? () => setDetailMatch(match) : undefined}
+        title={isCompleted ? 'Click to view match details & remarks' : undefined}
+      >
         {/* Round */}
         <td className="px-3 md:px-4 py-3 md:py-4 text-xs md:text-sm font-medium text-gray-900">
           <span className="hidden md:inline">Round </span>{match.round_number}
@@ -261,9 +299,19 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
                   </button>
                   {onAssignVenue && (
                     <button
-                      onClick={() => onAssignVenue(match.id)}
-                      className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Assign venue"
+                      onClick={() => {
+                        if (!match.scheduled_time) {
+                          return; // disabled — tooltip explains
+                        }
+                        onAssignVenue(match.id);
+                      }}
+                      disabled={!match.scheduled_time}
+                      className={`p-1 rounded transition-colors ${
+                        !match.scheduled_time
+                          ? 'text-gray-300 cursor-not-allowed'
+                          : 'text-blue-600 hover:bg-blue-50'
+                      }`}
+                      title={!match.scheduled_time ? 'Set date/time before assigning venue' : 'Assign venue'}
                       aria-label="Assign venue for this match"
                     >
                       <Building2 className="w-3 h-3 md:w-4 md:h-4" />
@@ -271,9 +319,28 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
                   )}
                   {onEnterScore && (
                     <button
-                      onClick={() => onEnterScore(match.id)}
-                      className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
-                      title="Enter score"
+                      onClick={() => {
+                        const hasDateTime = !!match.scheduled_time;
+                        // A venue is present if any of the venue fields has a real value
+                        const venueDisplay = match.match_venue_display || match.match_venue_name;
+                        const hasVenue = !!(venueDisplay && venueDisplay !== 'TBD - Assigned per match');
+
+                        if (!hasDateTime) {
+                          alert('Please set a date and time for this match before scoring.');
+                          return;
+                        }
+                        if (!hasVenue) {
+                          alert('Please assign a venue to this match before scoring.');
+                          return;
+                        }
+                        onEnterScore(match.id);
+                      }}
+                      className={`p-1 rounded transition-colors ${
+                        !match.scheduled_time
+                          ? 'text-gray-300 cursor-not-allowed'
+                          : 'text-green-600 hover:bg-green-50'
+                      }`}
+                      title={!match.scheduled_time ? 'Set date/time first' : 'Enter score'}
                       aria-label="Enter match score and statistics"
                     >
                       <Trophy className="w-3 h-3 md:w-4 md:h-4" />
@@ -393,6 +460,29 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {/* Match Detail Modal for completed matches */}
+      {detailMatch && tournamentId && (
+        <MatchDetailModal
+          isOpen={!!detailMatch}
+          onClose={() => setDetailMatch(null)}
+          tournamentId={tournamentId}
+          match={{
+            id: detailMatch.id,
+            round_number: detailMatch.round_number,
+            status: detailMatch.status,
+            scheduled_time: detailMatch.scheduled_time,
+            home_team: detailMatch.home_team,
+            away_team: detailMatch.away_team,
+            home_score: detailMatch.home_score,
+            away_score: detailMatch.away_score,
+            venue: detailMatch.venue,
+            match_venue_display: detailMatch.match_venue_display,
+            match_venue_name: detailMatch.match_venue_name,
+          }}
+          isTeamTournament={isTeamTournament}
+        />
       )}
     </div>
   );

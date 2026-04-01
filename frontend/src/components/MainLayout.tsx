@@ -5,6 +5,7 @@ import { User, Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import BottomNavigation from './BottomNavigation';
 import { NotificationBell } from './NotificationBell';
+import { LogoutDialog } from './ConfirmDialog';
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
@@ -12,6 +13,7 @@ export default function MainLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Handle sidebar toggle with body scroll prevention
   const toggleSidebar = (open: boolean) => {
@@ -108,11 +110,7 @@ export default function MainLayout() {
                 
                 {/* Logout */}
                 <button
-                  onClick={() => {
-                    if (confirm('Are you sure you want to logout?')) {
-                      logout();
-                    }
-                  }}
+                  onClick={() => setShowLogoutDialog(true)}
                   className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
                 >
                   Logout
@@ -121,6 +119,12 @@ export default function MainLayout() {
             </div>
           </div>
         </header>
+
+        <LogoutDialog
+          open={showLogoutDialog}
+          onConfirm={() => { setShowLogoutDialog(false); logout(); }}
+          onCancel={() => setShowLogoutDialog(false)}
+        />
 
         {/* Main Content */}
         <main className={`flex-1 overflow-y-auto relative z-10 ${sidebarOpen ? 'pointer-events-none lg:pointer-events-auto' : 'pointer-events-auto'}`}>

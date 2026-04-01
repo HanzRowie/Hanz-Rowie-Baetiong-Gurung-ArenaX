@@ -227,7 +227,7 @@ export default function ChatsPage() {
   };
 
   const deleteConversation = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
       return;
     }
 

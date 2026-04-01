@@ -95,7 +95,7 @@ const RefereeManagementPage: React.FC = () => {
       await fetchBookings();
       setSelectedBooking(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to respond to booking');
+      toastService.error(err?.response?.data?.error || 'Failed to respond to booking');
     } finally {
       setResponding(false);
     }

@@ -41,7 +41,7 @@ export default function VerifyEmailPage() {
 
     try {
       const response = await api.post(API_ENDPOINTS.AUTH.RESEND_VERIFICATION, { email });
-      alert(`New OTP sent! (Dev: ${response.data.otp})`); // Remove in production
+      // Dev OTP: response.data.otp
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to resend OTP.');
     } finally {

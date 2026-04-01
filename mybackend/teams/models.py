@@ -70,6 +70,7 @@ class TeamMembership(models.Model):
     ROLE_CHOICES = (
         ('OWNER', 'Owner'),
         ('LEADER', 'Leader'),
+        ('CAPTAIN', 'Captain'),
         ('MEMBER', 'Member'),
     )
 
@@ -97,11 +98,11 @@ class TeamMembership(models.Model):
 
     def can_register_for_tournaments(self):
         """Check if this member can register the team for tournaments"""
-        return self.role in ['OWNER', 'LEADER'] and self.is_active
+        return self.role in ['OWNER', 'LEADER', 'CAPTAIN'] and self.is_active
 
     def can_assign_roles(self):
         """Check if this member can assign roles to other members"""
-        return self.role == 'OWNER' and self.is_active
+        return self.role in ['OWNER', 'CAPTAIN'] and self.is_active
 
 
 class Invitation(models.Model):

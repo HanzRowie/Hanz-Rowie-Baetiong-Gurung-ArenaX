@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Calendar, MapPin, Users, Trophy, DollarSign,
-  Info, Award, ArrowLeft, Lock
+  Info, Award, ArrowLeft, Lock, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { getMediaUrl } from '@/utils/constants';
@@ -10,6 +10,50 @@ import BracketVisualization from '@/components/BracketVisualization';
 import { LeagueStandingsTable } from '@/components/LeagueStandingsTable';
 import LeagueScheduleTable from '@/components/LeagueScheduleTable';
 import type { StandingsRow } from '@/components/LeagueStandingsTable';
+
+function TeamRow({ team }: { team: any }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <li>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-bold flex-shrink-0">
+            {team.name?.[0]?.toUpperCase()}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-800">{team.name}</p>
+            {team.registered_by && (
+              <p className="text-xs text-gray-400">Registered by {team.registered_by}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{team.player_count} players</span>
+          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </div>
+      </button>
+      {expanded && team.players?.length > 0 && (
+        <ul className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
+          {team.players.map((player: any) => (
+            <li key={player.id} className="flex items-center gap-3 px-8 py-2">
+              {player.profile_picture ? (
+                <img src={player.profile_picture} alt={player.name} className="w-6 h-6 rounded-full object-cover" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 text-xs font-medium flex-shrink-0">
+                  {player.name?.[0]?.toUpperCase()}
+                </div>
+              )}
+              <span className="text-sm text-gray-700">{player.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 export default function PublicTournamentPage() {
   const { shareToken } = useParams<{ shareToken: string }>();
@@ -201,23 +245,35 @@ export default function PublicTournamentPage() {
 
         {activeTab === 'participants' && (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {tournament.registered_players?.length > 0 ? (
-              <ul className="divide-y divide-gray-100">
-                {tournament.registered_players.map((player: any, i: number) => (
-                  <li key={player.id || i} className="flex items-center gap-3 px-5 py-3">
-                    {player.profile_picture ? (
-                      <img src={player.profile_picture} alt={player.name} className="w-8 h-8 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-medium">
-                        {player.name?.[0]?.toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-sm text-gray-800">{player.name}</span>
-                  </li>
-                ))}
-              </ul>
+            {tournament.registration_type === 'TEAM' ? (
+              tournament.registered_teams?.length > 0 ? (
+                <ul className="divide-y divide-gray-100">
+                  {tournament.registered_teams.map((team: any, i: number) => (
+                    <TeamRow key={team.id || i} team={team} />
+                  ))}
+                </ul>
+              ) : (
+                <div className="p-8 text-center text-gray-400 text-sm">No teams registered yet.</div>
+              )
             ) : (
-              <div className="p-8 text-center text-gray-400 text-sm">No participants yet.</div>
+              tournament.registered_players?.length > 0 ? (
+                <ul className="divide-y divide-gray-100">
+                  {tournament.registered_players.map((player: any, i: number) => (
+                    <li key={player.id || i} className="flex items-center gap-3 px-5 py-3">
+                      {player.profile_picture ? (
+                        <img src={player.profile_picture} alt={player.name} className="w-8 h-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-sm font-medium">
+                          {player.name?.[0]?.toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-sm text-gray-800">{player.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="p-8 text-center text-gray-400 text-sm">No participants yet.</div>
+              )
             )}
           </div>
         )}
@@ -225,7 +281,7 @@ export default function PublicTournamentPage() {
         {activeTab === 'bracket' && isKnockout && (
           <div className="bg-white rounded-xl shadow-sm p-4 overflow-x-auto">
             {tournament.matches?.length > 0 ? (
-              <BracketVisualization matches={tournament.matches} />
+              <BracketVisualization tournament={tournament} matches={tournament.matches} isOrganizer={false} />
             ) : (
               <p className="text-center text-gray-400 text-sm py-8">Bracket not generated yet.</p>
             )}

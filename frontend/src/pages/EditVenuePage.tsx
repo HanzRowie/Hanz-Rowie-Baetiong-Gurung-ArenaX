@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { venueService } from '@/services/venueService';
 import toastService from '@/services/toastService';
 import VenueLocationPicker from '@/components/VenueLocationPicker';
-import { Building2, MapPin, DollarSign, Users, Info, Image as ImageIcon, ArrowLeft, Trash2 } from 'lucide-react';
+import { Building2, MapPin, Users, Info, Image as ImageIcon, ArrowLeft, Trash2 } from 'lucide-react';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 
 export default function EditVenuePage() {
@@ -302,13 +302,13 @@ export default function EditVenuePage() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Price per Hour *</label>
                                 <div className="relative">
-                                    <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                                    <span className="absolute left-3 top-2.5 text-sm font-medium text-gray-400">₨</span>
                                     <input
                                         type="number"
                                         name="price_per_hour"
                                         value={formData.price_per_hour}
                                         onChange={handleChange}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                         step="0.01"
                                         required
                                     />

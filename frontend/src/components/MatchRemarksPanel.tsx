@@ -41,6 +41,8 @@ interface MatchRemarksPanelProps {
   matchId: string;
   team1: Team;
   team2: Team;
+  team1Members?: { id: string; name: string }[];
+  team2Members?: { id: string; name: string }[];
   readOnly?: boolean;
 }
 
@@ -73,6 +75,8 @@ export const MatchRemarksPanel: React.FC<MatchRemarksPanelProps> = ({
   matchId,
   team1,
   team2,
+  team1Members = [],
+  team2Members = [],
   readOnly = false,
 }) => {
   const [remarks, setRemarks] = useState<Remark[]>([]);
@@ -269,16 +273,38 @@ export const MatchRemarksPanel: React.FC<MatchRemarksPanelProps> = ({
             </div>
           </div>
 
-          {/* Player name */}
+          {/* Player name — dropdown if team members available, else free text */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Player name (optional)</label>
-            <input
-              type="text"
-              placeholder="e.g. John Doe"
-              value={form.player_name}
-              onChange={e => setForm(f => ({ ...f, player_name: e.target.value }))}
-              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
+            <label className="block text-xs font-medium text-gray-600 mb-1">Player (optional)</label>
+            {(() => {
+              const members = form.team === team1.id ? team1Members : form.team === team2.id ? team2Members : [];
+              if (members.length > 0) {
+                return (
+                  <div className="relative">
+                    <select
+                      value={form.player_name}
+                      onChange={e => setForm(f => ({ ...f, player_name: e.target.value }))}
+                      className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 pr-8 appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      <option value="">— No player —</option>
+                      {members.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2 top-2.5 text-gray-400 pointer-events-none" />
+                  </div>
+                );
+              }
+              return (
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  value={form.player_name}
+                  onChange={e => setForm(f => ({ ...f, player_name: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+              );
+            })()}
           </div>
 
           {/* Title */}

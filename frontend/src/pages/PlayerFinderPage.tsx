@@ -143,9 +143,9 @@ export default function PlayerFinderPage() {
           setConnectedPlayers(prev => new Set([...prev, playerId]));
         }
         
-        alert(errorMsg);
+        toastService.error(errorMsg);
       } else {
-        alert('Failed to send connection request. Please try again.');
+        toastService.error('Failed to send connection request. Please try again.');
       }
     }
   };

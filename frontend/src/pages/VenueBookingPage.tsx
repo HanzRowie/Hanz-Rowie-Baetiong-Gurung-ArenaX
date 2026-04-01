@@ -118,45 +118,44 @@ export default function VenueBookingPage() {
 
   // Calculate effective free slots
   const getEffectiveAvailability = () => {
-    if (!availabilities.length) return [];
+    // Use date-specific slots if available, otherwise fall back to venue default hours
+    let baseSlots = availabilities.length > 0
+      ? availabilities.map(slot => ({
+          start: parseTimeToMinutes(slot.opening_time),
+          end: parseTimeToMinutes(slot.closing_time),
+          originalId: slot.id
+        }))
+      : venue?.default_opening_time && venue?.default_closing_time
+        ? [{
+            start: parseTimeToMinutes(venue.default_opening_time),
+            end: parseTimeToMinutes(venue.default_closing_time),
+            originalId: 'default'
+          }]
+        : [];
 
-    // Convert initial slots to minutes ranges
-    let freeSlots = availabilities.map(slot => ({
-      start: parseTimeToMinutes(slot.opening_time),
-      end: parseTimeToMinutes(slot.closing_time),
-      originalId: slot.id
-    }));
+    if (!baseSlots.length) return [];
 
     // Subtract booked slots
+    let freeSlots = baseSlots;
     existingBookings.forEach(booking => {
-      // Basic booking status check - ignore cancelled/rejected
       if (['CANCELLED', 'REJECTED'].includes(booking.status)) return;
 
       const bookStart = parseTimeToMinutes(booking.start_time);
       const bookEnd = parseTimeToMinutes(booking.end_time);
-
       const nextFreeSlots = [];
 
       for (const slot of freeSlots) {
-        // Check for overlap
-        // Overlap if max(start1, start2) < min(end1, end2)
         const overlapStart = Math.max(slot.start, bookStart);
         const overlapEnd = Math.min(slot.end, bookEnd);
 
         if (overlapStart < overlapEnd) {
-          // They overlap. Split the slot.
-
-          // Part before booking
           if (slot.start < overlapStart) {
             nextFreeSlots.push({ start: slot.start, end: overlapStart, originalId: slot.originalId });
           }
-
-          // Part after booking
           if (overlapEnd < slot.end) {
             nextFreeSlots.push({ start: overlapEnd, end: slot.end, originalId: slot.originalId });
           }
         } else {
-          // No overlap, keep slot as is
           nextFreeSlots.push(slot);
         }
       }
@@ -534,11 +533,11 @@ export default function VenueBookingPage() {
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm text-blue-800">
-                      {availabilities.length > 0
+                      {availabilities.length > 0 || (venue?.default_opening_time && venue?.default_closing_time)
                         ? "All time slots for this date are currently booked."
-                        : "No specific time slots are defined for this date."}
+                        : "No operating hours defined for this venue."}
                     </p>
-                    {availabilities.length === 0 && (
+                    {!availabilities.length && !(venue?.default_opening_time && venue?.default_closing_time) && (
                       <p className="text-xs text-blue-600">
                         You can try to book any time, subject to venue approval.
                       </p>

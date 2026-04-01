@@ -571,6 +571,14 @@ def assign_referee_to_tournament(request, tournament_id):
         return Response({'error': 'Only organizers can assign referees'}, status=status.HTTP_403_FORBIDDEN)
     
     tournament = get_object_or_404(Tournament, id=tournament_id, organizer=user)
+
+    # Block modifications to completed or cancelled tournaments
+    if tournament.status in ('COMPLETED', 'CANCELLED'):
+        return Response(
+            {'error': f'Cannot assign referees to a {tournament.status.lower()} tournament.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     referee_id = request.data.get('referee_id')
     notes = request.data.get('notes', '')
     fee = request.data.get('fee', 0)

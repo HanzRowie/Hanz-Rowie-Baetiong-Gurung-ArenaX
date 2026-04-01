@@ -65,7 +65,7 @@ def create_team(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@role_required('PLAYER')
+@role_required(['PLAYER', 'ORGANIZER', 'SYSTEM_ADMIN', 'VENUE_OWNER'])
 @team_error_handler('list_teams')
 def list_teams(request):
     """
@@ -150,7 +150,7 @@ def list_teams(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@role_required('PLAYER')
+@role_required(['PLAYER', 'ORGANIZER', 'SYSTEM_ADMIN', 'VENUE_OWNER'])
 @team_error_handler('get_team')
 def get_team(request, team_id):
     """
@@ -737,7 +737,7 @@ def respond_to_invitation(request, invitation_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@role_required('PLAYER')
+@role_required(['PLAYER', 'ORGANIZER', 'SYSTEM_ADMIN', 'VENUE_OWNER'])
 def get_team_members(request, team_id):
     """
     Get all members of a specific team.
@@ -793,7 +793,7 @@ def get_team_members(request, team_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-@role_required('PLAYER')
+@role_required(['PLAYER', 'ORGANIZER', 'SYSTEM_ADMIN', 'VENUE_OWNER'])
 def get_member_details(request, team_id, player_id):
     """
     Get detailed information about a specific team member.
@@ -813,7 +813,7 @@ def get_member_details(request, team_id, player_id):
             is_active=True
         ).first()
         
-        if not requester_membership:
+        if not requester_membership and getattr(request, 'user_role', 'PLAYER') == 'PLAYER':
             return Response({
                 'success': False,
                 'error': 'You are not a member of this team'

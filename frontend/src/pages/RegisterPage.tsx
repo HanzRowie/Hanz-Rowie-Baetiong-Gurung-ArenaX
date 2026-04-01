@@ -3,6 +3,7 @@ import { Eye, EyeOff, User, Lock, Phone, Mail, AlertCircle, ChevronDown, Upload,
 import { useState, type FormEvent, type ChangeEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole, type UserRole as UserRoleType } from '@/types/auth.types';
+import toastService from '@/services/toastService';
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -50,21 +51,21 @@ export default function RegisterPage() {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match!');
+      toastService.error('Passwords do not match!');
       return;
     }
 
     // Validate role-specific documents
     if (selectedRole === UserRole.VENUE_OWNER) {
       if (!businessDocument) {
-        alert('Please upload your business document (registration/license/certificate)');
+        toastService.error('Please upload your business document');
         return;
       }
     }
 
     if (selectedRole === UserRole.ORGANIZER || selectedRole === UserRole.REFEREE) {
       if (!certificationDocument) {
-        alert('Please upload your certification document');
+        toastService.error('Please upload your certification document');
         return;
       }
     }
@@ -93,8 +94,8 @@ export default function RegisterPage() {
       const result = await register(registrationData);
       
       if (result?.success && result.otp) {
-        // Show OTP in development mode
-        alert(`Registration successful! Your verification code is: ${result.otp}\n\n(This is only shown in development mode)`);
+        // Dev mode: OTP is shown in the verification page automatically
+        console.info('[Dev] OTP:', result.otp);
       }
     } catch (err) {
       // Error is handled by the hook

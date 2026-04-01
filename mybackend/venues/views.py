@@ -280,23 +280,18 @@ def book_venue(request, venue_id):
         ).update(status='CANCELLED')
 
         # Check for conflicting bookings (exclude expired PENDING ones)
-        print("Checking conflicts with:")
-        print(f"Start < {end_time_obj}")
-        print(f"End > {start_time_obj}")
-        
+        # Organizer's own bookings do NOT count as conflicts
         conflicting_bookings = VenueBooking.objects.filter(
             venue=venue,
             date=data['date'],
             status__in=['PENDING', 'CONFIRMED']
+        ).exclude(
+            user=request.user  # organizer can re-book their own slot
         ).filter(
             # Check time overlap
             start_time__lt=end_time_obj,
             end_time__gt=start_time_obj
         )
-
-        print(f"Conflicting bookings count: {conflicting_bookings.count()}")
-        for conflict in conflicting_bookings:
-             print(f"Conflict: {conflict.id} {conflict.start_time}-{conflict.end_time} ({conflict.status})")
 
         if conflicting_bookings.exists():
             return Response({'error': 'Venue is already booked for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
@@ -652,6 +647,34 @@ def my_venue_bookings(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def my_confirmed_venue_bookings(request):
+    """Get organizer's confirmed venue bookings for use in tournament creation.
+    Only returns bookings NOT already linked to a tournament."""
+    bookings = VenueBooking.objects.filter(
+        user=request.user,
+        status='CONFIRMED',
+        tournament__isnull=True,   # exclude bookings already used by a tournament
+    ).select_related('venue').order_by('-date')
+
+    data = []
+    for b in bookings:
+        data.append({
+            'booking_id': b.id,
+            'venue_id': b.venue.id,
+            'venue_name': b.venue.name,
+            'venue_location': b.venue.location,
+            'sport_types': b.venue.sport_types,
+            'price_per_hour': float(b.venue.price_per_hour),
+            'date': str(b.date),
+            'start_time': str(b.start_time),
+            'end_time': str(b.end_time),
+            'amount': float(b.amount) if b.amount else 0,
+        })
+
+    return Response({'bookings': data, 'count': len(data)}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_my_venues(request):
     """Get venues owned by the current user with booking statistics"""
     try:
@@ -750,16 +773,16 @@ def available_venues_for_tournament(request):
                     continue
             
             # Check for conflicting bookings (skip expired PENDING bookings)
+            # Also exclude bookings already linked to a tournament
             conflicting_bookings = VenueBooking.objects.filter(
                 venue=venue,
                 date=requested_date,
-                status__in=['PENDING', 'CONFIRMED']
+                status__in=['PENDING', 'CONFIRMED'],
+                start_time__lt=end_time_obj,
+                end_time__gt=start_time_obj,
             ).exclude(
                 status='PENDING',
                 payment_expires_at__lt=tz.now()
-            ).filter(
-                start_time__lt=end_time_obj,
-                end_time__gt=start_time_obj
             )
             
             if not conflicting_bookings.exists():

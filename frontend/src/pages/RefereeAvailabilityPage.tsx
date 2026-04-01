@@ -4,6 +4,8 @@ import { Button } from '../design-system/components/Button';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { api } from '../services/api';
 import { Calendar, Clock, Settings, Save, RotateCcw, CheckCircle } from 'lucide-react';
+import toastService from '../services/toastService';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface GeneralAvailability {
   monday: { enabled: boolean; start_time: string; end_time: string };
@@ -30,6 +32,7 @@ const RefereeAvailabilityPage: React.FC = () => {
   const [availabilities, setAvailabilities] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showFeeSettings, setShowFeeSettings] = useState(false);
@@ -120,7 +123,7 @@ const RefereeAvailabilityPage: React.FC = () => {
     const daySettings = generalAvailability[dayOfWeek];
     
     if (!daySettings.enabled) {
-      alert('This day is disabled in your general availability settings. Please enable it first.');
+      toastService.error('This day is disabled in your general availability settings. Please enable it first.');
       return;
     }
 
@@ -164,7 +167,7 @@ const RefereeAvailabilityPage: React.FC = () => {
       setTimeout(() => fetchAvailabilities(), 100);
     } catch (err: any) {
       console.error('Availability toggle error:', err.response?.data);
-      alert(err.response?.data?.error || err.response?.data?.detail || 'Failed to update availability');
+      toastService.error(err?.response?.data?.error || err?.response?.data?.detail || 'Failed to update availability');
       // Revert optimistic update on error
       await fetchAvailabilities();
     } finally {
@@ -193,19 +196,21 @@ const RefereeAvailabilityPage: React.FC = () => {
       }
       
       setShowSettings(false);
-      alert('General availability settings saved! These settings will apply to all future dates.');
+      toastService.success('General availability settings saved!');
     } catch (err: any) {
       console.error('Save general availability error:', err.response?.data);
-      alert(err.response?.data?.error || 'Failed to save general availability settings');
+      toastService.error(err?.response?.data?.error || 'Failed to save general availability settings');
     } finally {
       setSaving(false);
     }
   };
 
   const applyGeneralAvailabilityToAll = async () => {
-    if (!confirm('This will update all your availability slots based on your general settings. Continue?')) {
-      return;
-    }
+    setApplyConfirmOpen(true);
+  };
+
+  const doApplyGeneralAvailabilityToAll = async () => {
+    setApplyConfirmOpen(false);
 
     try {
       setSaving(true);
@@ -240,10 +245,10 @@ const RefereeAvailabilityPage: React.FC = () => {
       await Promise.all(createPromises);
       await fetchAvailabilities();
       setShowSettings(false);
-      alert('Applied general availability to all days!');
+      toastService.success('Applied general availability to all days!');
     } catch (err: any) {
       console.error('Apply general availability error:', err.response?.data);
-      alert(err.response?.data?.error || err.response?.data?.detail || 'Failed to apply general availability');
+      toastService.error(err?.response?.data?.error || err?.response?.data?.detail || 'Failed to apply general availability');
     } finally {
       setSaving(false);
     }
@@ -507,6 +512,15 @@ const RefereeAvailabilityPage: React.FC = () => {
           </div>
         )}
       </Card>
+      <ConfirmDialog
+        open={applyConfirmOpen}
+        title="Apply general availability"
+        message="This will update all your availability slots based on your general settings. Continue?"
+        confirmLabel="Apply"
+        variant="warning"
+        onConfirm={doApplyGeneralAvailabilityToAll}
+        onCancel={() => setApplyConfirmOpen(false)}
+      />
     </div>
   );
 };

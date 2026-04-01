@@ -141,6 +141,7 @@ class PublicTournamentSerializer(serializers.ModelSerializer):
     sport_requirements = serializers.SerializerMethodField()
     matches = serializers.SerializerMethodField()
     registered_players = serializers.SerializerMethodField()
+    registered_teams = serializers.SerializerMethodField()
     tournament_image = serializers.SerializerMethodField()
 
     class Meta:
@@ -152,7 +153,7 @@ class PublicTournamentSerializer(serializers.ModelSerializer):
             'min_participants', 'registered_count', 'registration_deadline',
             'status', 'prize_pool', 'rules', 'tournament_image', 'organizer',
             'is_registration_open', 'sport_requirements', 'matches',
-            'registered_players', 'created_at',
+            'registered_players', 'registered_teams', 'created_at',
         ]
 
     def get_organizer(self, obj):
@@ -191,6 +192,32 @@ class PublicTournamentSerializer(serializers.ModelSerializer):
                     'profile_picture': reg.player.profile_picture.url if reg.player.profile_picture else None,
                 }
                 for reg in registrations
+            ]
+        return []
+
+    def get_registered_teams(self, obj):
+        if obj.registration_type == 'TEAM':
+            from teams.models import TeamTournamentRegistration
+            regs = TeamTournamentRegistration.objects.filter(
+                tournament=obj, status='CONFIRMED'
+            ).select_related('team').prefetch_related('selected_players')
+            return [
+                {
+                    'id': str(reg.team.id),
+                    'name': reg.team.name,
+                    'player_count': reg.selected_players.count(),
+                    'registered_by': reg.registered_by.full_name if reg.registered_by else None,
+                    'registered_at': reg.registered_at.isoformat() if hasattr(reg, 'registered_at') and reg.registered_at else None,
+                    'players': [
+                        {
+                            'id': str(p.id),
+                            'name': p.full_name,
+                            'profile_picture': p.profile_picture.url if p.profile_picture else None,
+                        }
+                        for p in reg.selected_players.all()
+                    ],
+                }
+                for reg in regs
             ]
         return []
 

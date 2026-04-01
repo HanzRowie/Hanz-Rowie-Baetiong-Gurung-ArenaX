@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Users, LogOut, User, Trophy, MapPin } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { LogoutDialog } from '@/components/ConfirmDialog';
 
 interface AdminSidebarProps {
   isOpen?: boolean;
@@ -21,6 +22,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const location = useLocation();
   const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
 
   const navItems = [
     {
@@ -62,11 +64,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     }
   };
 
-  const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
-      logout();
-    }
-  };
+  const handleLogout = () => setShowLogoutDialog(true);
 
   const toggleCollapse = () => {
     const newCollapsedState = !isCollapsed;
@@ -77,10 +75,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   };
 
   return (
-    <aside
-      className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 z-50 shadow-sm transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'
-        } ${isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0`}
+    <><aside
+      className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 z-50 shadow-sm transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'} ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
     >
       <div className="flex flex-col h-full overflow-hidden">
         {/* Header - Hidden on mobile (shown in AdminLayout mobile header) */}
@@ -88,11 +84,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           {!isCollapsed ? (
             <>
               <div className="flex items-center gap-3">
-                <img 
-                  src="/images/Logo.jpg" 
-                  alt="ArenaX Logo" 
-                  className="w-10 h-10 object-contain rounded-lg flex-shrink-0"
-                />
+                <img
+                  src="/images/Logo.jpg"
+                  alt="ArenaX Logo"
+                  className="w-10 h-10 object-contain rounded-lg flex-shrink-0" />
                 <div>
                   <span className="text-xl font-bold text-gray-900">ArenaX</span>
                   <p className="text-xs text-gray-500">Admin Panel</p>
@@ -113,8 +108,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                  />
+                    d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                 </svg>
               </button>
             </>
@@ -124,11 +118,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               className="w-full flex flex-col items-center gap-2"
               title="Expand sidebar"
             >
-              <img 
-                src="/images/Logo.jpg" 
-                alt="ArenaX Logo" 
-                className="w-10 h-10 object-contain rounded-lg"
-              />
+              <img
+                src="/images/Logo.jpg"
+                alt="ArenaX Logo"
+                className="w-10 h-10 object-contain rounded-lg" />
               <svg
                 className="h-5 w-5 text-gray-600 rotate-180"
                 fill="none"
@@ -139,8 +132,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                />
+                  d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
               </svg>
             </button>
           )}
@@ -158,19 +150,15 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 key={item.id}
                 onClick={() => handleNavigate(item.path)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${item.active
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  } ${isCollapsed ? 'justify-center' : ''}`}
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'} ${isCollapsed ? 'justify-center' : ''}`}
                 title={isCollapsed ? item.label : ''}
               >
                 <IconComponent
-                  className={`h-5 w-5 ${item.active ? 'text-white' : 'text-gray-500'
-                    } ${isCollapsed ? 'flex-shrink-0' : ''}`}
-                />
+                  className={`h-5 w-5 ${item.active ? 'text-white' : 'text-gray-500'} ${isCollapsed ? 'flex-shrink-0' : ''}`} />
                 {!isCollapsed && (
                   <span
-                    className={`font-medium ${item.active ? 'text-white' : 'text-gray-700'
-                      }`}
+                    className={`font-medium ${item.active ? 'text-white' : 'text-gray-700'}`}
                   >
                     {item.label}
                   </span>
@@ -189,8 +177,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 <img
                   src={user.profile_picture}
                   alt={user.full_name}
-                  className="h-10 w-10 rounded-full object-cover"
-                />
+                  className="h-10 w-10 rounded-full object-cover" />
               ) : (
                 <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
                   <User className="h-5 w-5 text-purple-600" />
@@ -210,8 +197,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                   src={user.profile_picture}
                   alt={user.full_name}
                   className="h-10 w-10 rounded-full object-cover"
-                  title={user.full_name}
-                />
+                  title={user.full_name} />
               ) : (
                 <div
                   className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center"
@@ -226,8 +212,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           {/* Logout Button */}
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''
-              }`}
+            className={`w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''}`}
             title={isCollapsed ? 'Logout' : ''}
           >
             <LogOut className="h-5 w-5" />
@@ -242,6 +227,9 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           )}
         </div>
       </div>
-    </aside>
+    </aside><LogoutDialog
+        open={showLogoutDialog}
+        onConfirm={() => { setShowLogoutDialog(false); logout(); } }
+        onCancel={() => setShowLogoutDialog(false)} /></>
   );
 }

@@ -3,6 +3,7 @@ import { X, Users, AlertCircle } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import api from '@/services/api';
 import toastService from '@/services/toastService';
+import PaymentModal from '@/components/PaymentModal';
 import type { Team as TeamType, TeamMembership } from '@/types/team.types';
 
 interface TeamWithRole extends TeamType {
@@ -45,6 +46,7 @@ export default function QuickTeamRegistrationModal({
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string>('');
+  const [paymentData, setPaymentData] = useState<any>(null);
 
   const getPlayerRequirements = (): PlayerRequirements => {
     const sport = tournament.sport_type.toUpperCase();
@@ -126,24 +128,30 @@ export default function QuickTeamRegistrationModal({
     try {
       setRegistering(true);
       const selectedPlayerIds = [...starterPlayers, ...substitutePlayers];
-      
-      console.log('Registering team:', {
-        team_id: selectedTeamId,
-        selected_players: selectedPlayerIds,
-        team_members: teamMembers.map(m => ({ id: m.player.id, name: m.player.full_name, role: m.role }))
-      });
-      
-      await api.post(`/api/tournaments/${tournament.id}/register-team/`, {
+
+      const response = await api.post(`/api/tournaments/${tournament.id}/register-team-with-payment/`, {
         team_id: selectedTeamId,
         selected_players: selectedPlayerIds
       });
-      
-      toastService.success('Team registered successfully!');
-      onSuccess();
-      onClose();
+
+      const data = response.data;
+
+      if (data.payment_required && data.khalti_response?.payment_url) {
+        // Entry fee required — show payment modal
+        setPaymentData({
+          paymentId: data.payment?.id,
+          paymentUrl: data.khalti_response.payment_url,
+          pidx: data.khalti_response.pidx,
+          amount: parseFloat(data.payment?.amount || 0),
+        });
+      } else {
+        // Free tournament or payment not required
+        toastService.success('Team registered successfully!');
+        onSuccess();
+        onClose();
+      }
     } catch (error: any) {
       console.error('Error registering team:', error);
-      console.error('Error details:', error.response?.data);
       setError(error.response?.data?.error || error.message || 'Failed to register team');
     } finally {
       setRegistering(false);
@@ -251,9 +259,33 @@ export default function QuickTeamRegistrationModal({
 
   if (!isOpen) return null;
 
+  // Show payment modal if payment is required
+  if (paymentData) {
+    return (
+      <PaymentModal
+        isOpen={true}
+        onClose={() => { setPaymentData(null); onClose(); }}
+        amount={paymentData.amount}
+        productName={`Tournament Registration - ${tournament.title}`}
+        paymentId={paymentData.paymentId}
+        paymentUrl={paymentData.paymentUrl}
+        onSuccess={() => {
+          setPaymentData(null);
+          toastService.success('Payment successful! Team registered.');
+          onSuccess();
+          onClose();
+        }}
+        onError={() => {
+          setPaymentData(null);
+          toastService.error('Payment failed. Please try again.');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
@@ -411,33 +443,30 @@ export default function QuickTeamRegistrationModal({
                         return (
                           <div
                             key={membership.id}
-                            className={`p-4 border rounded-lg ${
+                            className={`p-3 border rounded-lg ${
                               playerSelection ? 'border-purple-500 bg-purple-50' : 'border-gray-300'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {membership.player.full_name.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                                <div>
-                                  <p className="font-medium text-gray-900">{membership.player.full_name}</p>
-                                  <p className="text-sm text-gray-600">{membership.player.email}</p>
-                                  <p className="text-xs text-gray-500">
-                                    {membership.role} • Joined {new Date(membership.joined_at).toLocaleDateString()}
-                                  </p>
-                                </div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 flex-shrink-0 bg-gray-300 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-medium text-gray-700">
+                                  {membership.player.full_name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-gray-900 truncate">{membership.player.full_name}</p>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {membership.role} • {new Date(membership.joined_at).toLocaleDateString()}
+                                </p>
                               </div>
 
-                              <div className="flex items-center space-x-2">
+                              <div className="flex-shrink-0 flex items-center gap-1.5">
                                 {/* Starter Button */}
                                 <button
                                   type="button"
                                   disabled={!canBeStarter && playerSelection !== 'starter'}
                                   onClick={() => handlePlayerToggle(membership.player.id, true)}
-                                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
                                     playerSelection === 'starter'
                                       ? 'bg-purple-600 text-white'
                                       : canBeStarter
@@ -453,7 +482,7 @@ export default function QuickTeamRegistrationModal({
                                   type="button"
                                   disabled={!canBeSubstitute && playerSelection !== 'substitute'}
                                   onClick={() => handlePlayerToggle(membership.player.id, false)}
-                                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
                                     playerSelection === 'substitute'
                                       ? 'bg-purple-600 text-white'
                                       : canBeSubstitute

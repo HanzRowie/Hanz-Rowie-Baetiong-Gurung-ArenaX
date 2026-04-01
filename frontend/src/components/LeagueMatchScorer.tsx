@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { PlayerStatsInput, type PlayerStat } from './PlayerStatsInput';
+import { api } from '@/services/api';
 
 interface Player {
   id: string;
@@ -60,8 +61,36 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
 
   const homeTeamName = match.team1?.name || 'Home Team';
   const awayTeamName = match.team2?.name || 'Away Team';
-  const homePlayers: Player[] = match.team1_members || [];
-  const awayPlayers: Player[] = match.team2_members || [];
+  const [homePlayers, setHomePlayers] = useState<Player[]>(match.team1_members || []);
+  const [awayPlayers, setAwayPlayers] = useState<Player[]>(match.team2_members || []);
+
+  // Fetch team members if not provided in match data
+  useEffect(() => {
+    const isFutsal = match.tournament?.sport_type === 'FUTSAL';
+    if (!isFutsal) return;
+
+    const fetchMembers = async (teamId: string, setter: (p: Player[]) => void) => {
+      try {
+        const res = await api.get(`/api/teams/${teamId}/members/`);
+        const membersData = res.data.data || res.data.members || (Array.isArray(res.data) ? res.data : []);
+        const members = membersData.map((m: any) => ({
+          id: m.player?.id || m.id,
+          name: m.player?.full_name || m.full_name || m.name,
+          full_name: m.player?.full_name || m.full_name || m.name,
+        })).filter((p: Player) => p.id && p.name);
+        if (members.length > 0) setter(members);
+      } catch {
+        // silently fail — user can still add stats manually
+      }
+    };
+
+    if (match.team1?.id && (match.team1_members || []).length === 0) {
+      fetchMembers(match.team1.id, setHomePlayers);
+    }
+    if (match.team2?.id && (match.team2_members || []).length === 0) {
+      fetchMembers(match.team2.id, setAwayPlayers);
+    }
+  }, [match.team1?.id, match.team2?.id]);
 
   // Load existing scores if available
   useEffect(() => {

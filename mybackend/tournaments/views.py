@@ -3,6 +3,8 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.db import models
+from django.db.models import Q
 from accounts.decorators import jwt_required
 from accounts.models import CustomUser
 from accounts.utils import decode_jwt
@@ -17,6 +19,106 @@ from referees.serializers import RefereeBookingSerializer
 from payments.services import VenuePaymentService
 from payments.models import Payment
 from notifications.utils import send_notification
+
+def _release_referee_escrow_for_match(match):
+    """
+    Kept for backward compatibility — delegates to tournament-level release.
+    Referees are booked per-tournament, so payment releases when the tournament completes.
+    """
+    _release_referee_escrow_for_tournament(match.tournament)
+
+
+def _release_referee_escrow_for_tournament(tournament):
+    """
+    Release escrowed referee payments when a TOURNAMENT is completed.
+    Referees are assigned at the tournament level (not per-match), so the full
+    fee is released once the tournament status becomes COMPLETED.
+    """
+    from payments.models import Payment, Transaction
+    from referees.models import RefereePaymentRecord
+    from django.utils import timezone
+
+    # All accepted bookings for this tournament
+    referee_bookings = RefereeBooking.objects.filter(
+        tournament=tournament,
+        status='ACCEPTED'
+    )
+
+    for booking in referee_bookings:
+        organizer_payment = Payment.objects.filter(
+            referee_booking=booking,
+            status='COMPLETED'
+        ).first()
+
+        payout_amount = organizer_payment.amount if organizer_payment else booking.fee
+        if not payout_amount:
+            continue
+
+        # Skip if already paid out
+        if organizer_payment:
+            already_paid = Transaction.objects.filter(
+                payment=organizer_payment,
+                transaction_type='TRANSFER',
+                status='SUCCESS'
+            ).exists()
+            if already_paid:
+                continue
+
+        referee = booking.referee
+
+        # Credit wallet
+        referee.wallet_balance += payout_amount
+        referee.save(update_fields=['wallet_balance'])
+
+        # Log transaction
+        if organizer_payment:
+            Transaction.objects.create(
+                payment=organizer_payment,
+                transaction_type='TRANSFER',
+                amount=payout_amount,
+                currency=organizer_payment.currency,
+                status='SUCCESS',
+                external_transaction_id=f"wallet_tx_tournament_{tournament.id}_{booking.id}",
+                payment_processor='wallet_escrow',
+                processed_at=timezone.now(),
+                processor_response={"note": f"Escrow released on tournament completion: {tournament.title}"}
+            )
+
+        # Mark booking completed
+        booking.status = 'COMPLETED'
+        booking.payment_released = True
+        booking.payment_released_at = timezone.now()
+        booking.save(update_fields=['status', 'payment_released', 'payment_released_at'])
+
+        # Create/update RefereePaymentRecord
+        record, created = RefereePaymentRecord.objects.get_or_create(
+            referee=referee,
+            booking=booking,
+            defaults={
+                'tournament': tournament,
+                'amount': payout_amount,
+                'currency': organizer_payment.currency if organizer_payment else 'NPR',
+                'payment_status': 'PAID',
+                'description': f'Payment for officiating {tournament.title}',
+                'paid_at': timezone.now(),
+                'payment': organizer_payment,
+            }
+        )
+        if not created and record.payment_status != 'PAID':
+            record.payment_status = 'PAID'
+            record.paid_at = timezone.now()
+            record.save(update_fields=['payment_status', 'paid_at'])
+
+        # Notify referee
+        send_notification(
+            user=referee,
+            notification_type="PAYMENT_SUCCESSFUL",
+            title="Payment Released",
+            message=f"NPR {payout_amount} has been credited to your wallet — {tournament.title} is now complete.",
+            tournament=tournament,
+            action_url="/referee/wallet"
+        )
+
 
 class TournamentViewSet(viewsets.ModelViewSet):
     queryset = Tournament.objects.all().order_by('-created_at')
@@ -53,9 +155,16 @@ class TournamentViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-created_at')
     
     def update(self, request, *args, **kwargs):
-        """Override update to prevent tournament type change after matches exist"""
+        """Override update to prevent edits on completed/cancelled tournaments and type changes after matches"""
         instance = self.get_object()
-        
+
+        # Block all edits on completed or cancelled tournaments
+        if instance.status in ('COMPLETED', 'CANCELLED'):
+            return Response(
+                {'error': f'Cannot edit a {instance.status.lower()} tournament.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check if tournament_type is being changed
         new_tournament_type = request.data.get('tournament_type')
         if new_tournament_type and new_tournament_type != instance.tournament_type:
@@ -714,86 +823,117 @@ def create_tournament(request):
                     if not (venue.default_opening_time <= start_time_obj and venue.default_closing_time >= end_time_obj):
                         return Response({'error': 'Selected venue is not available during the requested time window'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Check for conflicting bookings
+                # Check for conflicting bookings — exclude the organizer's own confirmed booking
+                # Check for conflicting bookings from OTHER users.
+                # Exclude the organizer's own confirmed bookings that are not yet linked to a
+                # tournament — those are legitimate pre-booked slots they want to reuse.
                 conflicting = VenueBooking.objects.filter(
                     venue=venue,
                     date=date_obj,
-                    status__in=['PENDING', 'CONFIRMED']
+                    status__in=['PENDING', 'CONFIRMED'],
+                    start_time__lt=end_time_obj,
+                    end_time__gt=start_time_obj,
                 ).exclude(
+                    # Ignore expired pending bookings
                     status='PENDING',
                     payment_expires_at__lt=tz.now()
-                ).filter(
-                    start_time__lt=end_time_obj,
-                    end_time__gt=start_time_obj
+                ).exclude(
+                    # Allow the organizer's own unlinked confirmed booking through
+                    user=request.user,
+                    status='CONFIRMED',
+                    tournament__isnull=True,
                 )
                 if conflicting.exists():
                     return Response({'error': 'Selected venue is already booked for the chosen time slot'}, status=status.HTTP_400_BAD_REQUEST)
-                
-                # Calculate booking amount
-                start_minutes = start_time_obj.hour * 60 + start_time_obj.minute
-                end_minutes = end_time_obj.hour * 60 + end_time_obj.minute
-                duration_hours = Decimal((end_minutes - start_minutes) / 60)
-                amount = venue.price_per_hour * duration_hours
-                
-                # Create PENDING venue booking
-                venue_booking = VenueBooking(
+
+                # Check if the organizer already has a confirmed booking for this exact slot
+                # that is NOT yet linked to another tournament — reuse it
+                existing_booking = VenueBooking.objects.filter(
                     venue=venue,
                     user=request.user,
                     date=date_obj,
-                    start_time=start_time_obj,
-                    end_time=end_time_obj,
-                    purpose=f"Tournament: {data.get('title', 'Tournament')}",
-                    notes=f"Tournament venue booking. Payment required.",
-                    amount=amount,
-                    status='PENDING',
-                    payment_status='PENDING'
-                )
-                venue_booking.save()
-                
-                # Create payment record
-                payment = Payment.objects.create(
-                    user=request.user,
-                    amount=amount,
-                    payment_type='VENUE_BOOKING',
-                    venue_booking=venue_booking,
-                    status='PENDING'
-                )
-                
-                # Initiate Khalti payment
-                payment_service = VenuePaymentService()
-                customer_info = {
-                    'name': request.user.full_name,
-                    'email': request.user.email,
-                    'phone': getattr(request.user, 'phone', '')
-                }
-                
-                khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
-                
-                if 'error' in khalti_response:
-                    # Clean up on payment initiation failure
-                    payment.delete()
-                    venue_booking.delete()
-                    return Response({
-                        'error': f'Payment initiation failed: {khalti_response["error"]}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                payment_url = khalti_response.get('payment_url')
-                pidx = khalti_response.get('pidx')
-                
-                # Store payment data to return to frontend
-                payment_data = {
-                    'payment_id': str(payment.id),
-                    'payment_url': payment_url,
-                    'pidx': pidx,
-                    'amount': str(amount),
-                    'venue_booking_id': str(venue_booking.id)
-                }
-                
-                # Update tournament data with venue info
-                data['venue'] = venue.name
-                data['venue_address'] = venue.location
-                data['linked_venue'] = venue.id
-                data['venue_booking'] = venue_booking.id
+                    status='CONFIRMED',
+                    start_time__lte=start_time_obj,
+                    end_time__gte=end_time_obj,
+                ).filter(
+                    # Only reuse if not already linked to a different tournament
+                    tournament__isnull=True
+                ).first()
+
+                if existing_booking:
+                    # Reuse the existing confirmed booking — no new payment needed
+                    venue_booking = existing_booking
+                    payment_data = None
+                    data['venue'] = venue.name
+                    data['venue_address'] = venue.location
+                    data['linked_venue'] = venue.id
+                    data['venue_booking'] = venue_booking.id
+                else:
+                    # No existing confirmed booking — create a new PENDING booking with payment
+                    start_minutes = start_time_obj.hour * 60 + start_time_obj.minute
+                    end_minutes = end_time_obj.hour * 60 + end_time_obj.minute
+                    duration_hours = Decimal((end_minutes - start_minutes) / 60)
+                    amount = venue.price_per_hour * duration_hours
+                    
+                    # Create PENDING venue booking
+                    venue_booking = VenueBooking(
+                        venue=venue,
+                        user=request.user,
+                        date=date_obj,
+                        start_time=start_time_obj,
+                        end_time=end_time_obj,
+                        purpose=f"Tournament: {data.get('title', 'Tournament')}",
+                        notes=f"Tournament venue booking. Payment required.",
+                        amount=amount,
+                        status='PENDING',
+                        payment_status='PENDING'
+                    )
+                    venue_booking.save()
+                    
+                    # Create payment record
+                    payment = Payment.objects.create(
+                        user=request.user,
+                        amount=amount,
+                        payment_type='VENUE_BOOKING',
+                        venue_booking=venue_booking,
+                        status='PENDING'
+                    )
+                    
+                    # Initiate Khalti payment
+                    payment_service = VenuePaymentService()
+                    customer_info = {
+                        'name': request.user.full_name,
+                        'email': request.user.email,
+                        'phone': getattr(request.user, 'phone', '')
+                    }
+                    
+                    khalti_response = payment_service.initiate_khalti_payment(payment, customer_info)
+                    
+                    if 'error' in khalti_response:
+                        # Clean up on payment initiation failure
+                        payment.delete()
+                        venue_booking.delete()
+                        return Response({
+                            'error': f'Payment initiation failed: {khalti_response["error"]}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    payment_url = khalti_response.get('payment_url')
+                    pidx = khalti_response.get('pidx')
+                    
+                    # Store payment data to return to frontend
+                    payment_data = {
+                        'payment_id': str(payment.id),
+                        'payment_url': payment_url,
+                        'pidx': pidx,
+                        'amount': str(amount),
+                        'venue_booking_id': str(venue_booking.id)
+                    }
+                    
+                    # Update tournament data with venue info
+                    data['venue'] = venue.name
+                    data['venue_address'] = venue.location
+                    data['linked_venue'] = venue.id
+                    data['venue_booking'] = venue_booking.id
                 
             except Venue.DoesNotExist:
                 return Response({'error': 'Selected venue does not exist'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1016,6 +1156,13 @@ def update_match_result(request, tournament_id, match_id):
             if 'team2_score' in data:
                 match.player2_score = data['team2_score']
             
+            # Block draws — a winner must be declared
+            if match.player1_score == match.player2_score:
+                return Response(
+                    {'error': 'Matches cannot end in a draw. One team must have a higher score.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Set winner
             if 'winner_id' in data:
                 try:
@@ -1032,7 +1179,14 @@ def update_match_result(request, tournament_id, match_id):
                 match.player1_score = data['player1_score']
             if 'player2_score' in data:
                 match.player2_score = data['player2_score']
-            
+
+            # Block draws
+            if match.player1_score == match.player2_score:
+                return Response(
+                    {'error': 'Matches cannot end in a draw. One player must have a higher score.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Set winner
             if 'winner_id' in data:
                 try:
@@ -1048,66 +1202,8 @@ def update_match_result(request, tournament_id, match_id):
         match.status = 'COMPLETED'
         match.save()
         
-        # --- REFEREE ESCROW PAYOUT SYSTEM ---
-        try:
-            from tournaments.models import RefereeBooking
-            from payments.models import Payment, Transaction
-            from django.utils import timezone
-            
-            # Find accepted referee bookings for this match
-            referee_bookings = RefereeBooking.objects.filter(
-                match=match, 
-                status='ACCEPTED'
-            )
-            
-            for booking in referee_bookings:
-                # Find the payment made by organizer for this referee booking
-                organizer_payment = Payment.objects.filter(
-                    referee_booking=booking,
-                    status='COMPLETED'
-                ).first()
-                
-                if organizer_payment:
-                    # Check if already paid out
-                    already_paid = Transaction.objects.filter(
-                        payment=organizer_payment,
-                        transaction_type='TRANSFER',
-                        status='SUCCESS'
-                    ).exists()
-                    
-                    if not already_paid:
-                        referee = booking.referee
-                        payout_amount = organizer_payment.amount
-                        
-                        # Add funds to referee's digital wallet
-                        referee.wallet_balance += payout_amount
-                        referee.save()
-                        
-                        # Log the successful escrow release
-                        Transaction.objects.create(
-                            payment=organizer_payment,
-                            transaction_type='TRANSFER',
-                            amount=payout_amount,
-                            currency=organizer_payment.currency,
-                            status='SUCCESS',
-                            external_transaction_id=f"wallet_tx_match_{match.id}",
-                            payment_processor='wallet_escrow',
-                            processed_at=timezone.now(),
-                            processor_response={"note": f"Automated Escrow Release for officiating Match ID {match.id}"}
-                        )
-
-                        # Notify referee about payout
-                        send_notification(
-                            user=referee,
-                            notification_type="PAYMENT_SUCCESSFUL",
-                            title="Payment Received",
-                            message=f"You have received {payout_amount} {organizer_payment.currency} in your wallet for officiating match {match.match_number} in {tournament.title}.",
-                            tournament=tournament,
-                            action_url="/referee/wallet"
-                        )
-        except Exception as e:
-            print(f"Error handling referee payout: {str(e)}")
-        # ------------------------------------
+        # Referee escrow releases when the TOURNAMENT completes, not per-match.
+        # See _release_referee_escrow_for_tournament called from _advance_winner_to_next_round.
         
         # Try to advance winner to next round
         try:
@@ -1352,66 +1448,7 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
         match.player2_score = away_score
         match.status = 'COMPLETED'
         
-        # --- REFEREE ESCROW PAYOUT SYSTEM ---
-        try:
-            from tournaments.models import RefereeBooking
-            from payments.models import Payment, Transaction
-            from django.utils import timezone
-            
-            # Find accepted referee bookings for this match
-            referee_bookings = RefereeBooking.objects.filter(
-                match=match, 
-                status='ACCEPTED'
-            )
-            
-            for booking in referee_bookings:
-                # Find the payment made by organizer for this referee booking
-                organizer_payment = Payment.objects.filter(
-                    referee_booking=booking,
-                    status='COMPLETED'
-                ).first()
-                
-                if organizer_payment:
-                    # Check if already paid out
-                    already_paid = Transaction.objects.filter(
-                        payment=organizer_payment,
-                        transaction_type='TRANSFER',
-                        status='SUCCESS'
-                    ).exists()
-                    
-                    if not already_paid:
-                        referee = booking.referee
-                        payout_amount = organizer_payment.amount
-                        
-                        # Add funds to referee's digital wallet
-                        referee.wallet_balance += payout_amount
-                        referee.save()
-                        
-                        # Log the successful escrow release
-                        Transaction.objects.create(
-                            payment=organizer_payment,
-                            transaction_type='TRANSFER',
-                            amount=payout_amount,
-                            currency=organizer_payment.currency,
-                            status='SUCCESS',
-                            external_transaction_id=f"wallet_tx_match_{match.id}",
-                            payment_processor='wallet_escrow',
-                            processed_at=timezone.now(),
-                            processor_response={"note": f"Automated Escrow Release for officiating Match ID {match.id}"}
-                        )
-
-                        # Notify referee about payout
-                        send_notification(
-                            user=referee,
-                            notification_type="PAYMENT_SUCCESSFUL",
-                            title="Payment Received",
-                            message=f"You have received {payout_amount} {organizer_payment.currency} in your wallet for officiating match between {match.team1.name} and {match.team2.name} in {tournament.title}.",
-                            tournament=tournament,
-                            action_url="/referee/wallet"
-                        )
-        except Exception as e:
-            print(f"Error handling referee payout: {str(e)}")
-        # ------------------------------------
+        # Referee escrow releases when the TOURNAMENT completes, not per-match.
         
         # Determine winner
         if home_score > away_score:
@@ -1944,6 +1981,13 @@ def accept_tournament_participant(request, tournament_id, participant_id):
     try:
         registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
         
+        # Prevent re-deciding an already finalised registration
+        if registration.status in ('ACCEPTED', 'REJECTED'):
+            return Response(
+                {'error': f'Registration is already {registration.status.lower()} and cannot be changed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check if tournament is full
         accepted_count = TournamentRegistration.objects.filter(
             tournament=tournament, 
@@ -2002,6 +2046,13 @@ def reject_tournament_participant(request, tournament_id, participant_id):
     try:
         registration = TournamentRegistration.objects.get(id=participant_id, tournament=tournament)
         
+        # Prevent re-deciding an already finalised registration
+        if registration.status in ('ACCEPTED', 'REJECTED'):
+            return Response(
+                {'error': f'Registration is already {registration.status.lower()} and cannot be changed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         rejection_reason = request.data.get('reason', 'No reason provided')
         registration.status = 'REJECTED'
         registration.notes = rejection_reason
@@ -2034,7 +2085,7 @@ def reject_tournament_participant(request, tournament_id, participant_id):
                     # Notify player about refund
                     send_notification(
                         user=registration.player,
-                        notification_type='PAYMENT',
+                        notification_type='PAYMENT_SUCCESSFUL',
                         title='Refund Processed',
                         message=f'A refund of NPR {refund_amount} has been processed for your rejected registration to {tournament.title}.',
                         tournament=tournament,
@@ -2049,7 +2100,7 @@ def reject_tournament_participant(request, tournament_id, participant_id):
                         'message': 'No refund available due to tournament proximity'
                     }
             except Exception as e:
-                logger.error(f"Error processing refund for registration {registration.id}: {str(e)}")
+                logger.error(f"Error processing refund for registration {registration.id}: {str(e)}", exc_info=True)
                 refund_info = {'error': 'Refund processing failed'}
 
         # Notify player about rejection
@@ -3076,6 +3127,13 @@ def accept_team_participant(request, tournament_id, registration_id):
         
         registration = TeamTournamentRegistration.objects.get(id=registration_id, tournament=tournament)
         
+        # Prevent re-deciding an already finalised registration
+        if registration.status in ('CONFIRMED', 'CANCELLED'):
+            return Response(
+                {'error': f'Team registration is already {registration.status.lower()} and cannot be changed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Check if tournament is full
         accepted_count = TeamTournamentRegistration.objects.filter(
             tournament=tournament, 
@@ -3148,6 +3206,13 @@ def reject_team_participant(request, tournament_id, registration_id):
         
         registration = TeamTournamentRegistration.objects.get(id=registration_id, tournament=tournament)
         
+        # Prevent re-deciding an already finalised registration
+        if registration.status in ('CONFIRMED', 'CANCELLED'):
+            return Response(
+                {'error': f'Team registration is already {registration.status.lower()} and cannot be changed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         rejection_reason = request.data.get('reason', 'No reason provided')
         
         registration.status = 'CANCELLED'
@@ -3180,7 +3245,7 @@ def reject_team_participant(request, tournament_id, registration_id):
                     # Notify team captain about refund
                     send_notification(
                         user=registration.registered_by,
-                        notification_type='PAYMENT',
+                        notification_type='PAYMENT_SUCCESSFUL',
                         title='Refund Processed',
                         message=f'A refund of NPR {refund_amount} has been processed for your team\'s rejected registration to {tournament.title}.',
                         tournament=tournament,
@@ -3195,7 +3260,7 @@ def reject_team_participant(request, tournament_id, registration_id):
                         'message': 'No refund available due to tournament proximity'
                     }
             except Exception as e:
-                logger.error(f"Error processing refund for team registration {registration.id}: {str(e)}")
+                logger.error(f"Error processing refund for team registration {registration.id}: {str(e)}", exc_info=True)
                 refund_info = {'error': 'Refund processing failed'}
 
         # Notify team captain about rejection

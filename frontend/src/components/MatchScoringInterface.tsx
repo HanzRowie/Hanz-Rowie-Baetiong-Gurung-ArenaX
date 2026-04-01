@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { LiveMatchScorer } from './LiveMatchScorer';
-import { MatchScorer } from './MatchScorer';
+import { BracketMatchScorer } from './BracketMatchScorer';
 import { tournamentService } from '@/services/tournamentService';
 import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/services/api';
 import { toast } from 'react-hot-toast';
 import {
-  Zap, FileText, Trophy, Clock, Calendar,
+  Zap, Trophy, Clock, Calendar,
   RefreshCw, ChevronDown, Swords, CheckCircle2,
   Circle, AlertCircle
 } from 'lucide-react';
@@ -101,12 +101,39 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
-  const [scoringMode, setScoringMode] = useState<'live' | 'detailed'>('live');
 
   const isOrganizer = user?.role === 'ORGANIZER';
 
+  // Track the selected tournament's metadata separately so loadMatches doesn't
+  // depend on the tournaments array being populated first (fixes empty dropdown on direct URL)
+  const [tournamentMeta, setTournamentMeta] = useState<Tournament | null>(null);
+
   useEffect(() => { if (isOrganizer) loadTournaments(); }, [isOrganizer]);
-  useEffect(() => { if (selectedTournament) loadMatches(); }, [selectedTournament]);
+
+  // When selectedTournament changes, update meta from the list (or fetch it)
+  useEffect(() => {
+    if (!selectedTournament) return;
+    const found = tournaments.find(t => t.id === selectedTournament);
+    if (found) {
+      setTournamentMeta(found);
+    } else {
+      // Fetch tournament info directly (handles direct URL navigation)
+      tournamentService.getTournamentDetail(selectedTournament)
+        .then((data: any) => {
+          setTournamentMeta({
+            id: data.id,
+            title: data.title,
+            sport_type: data.sport_type,
+            tournament_type: data.tournament_type,
+            registration_type: data.registration_type || 'INDIVIDUAL',
+            status: data.status,
+          });
+        })
+        .catch(() => {});
+    }
+  }, [selectedTournament, tournaments]);
+
+  useEffect(() => { if (selectedTournament && tournamentMeta) loadMatches(); }, [selectedTournament, tournamentMeta]);
 
   const loadTournaments = async () => {
     try {
@@ -124,12 +151,11 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   };
 
   const loadMatches = async () => {
-    if (!selectedTournament) return;
+    if (!selectedTournament || !tournamentMeta) return;
     setIsLoading(true);
     try {
-      const t = tournaments.find(x => x.id === selectedTournament);
       let raw: any[] = [];
-      if (t?.tournament_type === 'league' || t?.tournament_type === 'round_robin') {
+      if (tournamentMeta.tournament_type === 'league' || tournamentMeta.tournament_type === 'round_robin') {
         raw = (await tournamentService.getTournamentMatches(selectedTournament)).matches || [];
       } else {
         try {
@@ -138,8 +164,41 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
           raw = (await tournamentService.getTournamentMatches(selectedTournament)).matches || [];
         }
       }
-      const tInfo = { id: selectedTournament, title: t?.title || '', sport_type: t?.sport_type || 'FUTSAL', registration_type: t?.registration_type || 'INDIVIDUAL' };
-      setMatches(raw.map((m: any) => ({ ...m, tournament: tInfo })));
+      const tInfo = {
+        id: selectedTournament,
+        title: tournamentMeta.title,
+        sport_type: tournamentMeta.sport_type,
+        registration_type: tournamentMeta.registration_type,
+      };
+      // Fetch team members for each match so BracketMatchScorer has players for the dropdown
+      const enriched = await Promise.all(raw.map(async (m: any) => {
+        let team1_members: any[] = m.team1_members || [];
+        let team2_members: any[] = m.team2_members || [];
+        if (tournamentMeta.sport_type === 'FUTSAL' && tournamentMeta.registration_type === 'TEAM') {
+          if (m.team1?.id && team1_members.length === 0) {
+            try {
+              const res = await api.get(`/api/teams/${m.team1.id}/members/`);
+              team1_members = (res.data.members || res.data || []).map((mb: any) => ({
+                id: mb.player?.id || mb.id,
+                name: mb.player?.full_name || mb.full_name || mb.name,
+                full_name: mb.player?.full_name || mb.full_name || mb.name,
+              })).filter((p: any) => p.id && p.name);
+            } catch {}
+          }
+          if (m.team2?.id && team2_members.length === 0) {
+            try {
+              const res = await api.get(`/api/teams/${m.team2.id}/members/`);
+              team2_members = (res.data.members || res.data || []).map((mb: any) => ({
+                id: mb.player?.id || mb.id,
+                name: mb.player?.full_name || mb.full_name || mb.name,
+                full_name: mb.player?.full_name || mb.full_name || mb.name,
+              })).filter((p: any) => p.id && p.name);
+            } catch {}
+          }
+        }
+        return { ...m, tournament: tInfo, team1_members, team2_members };
+      }));
+      setMatches(enriched);
     } catch { toast.error('Failed to load matches'); }
     finally { setIsLoading(false); }
   };
@@ -167,14 +226,28 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
   }
 
   const selectedMatch = matches.find(m => m.id === liveMatchId);
-  if (selectedMatch && scoringMode === 'live') {
-    // Cast to satisfy LiveMatchScorer's stricter Match type (team1/team2 required)
+  if (selectedMatch) {
     return (
-      <LiveMatchScorer
-        match={selectedMatch as any}
-        onMatchUpdated={handleMatchScored as any}
-        onClose={() => { setLiveMatchId(null); loadMatches(); }}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
+          <BracketMatchScorer
+            match={selectedMatch as any}
+            onSubmit={async (payload: any) => {
+              try {
+                const { api: apiClient } = await import('@/services/api');
+                await apiClient.put(
+                  `/api/tournaments/${selectedMatch.tournament.id}/matches/${selectedMatch.id}/result/`,
+                  payload
+                );
+                handleMatchScored({ ...selectedMatch, status: 'COMPLETED' } as any);
+              } catch (err: any) {
+                toast.error(err?.response?.data?.error || 'Failed to save score');
+              }
+            }}
+            onCancel={() => { setLiveMatchId(null); loadMatches(); }}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -255,26 +328,6 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Scoring mode toggle */}
-              <div className="flex bg-gray-100 rounded-lg p-1 gap-0.5">
-                <button
-                  onClick={() => setScoringMode('live')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    scoringMode === 'live' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5" /> Live
-                </button>
-                <button
-                  onClick={() => setScoringMode('detailed')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                    scoringMode === 'detailed' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <FileText className="w-3.5 h-3.5" /> Detailed
-                </button>
-              </div>
-
               {/* Refresh */}
               <button
                 onClick={loadMatches}
@@ -319,18 +372,13 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
           {/* Match cards */}
           {!isLoading && filtered.length > 0 && (
             <div className="space-y-3">
-              {filtered.map(match => {
-                if (scoringMode === 'detailed') {
-                  return <MatchScorer key={match.id} match={match as any} onScoreRecorded={handleMatchScored as any} />;
-                }
-                return (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    onScore={() => setLiveMatchId(match.id)}
-                  />
-                );
-              })}
+              {filtered.map(match => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  onScore={() => setLiveMatchId(match.id)}
+                />
+              ))}
             </div>
           )}
         </div>

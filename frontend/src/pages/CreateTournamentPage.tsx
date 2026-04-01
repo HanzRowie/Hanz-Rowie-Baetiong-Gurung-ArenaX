@@ -1,30 +1,27 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, DollarSign, Trophy, AlertCircle, CheckCircle, Users, Upload, X, Building2 } from 'lucide-react';
+import { Calendar, MapPin, Trophy, AlertCircle, CheckCircle, Users, Upload, X, Building2 } from 'lucide-react';
 import { tournamentService } from '@/services/tournamentService';
-import { venueService } from '@/services/venueService';
 import type { Venue } from '@/types/venue.types';
+
+// Extended venue type used locally when building the confirmed-bookings list
+type VenueWithBooking = Venue & { _booking?: Record<string, any> };
 import BottomNavigation from '@/components/BottomNavigation';
 import toastService from '@/services/toastService';
 import TimePicker from '@/components/TimePicker';
 import TournamentTypeSelector from '@/components/TournamentTypeSelector';
 import LeagueOptionsForm, { type LeagueOptions } from '@/components/LeagueOptionsForm';
-import { VenueCostPreview } from '@/components/VenueCostPreview';
-import PaymentModal from '@/components/PaymentModal';
 
 export default function CreateTournamentPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [availableVenues, setAvailableVenues] = useState<Venue[]>([]);
+  const [availableVenues, setAvailableVenues] = useState<VenueWithBooking[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(false);
   const [useCustomVenue, setUseCustomVenue] = useState(false);
   
-  // Payment flow states
-  const [showVenuePaymentModal, setShowVenuePaymentModal] = useState(false);
-  const [venuePaymentData, setVenuePaymentData] = useState<any>(null);
-  const [createdTournament, setCreatedTournament] = useState<any>(null);
+  // Payment flow states removed — venue is pre-booked before tournament creation
 
   const [formData, setFormData] = useState({
     title: '',
@@ -157,67 +154,71 @@ export default function CreateTournamentPage() {
     setImagePreview(null);
   };
 
-  // Load available venues when date, time, or sport changes
+  // Load organizer's confirmed venue bookings for non-league tournaments
+  // Filter by tournament date if set — only show bookings for that specific date
   useEffect(() => {
-    const loadAvailableVenues = async () => {
-      console.log('Loading venues with params:', {
-        date: formData.date,
-        start_time: formData.start_time,
-        end_time: formData.end_time,
-        sport_type: formData.sport_type,
-        useCustomVenue,
-        dateCheck: !!formData.date,
-        startTimeCheck: !!formData.start_time,
-        customVenueCheck: !useCustomVenue
-      });
-
-      if (formData.date && formData.start_time && formData.sport_type && !useCustomVenue) {
-        setLoadingVenues(true);
-        try {
-          // Use end_time if set, otherwise default to 1 hour after start_time
-          let endTime = formData.end_time;
-          if (!endTime && formData.start_time) {
-            const [h, m] = formData.start_time.split(':').map(Number);
-            const endDate = new Date(0, 0, 0, h + 1, m);
-            endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
-          }
-          const response = await venueService.getAvailableVenuesForTournament({
-            date: formData.date,
-            start_time: formData.start_time,
-            end_time: endTime!,
-            sport_type: formData.sport_type
-          });
-          console.log('Venues loaded:', response);
-          setAvailableVenues(response.venues);
-          // Clear stale venue selection if it's no longer in the available list
-          if (formData.linked_venue_id) {
-            const stillAvailable = response.venues.some((v: any) => v.id === formData.linked_venue_id);
-            if (!stillAvailable) {
-              setFormData(prev => ({ ...prev, linked_venue_id: '', venue: '', venue_address: '' }));
-            }
-          }
-        } catch (error) {
-          console.error('Error loading available venues:', error);
-          setAvailableVenues([]);
-        } finally {
-          setLoadingVenues(false);
-        }
-      } else {
-        console.log('Not loading venues - missing required fields or using custom venue');
-        console.log('Detailed checks:', {
-          'formData.date exists': !!formData.date,
-          'formData.date value': formData.date,
-          'formData.start_time exists': !!formData.start_time,
-          'formData.start_time value': formData.start_time,
-          'useCustomVenue': useCustomVenue,
-          'condition result': !!(formData.date && formData.start_time && !useCustomVenue)
-        });
+    const loadOrganizerBookings = async () => {
+      if (formData.tournament_type === 'league' || useCustomVenue) {
         setAvailableVenues([]);
+        return;
+      }
+      setLoadingVenues(true);
+      try {
+        const { api } = await import('@/services/api');
+        const res = await api.get('/api/venues/my-confirmed-bookings/');
+        const bookings: any[] = res.data.bookings || [];
+
+        // Filter by sport type
+        let filtered = bookings.filter((b: any) => {
+          if (!formData.sport_type) return true;
+          return (b.sport_types || []).includes(formData.sport_type.toUpperCase());
+        });
+
+        // Filter by tournament date if set — only show bookings on that exact date
+        if (formData.date) {
+          filtered = filtered.filter((b: any) => b.date === formData.date);
+        }
+
+        // Filter by start_time overlap if set — normalize to HH:MM for comparison
+        if (formData.start_time) {
+          const normalize = (t: string) => t.slice(0, 5); // "10:00:00" → "10:00"
+          filtered = filtered.filter((b: any) => {
+            const bStart = normalize(b.start_time);
+            const bEnd = normalize(b.end_time);
+            const tStart = normalize(formData.start_time);
+            return bStart <= tStart && bEnd > tStart;
+          });
+        }
+
+        // Deduplicate by venue_id
+        const seen = new Set<number>();
+        const venues = filtered.reduce((acc: any[], b: any) => {
+          if (!seen.has(b.venue_id)) {
+            seen.add(b.venue_id);
+            acc.push({
+              id: b.venue_id,
+              name: b.venue_name,
+              location: b.venue_location,
+              price_per_hour: b.price_per_hour,
+              sport_types: b.sport_types,
+              _booking: b,
+            });
+          }
+          return acc;
+        }, []);
+        setAvailableVenues(venues);
+        if (formData.linked_venue_id && !venues.some((v: any) => String(v.id) === formData.linked_venue_id)) {
+          setFormData(prev => ({ ...prev, linked_venue_id: '', venue: '', venue_address: '' }));
+        }
+      } catch {
+        setAvailableVenues([]);
+      } finally {
+        setLoadingVenues(false);
       }
     };
 
-    loadAvailableVenues();
-  }, [formData.date, formData.start_time, formData.end_time, formData.sport_type, useCustomVenue]);
+    loadOrganizerBookings();
+  }, [formData.tournament_type, formData.sport_type, formData.date, formData.start_time, useCustomVenue]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -236,7 +237,8 @@ export default function CreateTournamentPage() {
           throw new Error('Please select a venue from the available options, or use a custom venue');
         }
         // Confirm the selected venue is still in the available list (client-side guard)
-        const venueStillAvailable = availableVenues.some(v => v.id === formData.linked_venue_id);
+        // Use String() comparison since venue IDs from the API are numbers but select values are strings
+        const venueStillAvailable = availableVenues.some(v => String(v.id) === String(formData.linked_venue_id));
         if (!venueStillAvailable) {
           throw new Error('The selected venue is no longer available. Please choose another venue');
         }
@@ -281,15 +283,38 @@ export default function CreateTournamentPage() {
       }
 
       // Validate time
+      if (!formData.date) {
+        throw new Error('Please select a tournament date');
+      }
+      if (!formData.start_time) {
+        throw new Error('Please select a start time');
+      }
       if (formData.start_time && formData.end_time) {
         if (formData.start_time >= formData.end_time) {
           throw new Error('End time must be after start time');
         }
       }
 
-      // Prepare registration deadline (24 hours before tournament by default)
+      // Compute tournament start as a Date for deadline validation
       const tournamentDateTime = new Date(`${formData.date}T${formData.start_time}`);
-      const defaultDeadline = new Date(tournamentDateTime.getTime() - 24 * 60 * 60 * 1000);
+      if (Number.isNaN(tournamentDateTime.getTime())) {
+        throw new Error('Invalid tournament date or start time');
+      }
+
+      // Determine registration deadline — default to 24h before tournament start
+      let registrationDeadline: string;
+      if (formData.registration_deadline) {
+        const deadlineDate = new Date(formData.registration_deadline);
+        if (Number.isNaN(deadlineDate.getTime())) {
+          throw new Error('Invalid registration deadline');
+        }
+        if (deadlineDate >= tournamentDateTime) {
+          throw new Error('Registration deadline must be before the tournament start date and time');
+        }
+        registrationDeadline = deadlineDate.toISOString();
+      } else {
+        registrationDeadline = new Date(tournamentDateTime.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      }
 
       const tournamentData = {
         title: formData.title,
@@ -309,7 +334,7 @@ export default function CreateTournamentPage() {
         entry_fee: parseFloat(formData.entry_fee),
         max_participants: maxParticipants,
         min_participants: minParticipants,
-        registration_deadline: formData.registration_deadline || defaultDeadline.toISOString(),
+        registration_deadline: registrationDeadline,
         prize_pool: formData.prize_pool ? parseFloat(formData.prize_pool) : undefined,
         rules: formData.rules,
         tournament_image: tournamentImage || undefined,
@@ -326,28 +351,12 @@ export default function CreateTournamentPage() {
 
       console.log('Tournament created:', result);
       
-      // Check if venue payment is required
-      if (result.requires_venue_payment && result.venue_payment) {
-        setCreatedTournament(result);
-        setVenuePaymentData({
-          tournamentId: result.id,
-          paymentId: result.venue_payment.payment_id,
-          paymentUrl: result.venue_payment.payment_url,
-          pidx: result.venue_payment.pidx,
-          amount: parseFloat(result.venue_payment.amount),
-          venueBookingId: result.venue_payment.venue_booking_id
-        });
-        setShowVenuePaymentModal(true);
-        
-        toastService.info('Please complete venue payment to activate your tournament');
-      } else {
-        // No payment required (custom venue)
-        toastService.success('Tournament created successfully!');
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 2000);
-      }
+      // Tournament created — venue was already booked separately, no payment needed here
+      toastService.success('Tournament created successfully!');
+      setSuccess(true);
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
     } catch (err: any) {
       console.error('Error creating tournament:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to create tournament. Please try again.';
@@ -356,40 +365,6 @@ export default function CreateTournamentPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleVenuePaymentSuccess = async () => {
-    try {
-      setShowVenuePaymentModal(false);
-      
-      // Verify payment with backend
-      await tournamentService.verifyTournamentVenuePayment(
-        venuePaymentData.tournamentId,
-        { pidx: venuePaymentData.pidx }
-      );
-      
-      toastService.success('Venue payment successful! Your tournament is now active.');
-      setSuccess(true);
-      
-      setTimeout(() => {
-        navigate(`/tournaments/${createdTournament.id}`);
-      }, 2000);
-    } catch (error: any) {
-      console.error('Payment verification error:', error);
-      toastService.error('Payment verification failed. Please contact support.');
-    }
-  };
-
-  const handleVenuePaymentError = (error: any) => {
-    console.error('Payment error:', error);
-    toastService.error('Payment failed. Your tournament has been created but venue is not confirmed.');
-    setShowVenuePaymentModal(false);
-  };
-
-  const handleVenuePaymentClose = () => {
-    setShowVenuePaymentModal(false);
-    toastService.warning('Payment cancelled. Your tournament has been created but venue is not confirmed.');
-    navigate('/dashboard');
   };
 
   if (success) {
@@ -686,52 +661,62 @@ export default function CreateTournamentPage() {
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                    className={`w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all ${formData.linked_venue_id && !useCustomVenue ? 'bg-gray-50 text-gray-700' : ''}`}
                     required
-                    disabled={isLoading}
+                    disabled={isLoading || (!!formData.linked_venue_id && !useCustomVenue)}
                   />
                 </div>
+                {formData.linked_venue_id && !useCustomVenue && (
+                  <p className="text-xs text-gray-400 mt-1">Date set from venue booking</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Start Time <span className="text-red-500">*</span>
                 </label>
-                <TimePicker
-                  value={formData.start_time}
-                  onChange={(value) => {
-                    console.log('Start time changed:', value);
-                    let newEndTime = formData.end_time;
-
-                    // If end_time is empty, default to 1 hour after start_time
-                    if (!newEndTime && value) {
-                      const [hours, minutes] = value.split(':').map(Number);
-                      const date = new Date();
-                      date.setHours(hours + 1, minutes, 0, 0);
-                      newEndTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-                    }
-
-                    setFormData({ ...formData, start_time: value, end_time: newEndTime });
-                  }}
-                  placeholder="Select start time"
-                  required
-                  disabled={isLoading}
-                />
+                {formData.linked_venue_id && !useCustomVenue ? (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                    <span className="text-sm font-medium">{formData.start_time || '—'}</span>
+                    <span className="text-xs text-gray-400">(from venue booking)</span>
+                  </div>
+                ) : (
+                  <TimePicker
+                    value={formData.start_time}
+                    onChange={(value) => {
+                      let newEndTime = formData.end_time;
+                      if (!newEndTime && value) {
+                        const [hours, minutes] = value.split(':').map(Number);
+                        const date = new Date();
+                        date.setHours(hours + 1, minutes, 0, 0);
+                        newEndTime = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+                      }
+                      setFormData({ ...formData, start_time: value, end_time: newEndTime });
+                    }}
+                    placeholder="Select start time"
+                    required
+                    disabled={isLoading}
+                  />
+                )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   End Time (Optional)
                 </label>
-                <TimePicker
-                  value={formData.end_time}
-                  onChange={(value) => {
-                    console.log('End time changed:', value);
-                    setFormData({ ...formData, end_time: value });
-                  }}
-                  placeholder="Select end time"
-                  disabled={isLoading}
-                />
+                {formData.linked_venue_id && !useCustomVenue ? (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700">
+                    <span className="text-sm font-medium">{formData.end_time || '—'}</span>
+                    <span className="text-xs text-gray-400">(from venue booking)</span>
+                  </div>
+                ) : (
+                  <TimePicker
+                    value={formData.end_time}
+                    onChange={(value) => setFormData({ ...formData, end_time: value })}
+                    placeholder="Select end time"
+                    disabled={isLoading}
+                  />
+                )}
               </div>
             </div>
 
@@ -778,18 +763,25 @@ export default function CreateTournamentPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Venue <span className="text-red-500">*</span>
                   </label>
-                  {formData.date && formData.start_time && formData.sport_type ? (
+                  {formData.sport_type ? (
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                       <select
                         value={formData.linked_venue_id}
                         onChange={(e) => {
-                          const selectedVenue = availableVenues.find(v => v.id === e.target.value);
+                          const selectedVenue = availableVenues.find((v: any) => String(v.id) === e.target.value);
+                          const booking = selectedVenue?._booking;
                           setFormData(prev => ({
                             ...prev,
                             linked_venue_id: e.target.value,
                             venue: selectedVenue?.name || '',
-                            venue_address: selectedVenue?.location || ''
+                            venue_address: selectedVenue?.location || '',
+                            // Auto-fill date and time from the booking
+                            ...(booking ? {
+                              date: booking.date,
+                              start_time: booking.start_time.slice(0, 5),
+                              end_time: booking.end_time.slice(0, 5),
+                            } : {})
                           }));
                         }}
                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all bg-white"
@@ -799,9 +791,10 @@ export default function CreateTournamentPage() {
                         <option value="">
                           {loadingVenues ? 'Loading venues...' : 'Select an available venue'}
                         </option>
-                        {availableVenues.map((venue) => (
+                        {availableVenues.map((venue: any) => (
                           <option key={venue.id} value={venue.id}>
-                            {venue.name} - {venue.location} (NPR {venue.price_per_hour}/hr)
+                            {venue.name} — {venue.location}
+                            {venue._booking ? ` (Booked: ${venue._booking.date} ${venue._booking.start_time}–${venue._booking.end_time})` : ''}
                           </option>
                         ))}
                       </select>
@@ -810,35 +803,34 @@ export default function CreateTournamentPage() {
                     <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
                       <Building2 className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                       <p className="text-sm text-gray-600">
-                        Please select sport type, date, and start time to see available venues
+                        Select a sport type to see your booked venues
                       </p>
                     </div>
                   )}
 
-                  {availableVenues.length === 0 && formData.date && formData.start_time && formData.sport_type && !loadingVenues && (
+                  {availableVenues.length === 0 && !loadingVenues && formData.sport_type && (
                     <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-center gap-2 text-yellow-700">
-                        <AlertCircle className="h-4 w-4" />
-                        <span className="text-sm">
-                          No venues available for the selected date and time. Consider using a custom venue or changing the schedule.
-                        </span>
+                      <div className="flex items-start gap-2 text-yellow-700">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          {formData.date && formData.start_time ? (
+                            <>
+                              <p className="font-medium">No venue booked for {new Date(formData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {formData.start_time}.</p>
+                              <p className="mt-1">You need to book a venue for this date and time before creating the tournament.</p>
+                            </>
+                          ) : formData.date ? (
+                            <p>No venue booked for {new Date(formData.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}. Set a start time or book a venue for this date.</p>
+                          ) : (
+                            <p>You have no confirmed venue bookings for {formData.sport_type} tournaments.</p>
+                          )}
+                          <a href="/venues" className="inline-block mt-2 px-3 py-1.5 bg-yellow-600 text-white text-xs font-medium rounded-lg hover:bg-yellow-700 transition-colors">
+                            Book a Venue →
+                          </a>
+                        </div>
                       </div>
                     </div>
                   )}
                   
-                  {/* Venue Cost Preview */}
-                  {formData.linked_venue_id && formData.start_time && formData.end_time && (
-                    <div className="mt-4">
-                      <VenueCostPreview
-                        venueId={formData.linked_venue_id}
-                        venueName={formData.venue}
-                        startTime={formData.start_time}
-                        endTime={formData.end_time}
-                        entryFee={formData.entry_fee}
-                        maxParticipants={formData.max_participants}
-                      />
-                    </div>
-                  )}
                 </div>
               ) : (
                 /* Custom Venue Fields */
@@ -922,7 +914,7 @@ export default function CreateTournamentPage() {
                   Entry Fee (NPR) <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm font-medium text-gray-400">₨</span>
                   <input
                     type="number"
                     id="entry_fee"
@@ -931,7 +923,7 @@ export default function CreateTournamentPage() {
                     placeholder="0.00"
                     min="0"
                     step="0.01"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
                     required
                     disabled={isLoading}
                   />
@@ -954,6 +946,26 @@ export default function CreateTournamentPage() {
                   min="0"
                   step="0.01"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            {/* Registration Deadline */}
+            <div>
+              <label htmlFor="registration_deadline" className="block text-sm font-medium text-gray-700 mb-2">
+                Registration Deadline
+                <span className="ml-1 text-xs text-gray-400 font-normal">(defaults to 24h before start if left blank)</span>
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="datetime-local"
+                  id="registration_deadline"
+                  value={formData.registration_deadline}
+                  onChange={(e) => setFormData({ ...formData, registration_deadline: e.target.value })}
+                  max={formData.date && formData.start_time ? `${formData.date}T${formData.start_time}` : undefined}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
                   disabled={isLoading}
                 />
               </div>
@@ -990,20 +1002,6 @@ export default function CreateTournamentPage() {
       </main>
 
       <BottomNavigation />
-      
-      {/* Venue Payment Modal */}
-      {showVenuePaymentModal && venuePaymentData && (
-        <PaymentModal
-          isOpen={showVenuePaymentModal}
-          onClose={handleVenuePaymentClose}
-          amount={venuePaymentData.amount}
-          productName={`Venue Booking - ${formData.venue}`}
-          paymentId={venuePaymentData.paymentId}
-          paymentUrl={venuePaymentData.paymentUrl}
-          onSuccess={handleVenuePaymentSuccess}
-          onError={handleVenuePaymentError}
-        />
-      )}
     </div>
   );
 }

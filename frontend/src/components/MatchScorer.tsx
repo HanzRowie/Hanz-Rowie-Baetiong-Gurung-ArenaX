@@ -3,9 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/design-system/compon
 import { Button } from '@/design-system/components/Button';
 import { Modal } from '@/design-system/components/Modal';
 import { tournamentService } from '@/services/tournamentService';
-import { ModernFutsalScorer } from './ModernFutsalScorer';
 import { LeagueMatchScorer } from './LeagueMatchScorer';
-import { BadmintonScoreForm } from './BadmintonScoreForm';
+import { BracketMatchScorer } from './BracketMatchScorer';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'react-hot-toast';
 
@@ -138,9 +137,24 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
           scoreData
         );
       } else if (match.tournament.sport_type === 'BADMINTON') {
-        // TODO: Implement badminton scoring
-        toast.error('Badminton scoring not yet implemented');
-        return;
+        // Transform set data into match result format
+        const { setsData } = scoreData;
+        const homeSetsWon = setsData.filter((s: any) => s.home_score > s.away_score).length;
+        const awaySetsWon = setsData.filter((s: any) => s.away_score > s.home_score).length;
+        const isTeam = match.tournament.registration_type === 'TEAM';
+        const winnerId = homeSetsWon > awaySetsWon
+          ? (isTeam ? match.team1?.id : match.player1?.id)
+          : (isTeam ? match.team2?.id : match.player2?.id);
+
+        const badmintonPayload = isTeam
+          ? { team1_score: homeSetsWon, team2_score: awaySetsWon, winner_id: winnerId }
+          : { player1_score: homeSetsWon, player2_score: awaySetsWon, winner_id: winnerId };
+
+        response = await tournamentService.updateMatchResult(
+          match.tournament.id,
+          match.id,
+          badmintonPayload
+        );
       }
 
       if (response?.success) {
@@ -195,6 +209,24 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
           match.tournament.id,
           match.id,
           scoreData
+        );
+      } else if (match.tournament.sport_type === 'BADMINTON') {
+        const { setsData } = scoreData;
+        const homeSetsWon = setsData.filter((s: any) => s.home_score > s.away_score).length;
+        const awaySetsWon = setsData.filter((s: any) => s.away_score > s.home_score).length;
+        const isTeam = match.tournament.registration_type === 'TEAM';
+        const winnerId = homeSetsWon > awaySetsWon
+          ? (isTeam ? match.team1?.id : match.player1?.id)
+          : (isTeam ? match.team2?.id : match.player2?.id);
+
+        const badmintonPayload = isTeam
+          ? { team1_score: homeSetsWon, team2_score: awaySetsWon, winner_id: winnerId }
+          : { player1_score: homeSetsWon, player2_score: awaySetsWon, winner_id: winnerId };
+
+        response = await tournamentService.updateMatchResult(
+          match.tournament.id,
+          match.id,
+          badmintonPayload
         );
       } else {
         // For non-futsal tournaments, use the basic update method
@@ -350,16 +382,8 @@ export const MatchScorer: React.FC<MatchScorerProps> = ({
               isLoading={isLoading}
               isReadOnly={!canScoreMatch}
             />
-          ) : match.tournament?.sport_type === 'FUTSAL' ? (
-            <ModernFutsalScorer
-              match={matchDetails || match}
-              onSubmit={match.status === 'COMPLETED' ? handleUpdateScore : handleScoreSubmit}
-              onCancel={() => setIsOpen(false)}
-              isLoading={isLoading}
-              isReadOnly={!canScoreMatch}
-            />
           ) : (
-            <BadmintonScoreForm
+            <BracketMatchScorer
               match={matchDetails || match}
               onSubmit={match.status === 'COMPLETED' ? handleUpdateScore : handleScoreSubmit}
               onCancel={() => setIsOpen(false)}

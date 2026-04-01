@@ -45,7 +45,7 @@ export default function VenueManagementPage() {
   };
 
   const handleDeleteVenue = async (venueId: string) => {
-    if (!confirm('Are you sure you want to delete this venue? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to delete this venue? This action cannot be undone.')) {
       return;
     }
 

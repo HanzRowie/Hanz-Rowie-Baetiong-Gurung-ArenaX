@@ -114,7 +114,12 @@ def record_futsal_match_score(request, tournament_id, match_id):
                 match.winning_team = match.team1
             elif away_team_data['goals'] > home_team_data['goals']:
                 match.winning_team = match.team2
-            # No winner for draws
+            else:
+                # Draw — block completion
+                return Response(
+                    {'error': 'Matches cannot end in a draw. One team must score more goals.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             if is_final:
                 match.status = 'COMPLETED'
@@ -130,6 +135,7 @@ def record_futsal_match_score(request, tournament_id, match_id):
                     MatchScorer._advance_winner_to_next_round(match)
                 except Exception as e:
                     print(f"Warning: Could not advance winner: {e}")
+                # Referee escrow releases on tournament completion via _advance_winner_to_next_round
             
             return Response({
                 'success': True,

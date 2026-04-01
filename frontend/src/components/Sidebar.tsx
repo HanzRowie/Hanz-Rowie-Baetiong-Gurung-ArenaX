@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3, ChevronLeft } from 'lucide-react';
+import { Home, Trophy, Search, MessageCircle, User, X, Users, Building2, Calendar, Gavel, BarChart3, ChevronLeft, Wallet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { UserRole } from '@/types/auth.types';
 
@@ -83,6 +83,13 @@ export default function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse
           icon: Calendar,
           path: '/referee/availability',
           active: location.pathname.startsWith('/referee/availability'),
+        },
+        {
+          id: 'wallet',
+          label: 'Wallet',
+          icon: Wallet,
+          path: '/referee/wallet',
+          active: location.pathname === '/referee/wallet',
         },
         {
           id: 'chats',

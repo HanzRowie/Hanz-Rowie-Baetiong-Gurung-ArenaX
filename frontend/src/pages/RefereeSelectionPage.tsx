@@ -3,7 +3,7 @@ import { getAvatarUrl } from '@/utils/imageUtils';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Star, Award, Calendar, Clock, 
-  DollarSign, CheckCircle, Trophy, Shield, Users, Search, Filter, AlertCircle, XCircle
+  CheckCircle, Trophy, Shield, Users, Search, Filter, AlertCircle, XCircle
 } from 'lucide-react';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import PaymentModal from '../components/PaymentModal';
@@ -487,7 +487,7 @@ const RefereeSelectionPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  <DollarSign className="h-4 w-4 inline mr-1" />
+                  <span className="text-sm font-medium text-gray-500 mr-1">₨</span>
                   Referee Fee (NPR)
                 </label>
                 <input

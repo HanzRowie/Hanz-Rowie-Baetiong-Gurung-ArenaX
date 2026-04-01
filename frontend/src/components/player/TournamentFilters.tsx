@@ -5,7 +5,6 @@ import {
   ChevronDown,
   MapPin,
   Calendar,
-  DollarSign,
   Trophy,
   Users,
   X,
@@ -228,13 +227,13 @@ export default function TournamentFilters({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Max Entry Fee</label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm font-medium text-gray-400">₨</span>
               <input
                 type="number"
                 placeholder="0"
                 value={filters.maxEntryFee}
                 onChange={(e) => updateFilter('maxEntryFee', e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
               />
             </div>
           </div>

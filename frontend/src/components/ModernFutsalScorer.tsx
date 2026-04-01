@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { Plus, Minus, Trash2 } from 'lucide-react';
+import { api } from '@/services/api';
 
 interface Player {
   id: string;
@@ -120,9 +121,38 @@ export const ModernFutsalScorer: React.FC<ModernFutsalScorerProps> = ({
           team1_members: match.team1_members,
           team2_members: match.team2_members
         });
-        // Only show error if we truly don't have the data
-        if (!match.team1_members || !match.team2_members) {
-          toast.error('Team member information not available. Please refresh the page.');
+        
+        let fetchedHomePlayers: Player[] = [];
+        let fetchedAwayPlayers: Player[] = [];
+        try {
+          if (match.team1?.id) {
+            const res1 = await api.get(`/api/teams/${match.team1.id}/members/`);
+            const membersData1 = res1.data.data || res1.data.members || (Array.isArray(res1.data) ? res1.data : []);
+            fetchedHomePlayers = membersData1.map((m: any) => ({
+              id: m.player?.id || m.id,
+              name: m.player?.full_name || m.full_name || m.name,
+              full_name: m.player?.full_name || m.full_name || m.name,
+            })).filter((p: Player) => p.id && p.name);
+          }
+          if (match.team2?.id) {
+            const res2 = await api.get(`/api/teams/${match.team2.id}/members/`);
+            const membersData2 = res2.data.data || res2.data.members || (Array.isArray(res2.data) ? res2.data : []);
+            fetchedAwayPlayers = membersData2.map((m: any) => ({
+              id: m.player?.id || m.id,
+              name: m.player?.full_name || m.full_name || m.name,
+              full_name: m.player?.full_name || m.full_name || m.name,
+            })).filter((p: Player) => p.id && p.name);
+          }
+          
+          setAvailablePlayers({
+            home: fetchedHomePlayers,
+            away: fetchedAwayPlayers
+          });
+        } catch (err) {
+          console.error('Failed to fetch fallback team members', err);
+          if (!match.team1_members || !match.team2_members) {
+            toast.error('Team member information not available. Please refresh the page.');
+          }
         }
       }
 

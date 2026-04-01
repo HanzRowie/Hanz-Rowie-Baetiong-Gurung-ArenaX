@@ -23,6 +23,7 @@ import { api } from '@/services/api';
 import PaymentModal from '@/components/PaymentModal';
 import ChatButton from '@/components/chat/ChatButton';
 import { getMediaUrl } from '@/utils/constants';
+import ConfirmDialog, { TeamPlayersDialog } from '@/components/ConfirmDialog';
 
 export default function TournamentDetailPage() {
   const { tournamentId } = useParams<{ tournamentId: string }>();
@@ -47,6 +48,16 @@ export default function TournamentDetailPage() {
   const [refereesLoading, setRefereesLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Dialog state
+  const [dialog, setDialog] = useState<{
+    open: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'info';
+    confirmLabel?: string; inputLabel?: string; inputPlaceholder?: string;
+    onConfirm: (val?: string) => void;
+  } | null>(null);
+  const [teamPlayersDialog, setTeamPlayersDialog] = useState<{ open: boolean; teamName: string; players: { full_name: string }[] } | null>(null);
+
+  const showConfirm = (opts: typeof dialog) => setDialog(opts);
 
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -310,35 +321,46 @@ export default function TournamentDetailPage() {
   };
 
   const handleWithdraw = async () => {
-    if (confirm('Are you sure you want to withdraw from this tournament?')) {
-      try {
-        await tournamentService.withdrawFromTournament(tournamentId!);
-        await loadTournament();
-        toastService.success('Successfully withdrawn from tournament');
-      } catch (err: any) {
-        toastService.error(err.message || 'Failed to withdraw from tournament');
-      }
-    }
+    showConfirm({
+      open: true, title: 'Withdraw from tournament', variant: 'danger',
+      message: 'Are you sure you want to withdraw from this tournament?',
+      confirmLabel: 'Withdraw',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await tournamentService.withdrawFromTournament(tournamentId!);
+          await loadTournament();
+          toastService.success('Successfully withdrawn from tournament');
+        } catch (err: any) {
+          toastService.error(err.message || 'Failed to withdraw from tournament');
+        }
+      },
+    });
   };
 
   const handleGenerateBracket = async () => {
     const isLeague = tournament?.tournament_type === 'league';
     const actionText = isLeague ? 'Generate schedule' : 'Generate tournament bracket';
-
-    if (confirm(`${actionText}? This cannot be undone.`)) {
-      try {
-        if (isLeague) {
-          await tournamentService.generateSchedule(tournamentId!);
-          toastService.success('Tournament schedule generated successfully!');
-        } else {
-          await tournamentService.generateBracket(tournamentId!);
-          toastService.success('Tournament bracket generated successfully!');
+    showConfirm({
+      open: true, title: actionText, variant: 'warning',
+      message: `${actionText}? This cannot be undone.`,
+      confirmLabel: 'Generate',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          if (isLeague) {
+            await tournamentService.generateSchedule(tournamentId!);
+            toastService.success('Tournament schedule generated successfully!');
+          } else {
+            await tournamentService.generateBracket(tournamentId!);
+            toastService.success('Tournament bracket generated successfully!');
+          }
+          await loadTournament();
+        } catch (err: any) {
+          toastService.error(err.message || `Failed to generate ${isLeague ? 'schedule' : 'bracket'}`);
         }
-        await loadTournament();
-      } catch (err: any) {
-        toastService.error(err.message || `Failed to generate ${isLeague ? 'schedule' : 'bracket'}`);
-      }
-    }
+      },
+    });
   };
 
   const handleShareTournament = () => {
@@ -363,47 +385,52 @@ export default function TournamentDetailPage() {
   };
 
   const handleRemoveReferee = async (refereeId: number) => {
-    if (!confirm('Are you sure you want to remove this referee assignment?')) return;
-
-    try {
-      setRefereesLoading(true);
-      await api.delete(`/api/tournaments/${tournamentId}/referees/${refereeId}/`);
-      await loadReferees();
-      toastService.success('Referee removed successfully!');
-    } catch (err: any) {
-      toastService.error(err.response?.data?.error || 'Failed to remove referee');
-    } finally {
-      setRefereesLoading(false);
-    }
+    showConfirm({
+      open: true, title: 'Remove referee', variant: 'danger',
+      message: 'Are you sure you want to remove this referee assignment?',
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          setRefereesLoading(true);
+          await api.delete(`/api/tournaments/${tournamentId}/referees/${refereeId}/`);
+          await loadReferees();
+          toastService.success('Referee removed successfully!');
+        } catch (err: any) {
+          toastService.error(err.response?.data?.error || 'Failed to remove referee');
+        } finally {
+          setRefereesLoading(false);
+        }
+      },
+    });
   };
 
   const handleGenerateSchedule = async () => {
     if (!tournamentId) return;
-
-    if (!confirm('Generate league schedule? This will create matches for all teams.')) return;
-
-    try {
-      setScheduleLoading(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const result = await tournamentService.generateSchedule(tournamentId);
-
-      setSuccessMessage(result.message || `Successfully generated ${result.matches_created} matches!`);
-
-      // Refresh matches and standings
-      await loadMatches();
-      await loadStandings();
-
-      // Auto-dismiss success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to generate schedule';
-      setError(errorMsg);
-      toastService.error(errorMsg);
-    } finally {
-      setScheduleLoading(false);
-    }
+    showConfirm({
+      open: true, title: 'Generate league schedule', variant: 'warning',
+      message: 'This will create matches for all teams. Continue?',
+      confirmLabel: 'Generate',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          setScheduleLoading(true);
+          setError(null);
+          setSuccessMessage(null);
+          const result = await tournamentService.generateSchedule(tournamentId);
+          setSuccessMessage(result.message || `Successfully generated ${result.matches_created} matches!`);
+          await loadMatches();
+          await loadStandings();
+          setTimeout(() => setSuccessMessage(null), 5000);
+        } catch (err: any) {
+          const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to generate schedule';
+          setError(errorMsg);
+          toastService.error(errorMsg);
+        } finally {
+          setScheduleLoading(false);
+        }
+      },
+    });
   };
 
   const handleEditMatch = async (matchId: string, updates: any) => {
@@ -549,15 +576,21 @@ export default function TournamentDetailPage() {
   };
 
   const handleDeleteTournament = async () => {
-    if (!confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) return;
-
-    try {
-      await api.delete(`/api/tournaments/tournaments/${tournamentId}/`);
-      toastService.success('Tournament deleted successfully!');
-      navigate('/my-tournaments');
-    } catch (err: any) {
-      toastService.error(err.response?.data?.error || 'Failed to delete tournament');
-    }
+    showConfirm({
+      open: true, title: 'Delete tournament', variant: 'danger',
+      message: 'Are you sure you want to delete this tournament? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await api.delete(`/api/tournaments/tournaments/${tournamentId}/`);
+          toastService.success('Tournament deleted successfully!');
+          navigate('/my-tournaments');
+        } catch (err: any) {
+          toastService.error(err.response?.data?.error || 'Failed to delete tournament');
+        }
+      },
+    });
   };
 
   const handleExportParticipants = () => {
@@ -628,33 +661,35 @@ export default function TournamentDetailPage() {
 
   const handleRejectParticipants = async () => {
     if (selectedParticipants.length === 0) return;
-
-    const reason = prompt('Please provide a reason for rejection (optional):');
-
-    try {
-      let rejectedCount = 0;
-      // Process all selected participants in parallel
-      await Promise.all(selectedParticipants.map(async (participantId) => {
-        const participant = participants.find(p => p.id === participantId);
-        if (!participant) return;
-
-        if (participant.type === 'team') {
-          await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
-        } else {
-          await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+    showConfirm({
+      open: true, title: `Reject ${selectedParticipants.length} participant(s)`, variant: 'danger',
+      message: 'Provide an optional reason for rejection.',
+      confirmLabel: 'Reject',
+      inputLabel: 'Reason (optional)',
+      inputPlaceholder: 'e.g. Incomplete registration...',
+      onConfirm: async (reason) => {
+        setDialog(null);
+        try {
+          let rejectedCount = 0;
+          await Promise.all(selectedParticipants.map(async (participantId) => {
+            const participant = participants.find(p => p.id === participantId);
+            if (!participant) return;
+            if (participant.type === 'team') {
+              await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
+            } else {
+              await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+            }
+            rejectedCount++;
+          }));
+          toastService.success(`${rejectedCount} participants rejected successfully!`);
+          setSelectedParticipants([]);
+          await loadTournament();
+        } catch (err: any) {
+          toastService.error(err.message || 'Failed to reject participants. Some may have been processed.');
+          await loadTournament();
         }
-        rejectedCount++;
-      }));
-
-      toastService.success(`${rejectedCount} participants rejected successfully!`);
-      setSelectedParticipants([]);
-      await loadTournament(); // Reload to update participant list
-    } catch (err: any) {
-      console.error('Error rejecting participants:', err);
-      toastService.error(err.message || 'Failed to reject participants. Some may have been processed.');
-      // Reload to reflect any successful changes
-      await loadTournament();
-    }
+      },
+    });
   };
 
   const filteredParticipants = participants?.filter(participant => {
@@ -784,21 +819,15 @@ export default function TournamentDetailPage() {
                     </button>
                   )}
 
-                  <button
-                    onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
-                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Edit
-                  </button>
-
-                  <button
-                    onClick={handleDeleteTournament}
-                    className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete
-                  </button>
+                  {tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
+                    <button
+                      onClick={() => navigate(`/tournaments/${tournament.id}/edit`)}
+                      className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1038,6 +1067,7 @@ export default function TournamentDetailPage() {
                               <input
                                 type="checkbox"
                                 checked={selectedParticipants.includes(participant.id)}
+                                disabled={['ACCEPTED', 'CONFIRMED', 'REJECTED', 'CANCELLED'].includes(participant.status)}
                                 onChange={(e) => {
                                   if (e.target.checked) {
                                     setSelectedParticipants([...selectedParticipants, participant.id]);
@@ -1045,7 +1075,7 @@ export default function TournamentDetailPage() {
                                     setSelectedParticipants(selectedParticipants.filter(id => id !== participant.id));
                                   }
                                 }}
-                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded disabled:opacity-30 disabled:cursor-not-allowed"
                               />
                             )}
 
@@ -1090,12 +1120,13 @@ export default function TournamentDetailPage() {
                                     <p className="font-medium text-gray-900">{participant.user.full_name}</p>
                                   )}
                                   {participant.status && (
-                                    <span className={`px-2 py-1 text-xs rounded-full ${participant.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
-                                      participant.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
-                                        participant.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                                          'bg-gray-100 text-gray-800'
-                                      }`}>
-                                      {participant.status}
+                                    <span className={`px-2 py-1 text-xs rounded-full ${
+                                      participant.status === 'ACCEPTED' || participant.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                                      participant.status === 'PENDING' || participant.status === 'PENDING_PAYMENT' ? 'bg-yellow-100 text-yellow-800' :
+                                      participant.status === 'REJECTED' || participant.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {participant.status === 'CONFIRMED' ? 'ACCEPTED' : participant.status}
                                     </span>
                                   )}
                                 </div>
@@ -1120,8 +1151,11 @@ export default function TournamentDetailPage() {
                               {participant.type === 'team' && (
                                 <button
                                   onClick={() => {
-                                    // Show team details modal with selected players
-                                    alert(`Team: ${participant.team.name}\nSelected Players:\n${participant.selected_players.map((p: any) => `• ${p.full_name}`).join('\n')}`);
+                                    setTeamPlayersDialog({
+                                      open: true,
+                                      teamName: participant.team.name,
+                                      players: participant.selected_players,
+                                    });
                                   }}
                                   className="flex items-center gap-2 px-3 py-2 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
                                 >
@@ -1165,20 +1199,27 @@ export default function TournamentDetailPage() {
                                   </button>
                                   <button
                                     onClick={async () => {
-                                      const reason = prompt('Please provide a reason for rejection (optional):');
-                                      try {
-                                        if (participant.type === 'team') {
-                                          // Use team-specific endpoint
-                                          await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
-                                        } else {
-                                          // Use individual participant endpoint
-                                          await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
-                                        }
-                                        toastService.success('Participant rejected successfully!');
-                                        await loadTournament();
-                                      } catch (err: any) {
-                                        toastService.error(err.message || 'Failed to reject participant');
-                                      }
+                                      showConfirm({
+                                        open: true, title: 'Reject participant', variant: 'danger',
+                                        message: `Reject ${participant.type === 'team' ? participant.team.name : participant.user.full_name}?`,
+                                        confirmLabel: 'Reject',
+                                        inputLabel: 'Reason (optional)',
+                                        inputPlaceholder: 'e.g. Incomplete registration...',
+                                        onConfirm: async (reason) => {
+                                          setDialog(null);
+                                          try {
+                                            if (participant.type === 'team') {
+                                              await tournamentService.rejectTeamParticipant(tournamentId!, participant.id, reason || undefined);
+                                            } else {
+                                              await tournamentService.rejectParticipant(tournamentId!, participant.id, reason || undefined);
+                                            }
+                                            toastService.success('Participant rejected successfully!');
+                                            await loadTournament();
+                                          } catch (err: any) {
+                                            toastService.error(err.message || 'Failed to reject participant');
+                                          }
+                                        },
+                                      });
                                     }}
                                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Reject participant"
@@ -1295,10 +1336,13 @@ export default function TournamentDetailPage() {
                           match_venue_display: match.match_venue_display,
                           status: match.status || 'SCHEDULED'
                         }))}
+                        tournamentId={tournamentId}
+                        isTeamTournament={tournament.participation_type === 'TEAM'}
                         editable={isOrganizer()}
                         onEditMatch={isOrganizer() ? handleEditMatch : undefined}
                         onEnterScore={isOrganizer() ? (matchId) => navigate(`/match-scoring?tournamentId=${tournamentId}&matchId=${matchId}`) : undefined}
                         onAssignVenue={isOrganizer() ? handleAssignVenue : undefined}
+                        tournamentStartDate={tournament?.date}
                       />
                     ) : (
                       <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -1347,7 +1391,7 @@ export default function TournamentDetailPage() {
                   <div>
                     <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-semibold text-gray-900">Referee Assignments</h3>
-                      {isOrganizer() && (
+                      {isOrganizer() && tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
                         <button
                           onClick={handleAddReferee}
                           className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -1371,7 +1415,7 @@ export default function TournamentDetailPage() {
                             ? 'Add referees to manage your tournament matches professionally'
                             : 'No referees have been assigned to this tournament yet'}
                         </p>
-                        {isOrganizer() && (
+                        {isOrganizer() && tournament.status !== 'COMPLETED' && tournament.status !== 'CANCELLED' && (
                           <button
                             onClick={handleAddReferee}
                             className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -1685,6 +1729,29 @@ export default function TournamentDetailPage() {
       )}
 
       <BottomNavigation />
+
+      {/* Custom dialogs — replaces all native alert/confirm/prompt */}
+      {dialog && (
+        <ConfirmDialog
+          open={dialog.open}
+          title={dialog.title}
+          message={dialog.message}
+          variant={dialog.variant}
+          confirmLabel={dialog.confirmLabel}
+          inputLabel={dialog.inputLabel}
+          inputPlaceholder={dialog.inputPlaceholder}
+          onConfirm={dialog.onConfirm}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {teamPlayersDialog && (
+        <TeamPlayersDialog
+          open={teamPlayersDialog.open}
+          teamName={teamPlayersDialog.teamName}
+          players={teamPlayersDialog.players}
+          onClose={() => setTeamPlayersDialog(null)}
+        />
+      )}
     </div>
   );
 }

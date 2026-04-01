@@ -62,3 +62,26 @@ def notify_admin_on_document_upload(sender, instance, **kwargs):
     except Tournament.DoesNotExist:
         # This shouldn't happen, but handle gracefully
         pass
+
+
+from django.db.models.signals import post_save
+
+
+@receiver(post_save, sender=Tournament)
+def release_escrow_on_tournament_completion(sender, instance, **kwargs):
+    """
+    When a tournament's status transitions to COMPLETED, release all
+    escrowed referee payments for that tournament.
+    Covers league tournaments and any manual status updates.
+    """
+    if instance.status != 'COMPLETED':
+        return
+
+    try:
+        from tournaments.views import _release_referee_escrow_for_tournament
+        _release_referee_escrow_for_tournament(instance)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Could not release referee escrow for tournament {instance.id}: {e}"
+        )

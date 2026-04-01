@@ -16,7 +16,8 @@ import {
 import type { Match, Tournament } from '@/types';
 import { tournamentService } from '@/services/tournamentService';
 import toastService from '@/services/toastService';
-import { MatchScorer } from './MatchScorer';
+import { BracketMatchScorer } from './BracketMatchScorer';
+import MatchDetailModal from './MatchDetailModal';
 
 interface BracketVisualizationProps {
   tournament: Tournament;
@@ -251,24 +252,39 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
   const [showResultModal, setShowResultModal] = useState(false);
   const [showMatchScorer, setShowMatchScorer] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  if (!tournament) {
+    return (
+      <div className="flex items-center justify-center py-12 text-gray-500">
+        Loading bracket...
+      </div>
+    );
+  }
 
   const isTeamTournament = tournament.participation_type === 'TEAM';
 
   const handleMatchClick = (match: Match) => {
-    if (isOrganizer && match.status !== 'COMPLETED') {
+    // Completed matches → show detail/remarks modal for everyone
+    if (match.status === 'COMPLETED') {
+      setSelectedMatch(match);
+      setShowDetailModal(true);
+      return;
+    }
+
+    if (isOrganizer) {
       const hasParticipants = isTeamTournament
         ? (match.team1 && match.team2)
         : (match.player1 && match.player2);
 
       if (hasParticipants) {
-        setSelectedMatch(match);
-
-        // Use detailed scoring for futsal tournaments, basic modal for others
-        if (tournament.sport_type === 'FUTSAL') {
-          setShowMatchScorer(true);
-        } else {
-          setShowResultModal(true);
+        // Validate date/time is set before scoring
+        if (!match.scheduled_time) {
+          toastService.error('Please set a date and time for this match before scoring.');
+          return;
         }
+        setSelectedMatch(match);
+        setShowMatchScorer(true);
       }
     }
   };
@@ -522,10 +538,13 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                         return (
                           <div key={match.id} className="relative">
                             <div
-                              className={`border-2 rounded-lg overflow-hidden transition-all duration-200 ${getMatchStatusColor(match.status)} ${isOrganizer && match.status !== 'COMPLETED' &&
-                                (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2))
-                                ? 'cursor-pointer hover:shadow-md'
-                                : ''
+                              className={`border-2 rounded-lg overflow-hidden transition-all duration-200 ${getMatchStatusColor(match.status)} ${
+                                match.status === 'COMPLETED'
+                                  ? 'cursor-pointer hover:shadow-md hover:border-green-600'
+                                  : isOrganizer &&
+                                    (isTeamTournament ? (match.team1 && match.team2) : (match.player1 && match.player2))
+                                  ? 'cursor-pointer hover:shadow-md'
+                                  : ''
                                 }`}
                               onClick={() => handleMatchClick(match)}
                             >
@@ -672,47 +691,38 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
         />
       )}
 
-      {/* Match Scorer for Futsal */}
+      {/* Match Scorer — detailed bracket scoring */}
       {selectedMatch && showMatchScorer && (
         <div className="fixed inset-0 bg-white/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Record Match Score - {selectedMatch.team1?.name} vs {selectedMatch.team2?.name}
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowMatchScorer(false);
-                    setSelectedMatch(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <MatchScorer
-                match={{
-                  ...selectedMatch,
-                  tournament: {
-                    id: tournament.id,
-                    title: tournament.title,
-                    sport_type: tournament.sport_type as 'FUTSAL' | 'BADMINTON',
-                    registration_type: tournament.registration_type as 'TEAM' | 'INDIVIDUAL'
-                  }
-                }}
-                onScoreRecorded={(updatedMatch) => {
-                  setShowMatchScorer(false);
-                  setSelectedMatch(null);
-                  onMatchUpdate?.();
-                }}
-                onClose={() => {
-                  setShowMatchScorer(false);
-                  setSelectedMatch(null);
-                }}
-              />
-            </div>
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <BracketMatchScorer
+              match={{
+                ...selectedMatch,
+                tournament: {
+                  id: tournament.id,
+                  title: tournament.title,
+                  sport_type: tournament.sport_type,
+                  registration_type: tournament.participation_type,
+                  tournament_type: tournament.tournament_type,
+                },
+                team1: selectedMatch.team1 ? { id: String(selectedMatch.team1.id), name: (selectedMatch.team1 as any).name || (selectedMatch.team1 as any).team?.name || String(selectedMatch.team1.id) } : undefined,
+                team2: selectedMatch.team2 ? { id: String(selectedMatch.team2.id), name: (selectedMatch.team2 as any).name || (selectedMatch.team2 as any).team?.name || String(selectedMatch.team2.id) } : undefined,
+              }}
+              onSubmit={async (scoreData) => {
+                await handleSaveResult(
+                  selectedMatch.id,
+                  scoreData.team1_score ?? scoreData.player1_score ?? 0,
+                  scoreData.team2_score ?? scoreData.player2_score ?? 0,
+                  scoreData.winner_id ?? ''
+                );
+                setShowMatchScorer(false);
+                setSelectedMatch(null);
+                onMatchUpdate?.();
+              }}
+              onCancel={() => { setShowMatchScorer(false); setSelectedMatch(null); }}
+              isLoading={false}
+              isReadOnly={!isOrganizer}
+            />
           </div>
         </div>
       )}
@@ -730,6 +740,17 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
           onSaved={() => {
             onMatchUpdate?.();
           }}
+        />
+      )}
+
+      {/* Match Detail Modal — for completed matches */}
+      {selectedMatch && showDetailModal && (
+        <MatchDetailModal
+          isOpen={showDetailModal}
+          onClose={() => { setShowDetailModal(false); setSelectedMatch(null); }}
+          tournamentId={tournament.id}
+          match={selectedMatch as any}
+          isTeamTournament={isTeamTournament}
         />
       )}
     </div>

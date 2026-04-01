@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { venueService } from '../services/venueService';
 import type { Venue, VenueFilters } from '../types/venue.types';
 import { useAuth } from '../hooks/useAuth';
+import { api } from '../services/api';
 
 const VenueListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'find' | 'bookings'>('find');
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +16,8 @@ const VenueListPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
 
   // Available filter options
   const [availableLocations, setAvailableLocations] = useState<string[]>([]);
@@ -22,6 +26,22 @@ const VenueListPage: React.FC = () => {
   useEffect(() => {
     loadVenues();
   }, [filters]);
+
+  useEffect(() => {
+    if (activeTab === 'bookings') loadMyBookings();
+  }, [activeTab]);
+
+  const loadMyBookings = async () => {
+    setBookingsLoading(true);
+    try {
+      const res = await api.get('/api/venues/my-bookings/');
+      setMyBookings(res.data.bookings || []);
+    } catch {
+      setMyBookings([]);
+    } finally {
+      setBookingsLoading(false);
+    }
+  };
 
   const loadVenues = async () => {
     try {
@@ -98,13 +118,76 @@ const VenueListPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Find Venues</h1>
-        <p className="text-gray-600">Discover and book sports venues for your tournaments and matches</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">Venues</h1>
+        <p className="text-gray-600">Discover and book sports venues for your tournaments</p>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-6">
+        <button
+          onClick={() => setActiveTab('find')}
+          className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'find' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Find Venues
+        </button>
+        <button
+          onClick={() => setActiveTab('bookings')}
+          className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'bookings' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          My Bookings
+        </button>
+      </div>
+
+      {/* My Bookings Tab */}
+      {activeTab === 'bookings' && (
+        <div>
+          {bookingsLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" /></div>
+          ) : myBookings.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-lg font-medium text-gray-600 mb-2">No bookings yet</p>
+              <p className="text-sm">Book a venue from the Find Venues tab to see it here.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {myBookings.map((b: any) => (
+                <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{b.venue_name || b.venue?.name || 'Venue'}</h3>
+                      <p className="text-sm text-gray-500 mt-0.5">{b.venue_location || b.venue?.location}</p>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
+                        <span>📅 {b.date}</span>
+                        <span>🕐 {b.start_time?.slice(0,5)} – {b.end_time?.slice(0,5)}</span>
+                        {b.purpose && <span>🎯 {b.purpose}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        b.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                        b.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{b.status}</span>
+                      {b.amount && <p className="text-sm font-semibold text-gray-900 mt-1">NPR {parseFloat(b.amount).toFixed(0)}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Find Venues Tab */}
+      {activeTab === 'find' && (
+        <div>
+        {/* Search and Filters */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
         {/* Search Bar */}
         <div className="mb-6">
           <div className="flex gap-4">
@@ -243,6 +326,8 @@ const VenueListPage: React.FC = () => {
           onBook={() => handleBookVenue(selectedVenue.id)}
           currentUser={user}
         />
+      )}
+      </div>
       )}
     </div>
   );
