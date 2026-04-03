@@ -43,6 +43,8 @@ export interface ExtendedUserProfile {
     is_verified: boolean;
     rating: number;
     total_matches_officiated: number;
+    default_fee_per_match?: number;
+    default_fee_per_session?: number;
   };
   
   // Referee booking stats

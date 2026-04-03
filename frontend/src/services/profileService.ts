@@ -19,6 +19,14 @@ export interface UpdateProfileData {
   business_name?: string;
   business_registration?: string;
   business_contact?: string;
+  // Referee-specific
+  default_fee_per_match?: number;
+  default_fee_per_session?: number;
+  sports_specialization?: string[];
+  certification_level?: string;
+  years_experience?: number;
+  license_number?: string;
+  license_expiry?: string;
 }
 
 export interface PlayerSearchFilters {

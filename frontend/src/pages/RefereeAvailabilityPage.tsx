@@ -3,7 +3,8 @@ import { Card } from '../design-system/components/Card';
 import { Button } from '../design-system/components/Button';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { api } from '../services/api';
-import { Calendar, Clock, Settings, Save, RotateCcw, CheckCircle } from 'lucide-react';
+import { profileService } from '../services/profileService';
+import { Calendar, Clock, Settings, Save, RotateCcw, CheckCircle, DollarSign } from 'lucide-react';
 import toastService from '../services/toastService';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -77,7 +78,37 @@ const RefereeAvailabilityPage: React.FC = () => {
   useEffect(() => {
     fetchAvailabilities();
     fetchGeneralAvailability();
+    fetchFeeSettings();
   }, []);
+
+  const fetchFeeSettings = async () => {
+    try {
+      const response = await profileService.getUserProfile();
+      const refereeProfile = response.profile?.referee_profile;
+      if (refereeProfile) {
+        setDefaultFeePerMatch(refereeProfile.default_fee_per_match || 0);
+        setDefaultFeePerSession(refereeProfile.default_fee_per_session || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch fee settings:', err);
+    }
+  };
+
+  const saveFeeSettings = async () => {
+    try {
+      setSaving(true);
+      await profileService.updateProfile({
+        default_fee_per_match: defaultFeePerMatch,
+        default_fee_per_session: defaultFeePerSession,
+      });
+      setShowFeeSettings(false);
+      toastService.success('Fee settings saved!');
+    } catch (err: any) {
+      toastService.error(err?.response?.data?.error || 'Failed to save fee settings');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fetchGeneralAvailability = async () => {
     try {
@@ -279,11 +310,68 @@ const RefereeAvailabilityPage: React.FC = () => {
           <Settings className="w-4 h-4" />
           <span>Settings</span>
         </Button>
+        <Button
+          onClick={() => setShowFeeSettings(!showFeeSettings)}
+          variant="secondary"
+          className="flex items-center space-x-2"
+        >
+          <DollarSign className="w-4 h-4" />
+          <span>Fee Settings</span>
+        </Button>
       </div>
 
       {error && (
         <Card className="p-4 mb-6 bg-red-50 border-red-200">
           <p className="text-red-600">{error}</p>
+        </Card>
+      )}
+
+      {/* Fee Settings */}
+      {showFeeSettings && (
+        <Card className="p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Fee Settings</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Set your default fees. These will be pre-filled when organizers book you.
+              </p>
+            </div>
+            <Button
+              onClick={saveFeeSettings}
+              disabled={saving}
+              size="sm"
+              className="flex items-center space-x-1"
+            >
+              <Save className="w-4 h-4" />
+              <span>Save</span>
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fee per Match (NPR)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={defaultFeePerMatch}
+                onChange={(e) => setDefaultFeePerMatch(Number.parseFloat(e.target.value) || 0)}
+                placeholder="e.g. 1500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fee per Session (NPR)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={defaultFeePerSession}
+                onChange={(e) => setDefaultFeePerSession(Number.parseFloat(e.target.value) || 0)}
+                placeholder="e.g. 5000"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+          </div>
         </Card>
       )}
 
