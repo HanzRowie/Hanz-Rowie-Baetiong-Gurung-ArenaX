@@ -177,6 +177,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           const result = await paymentService.verifyPayment(paymentId);
           if (result.payment.status === 'COMPLETED') {
             clearInterval(pollInterval);
+            clearInterval(windowCheckInterval);
             paymentWindow.close();
             onSuccess(result);
           }
@@ -184,10 +185,30 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           // Payment not yet completed, continue polling
         }
       }, 3000);
+
+      // Watch for the payment window being closed by the user
+      const windowCheckInterval = setInterval(async () => {
+        if (paymentWindow.closed) {
+          clearInterval(windowCheckInterval);
+          clearInterval(pollInterval);
+          // Do a final check to see if payment completed before window closed
+          try {
+            const result = await paymentService.verifyPayment(paymentId);
+            if (result.payment.status === 'COMPLETED') {
+              onSuccess(result);
+            } else {
+              setError('Payment window was closed. If you completed the payment, please wait a moment and refresh.');
+            }
+          } catch {
+            setError('Payment window was closed. If you completed the payment, please wait a moment and refresh.');
+          }
+        }
+      }, 1000);
       
       // Stop polling after 10 minutes
       setTimeout(() => {
         clearInterval(pollInterval);
+        clearInterval(windowCheckInterval);
       }, 600000);
       
       return;

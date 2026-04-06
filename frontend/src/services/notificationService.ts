@@ -24,12 +24,13 @@ class NotificationService {
   private readonly maxReconnectAttempts = 5;
   private reconnectTimeout: number | null = null;
   private heartbeatInterval: number | null = null;
+  private tokenRefreshTimeout: number | null = null;
   private connectionInProgress = false;
-  private hasShownToast = new Set<string>(); // Track which notifications have shown toasts
+  private readonly hasShownToast = new Set<string>(); // Track which notifications have shown toasts
 
-  private onNotificationCallbacks: Set<(notification: Notification) => void> = new Set();
-  private onUnreadCountCallbacks: Set<(count: number) => void> = new Set();
-  private onConnectionCallbacks: Set<(connected: boolean) => void> = new Set();
+  private readonly onNotificationCallbacks: Set<(notification: Notification) => void> = new Set();
+  private readonly onUnreadCountCallbacks: Set<(count: number) => void> = new Set();
+  private readonly onConnectionCallbacks: Set<(connected: boolean) => void> = new Set();
 
   // Singleton pattern
   constructor() {
@@ -122,11 +123,11 @@ class NotificationService {
   private handleWebSocketMessage(data: any): void {
     console.log('[NotificationService] Received WebSocket message:', data);
     switch (data.type) {
-      case 'notification':
+      case 'notification': {
         console.log('[NotificationService] New notification:', data.notification);
         
         // Show toast and play sound ONCE in the service
-        const notificationId = data.notification.id;
+        const notificationId: string = data.notification.id;
         if (!this.hasShownToast.has(notificationId)) {
           this.hasShownToast.add(notificationId);
           this.showNotificationToast(data.notification);
@@ -135,13 +136,16 @@ class NotificationService {
           // Clean up old entries to prevent memory leak (keep last 100)
           if (this.hasShownToast.size > 100) {
             const firstItem = this.hasShownToast.values().next().value;
-            this.hasShownToast.delete(firstItem);
+            if (firstItem !== undefined) {
+              this.hasShownToast.delete(firstItem);
+            }
           }
         }
         
         // Notify all callbacks
         this.onNotificationCallbacks.forEach(callback => callback(data.notification));
         break;
+      }
 
       case 'unread_count':
         this.onUnreadCountCallbacks.forEach(callback => callback(data.count));
@@ -231,13 +235,53 @@ class NotificationService {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: 'ping' }));
       }
-    }, 30000); // Every 30 seconds
+    }, 20000); // Every 20 seconds
+
+    // Schedule a proactive reconnect 60s before the token expires
+    // so we never hit the server with an expired token
+    this.scheduleTokenRefreshReconnect();
+  }
+
+  private scheduleTokenRefreshReconnect(): void {
+    if (this.tokenRefreshTimeout) {
+      clearTimeout(this.tokenRefreshTimeout);
+      this.tokenRefreshTimeout = null;
+    }
+
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      // JWT payload is the second base64 segment
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expiresAt = payload.exp * 1000; // convert to ms
+      const now = Date.now();
+      const msUntilExpiry = expiresAt - now;
+
+      // Reconnect 60s before expiry (but only if expiry is more than 70s away)
+      if (msUntilExpiry > 70000) {
+        const reconnectIn = msUntilExpiry - 60000;
+        console.log(`[NotificationService] Scheduling token-refresh reconnect in ${Math.round(reconnectIn / 1000)}s`);
+        this.tokenRefreshTimeout = setTimeout(() => {
+          console.log('[NotificationService] Proactive reconnect due to token expiry');
+          this.disconnect();
+          this.reconnectAttempts = 0;
+          this.connectToNotifications();
+        }, reconnectIn);
+      }
+    } catch {
+      // Ignore parse errors - token format unexpected
+    }
   }
 
   private stopHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+    }
+    if (this.tokenRefreshTimeout) {
+      clearTimeout(this.tokenRefreshTimeout);
+      this.tokenRefreshTimeout = null;
     }
   }
 
@@ -251,8 +295,9 @@ class NotificationService {
       clearTimeout(this.reconnectTimeout);
     }
 
+    // First attempt is immediate (0ms), then exponential backoff: 1s, 2s, 4s, 8s
+    const delay = this.reconnectAttempts === 0 ? 0 : Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 15000);
     this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
 
     console.log(`Reconnecting to notifications in ${delay}ms (attempt ${this.reconnectAttempts})`);
 

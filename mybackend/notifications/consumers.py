@@ -49,7 +49,11 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         message_type = data.get('type')
         
-        if message_type == 'mark_as_read':
+        if message_type == 'mark_read':
+            notification_id = data.get('notification_id')
+            await self.mark_notification_as_read(notification_id)
+        elif message_type == 'mark_as_read':
+            # Legacy alias
             notification_id = data.get('notification_id')
             await self.mark_notification_as_read(notification_id)
         elif message_type == 'get_unread_count':
@@ -81,6 +85,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             # User left the group chat view
             cache_key = f"user_{self.user.id}_viewing_group_chat"
             cache.delete(cache_key)
+        elif message_type == 'ping':
+            # Respond to heartbeat pings to keep connection alive
+            await self.send(text_data=json.dumps({'type': 'pong'}))
 
     async def notification_message(self, event):
         """Send notification to WebSocket"""
