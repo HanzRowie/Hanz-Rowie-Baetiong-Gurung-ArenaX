@@ -196,7 +196,10 @@ class AdminVenueViewSet(viewsets.ReadOnlyModelViewSet):
         # Send notification to venue owner
         from tournaments.notification_utils import send_venue_approved_notification
         send_venue_approved_notification(venue, request.user)
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_venue_stats')
+
         # Serialize and return updated venue
         serializer = AdminVenueDetailSerializer(venue)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -264,7 +267,10 @@ class AdminVenueViewSet(viewsets.ReadOnlyModelViewSet):
         # Send notification to venue owner
         from tournaments.notification_utils import send_venue_rejected_notification
         send_venue_rejected_notification(venue, request.user, rejection_reason)
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_venue_stats')
+
         # Serialize and return updated venue
         serializer = AdminVenueDetailSerializer(venue)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -411,7 +417,10 @@ class AdminVenueViewSet(viewsets.ReadOnlyModelViewSet):
         
         if failures:
             response_data['failures'] = failures
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_venue_stats')
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='bulk-reject', throttle_classes=[AdminApprovalThrottle])
@@ -561,7 +570,10 @@ class AdminVenueViewSet(viewsets.ReadOnlyModelViewSet):
         
         if failures:
             response_data['failures'] = failures
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_venue_stats')
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], url_path='conditional-approve', throttle_classes=[AdminApprovalThrottle])
@@ -645,7 +657,10 @@ class AdminVenueViewSet(viewsets.ReadOnlyModelViewSet):
             admin_user=request.user,
             requested_documents=requested_documents
         )
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_venue_stats')
+
         # Serialize and return updated venue
         serializer = AdminVenueDetailSerializer(venue)
         return Response(serializer.data, status=status.HTTP_200_OK)

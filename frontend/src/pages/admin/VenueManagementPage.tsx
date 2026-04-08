@@ -169,7 +169,7 @@ export default function VenueManagementPage() {
   } = useQuery({
     queryKey: QUERY_KEYS.stats,
     queryFn: () => adminVenueService.getVenueStats(),
-    staleTime: 30 * 1000,
+    staleTime: 0, // always refetch when invalidated
     gcTime: 5 * 60 * 1000,
     retry: 2,
   });

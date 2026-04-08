@@ -5,6 +5,7 @@ from . import futsal_scoring_views
 from .admin_views import AdminTournamentViewSet
 from .match_events_views import MatchEventViewSet
 from . import remarks_views
+from .document_views import upload_tournament_documents, get_tournament_document_status
 
 router = DefaultRouter()
 router.register(r'tournaments', views.TournamentViewSet)
@@ -58,4 +59,6 @@ urlpatterns = [
     
     # Router patterns last
     path('', include(router.urls)),
+    path('<uuid:tournament_id>/upload-documents/', upload_tournament_documents, name='upload_tournament_documents'),
+    path('<uuid:tournament_id>/document-status/', get_tournament_document_status, name='tournament_document_status'),
 ]

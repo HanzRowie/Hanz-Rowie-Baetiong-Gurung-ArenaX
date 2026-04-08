@@ -197,7 +197,10 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
         # Send notification to organizer
         from .notification_utils import send_tournament_approved_notification
         send_tournament_approved_notification(tournament, request.user)
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_tournament_stats')
+
         # Serialize and return updated tournament
         serializer = AdminTournamentDetailSerializer(tournament)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -265,7 +268,10 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
         # Send notification to organizer
         from .notification_utils import send_tournament_rejected_notification
         send_tournament_rejected_notification(tournament, request.user, rejection_reason)
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_tournament_stats')
+
         # Serialize and return updated tournament
         serializer = AdminTournamentDetailSerializer(tournament)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -412,7 +418,10 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
         
         if failures:
             response_data['failures'] = failures
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_tournament_stats')
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='bulk-reject', throttle_classes=[AdminApprovalThrottle])
@@ -562,7 +571,10 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
         
         if failures:
             response_data['failures'] = failures
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_tournament_stats')
+
         return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], url_path='conditional-approve', throttle_classes=[AdminApprovalThrottle])
@@ -646,7 +658,10 @@ class AdminTournamentViewSet(viewsets.ReadOnlyModelViewSet):
             admin_user=request.user,
             requested_documents=requested_documents
         )
-        
+
+        # Bust stats cache so cards update immediately
+        cache.delete('admin_tournament_stats')
+
         # Serialize and return updated tournament
         serializer = AdminTournamentDetailSerializer(tournament)
         return Response(serializer.data, status=status.HTTP_200_OK)

@@ -7,6 +7,7 @@ import toastService from '@/services/toastService';
 import { DashboardSkeleton } from '@/components/LoadingSkeleton';
 import { API_URL } from '@/utils/constants';
 import ChatButton from '@/components/chat/ChatButton';
+import DocumentSubmissionPanel from '@/components/DocumentSubmissionPanel';
 import {
     MapPin, Users, Star, Calendar,
     Clock, Info, Edit, ArrowLeft
@@ -172,6 +173,15 @@ export default function VenueDetailsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Document Submission Panel — visible to owner when CONDITIONAL_APPROVAL */}
+            {isOwner && (venue as any).approval_status === 'CONDITIONAL_APPROVAL' && (
+                <DocumentSubmissionPanel
+                    resourceType="venue"
+                    resourceId={venueId!}
+                    onDocumentsSubmitted={loadVenue}
+                />
+            )}
 
             {/* Content Tabs */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from .admin_views import AdminVenueViewSet
+from .document_views import upload_venue_documents, get_venue_document_status
 
 router = DefaultRouter()
 router.register(r'venues', views.VenueViewSet)
@@ -27,4 +28,6 @@ urlpatterns = [
     path('venues/<int:venue_id>/reviews/', views.venue_reviews, name='venue_reviews'),
     path('venues/<int:venue_id>/calculate-cost/', views.calculate_booking_cost, name='calculate_booking_cost'),
     path('earnings/', views.venue_earnings, name='venue_earnings'),
+    path('venues/<int:venue_id>/upload-documents/', upload_venue_documents, name='upload_venue_documents'),
+    path('venues/<int:venue_id>/document-status/', get_venue_document_status, name='venue_document_status'),
 ]

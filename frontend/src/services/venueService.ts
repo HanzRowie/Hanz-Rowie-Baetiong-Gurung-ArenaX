@@ -24,7 +24,7 @@ class VenueService {
     }
 
     if (data.sport_types && data.sport_types.length > 0) {
-      formData.append('sport_type', data.sport_types[0].toUpperCase()); // Ensure uppercase
+      formData.append('sport_types', JSON.stringify(data.sport_types.map(s => s.toUpperCase())));
     }
 
     if (data.images && data.images.length > 0) {
@@ -88,7 +88,7 @@ class VenueService {
     if (data.operating_days) formData.append('operating_days', JSON.stringify(data.operating_days));
 
     if (data.sport_types && data.sport_types.length > 0) {
-      formData.append('sport_type', data.sport_types[0].toUpperCase()); // Ensure uppercase
+      formData.append('sport_types', JSON.stringify(data.sport_types.map(s => s.toUpperCase())));
     }
 
     if (data.images && data.images.length > 0) {

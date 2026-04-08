@@ -23,6 +23,7 @@ import { api } from '@/services/api';
 import PaymentModal from '@/components/PaymentModal';
 import ChatButton from '@/components/chat/ChatButton';
 import { getMediaUrl } from '@/utils/constants';
+import DocumentSubmissionPanel from '@/components/DocumentSubmissionPanel';
 import ConfirmDialog, { TeamPlayersDialog } from '@/components/ConfirmDialog';
 
 export default function TournamentDetailPage() {
@@ -897,6 +898,17 @@ export default function TournamentDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Document Submission Panel — visible to organizer when CONDITIONAL_APPROVAL */}
+      {isOrganizer() && (tournament as any).approval_status === 'CONDITIONAL_APPROVAL' && (
+        <div className="px-4 sm:px-6 lg:px-8 pt-6">
+          <DocumentSubmissionPanel
+            resourceType="tournament"
+            resourceId={tournamentId!}
+            onDocumentsSubmitted={loadTournament}
+          />
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="px-4 sm:px-6 lg:px-8 py-8">

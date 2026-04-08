@@ -30,8 +30,38 @@ class VenueSerializer(serializers.ModelSerializer):
         fields = ['id', 'owner', 'name', 'description', 'location', 'latitude', 'longitude', 
                  'capacity', 'price_per_hour', 'sport_types', 'court_size', 
                  'facilities', 'amenities', 'rating', 'image', 'images', 'is_active',
-                 'default_opening_time', 'default_closing_time', 'operating_days']
+                 'default_opening_time', 'default_closing_time', 'operating_days',
+                 'approval_status', 'requested_documents', 'verification_documents',
+                 'rejection_reason', 'approval_notes']
         read_only_fields = ['owner']
+
+    def to_internal_value(self, data):
+        """Handle sport_types and operating_days sent as JSON strings from multipart/form-data."""
+        import json
+        from django.http import QueryDict
+
+        # Convert QueryDict to a regular mutable dict, preserving multi-value fields
+        if isinstance(data, QueryDict):
+            mutable = {}
+            for key in data.keys():
+                values = data.getlist(key)
+                mutable[key] = values[0] if len(values) == 1 else values
+        else:
+            mutable = dict(data)
+
+        for field in ('sport_types', 'operating_days'):
+            if field in mutable:
+                val = mutable[field]
+                # Could be a JSON string or a list containing a JSON string
+                if isinstance(val, list) and len(val) == 1:
+                    val = val[0]
+                if isinstance(val, str):
+                    try:
+                        mutable[field] = json.loads(val)
+                    except (ValueError, TypeError):
+                        pass
+
+        return super().to_internal_value(mutable)
     
     def to_representation(self, instance):
         ret = super().to_representation(instance)
