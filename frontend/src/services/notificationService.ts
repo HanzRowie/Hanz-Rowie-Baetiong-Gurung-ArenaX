@@ -3,6 +3,7 @@
  */
 import { api } from './api';
 import toastService from './toastService';
+import { ensureFreshToken } from '@/utils/tokenUtils';
 import type {  Notification, NotificationPreferences, NotificationsResponse } from '@/types/notification.types';
 
 export interface NotificationFilters {
@@ -301,9 +302,21 @@ class NotificationService {
 
     console.log(`Reconnecting to notifications in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = setTimeout(async () => {
+      // Ensure the access token is fresh before reconnecting.
+      // The WS connection doesn't go through the HTTP interceptor, so we must
+      // manually refresh here if the token is expired or about to expire.
+      await this.ensureFreshToken();
       this.connectToNotifications();
     }, delay);
+  }
+
+  /**
+   * Refresh the access token if it is expired or will expire within 30 seconds.
+   * Silently clears tokens and aborts if the refresh token is also invalid.
+   */
+  private async ensureFreshToken(): Promise<void> {
+    await ensureFreshToken();
   }
 
   /**

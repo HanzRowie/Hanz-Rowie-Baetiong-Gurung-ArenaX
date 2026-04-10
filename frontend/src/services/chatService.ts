@@ -2,6 +2,7 @@
 import { api } from './api';
 import { API_ENDPOINTS } from '@/utils/constants';
 import { store } from '@/store';
+import { ensureFreshToken } from '@/utils/tokenUtils';
 import type { 
   Message as PrivateMessage,
   Conversation,
@@ -235,8 +236,9 @@ class ChatService {
 
     console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
-    this.reconnectTimeout = setTimeout(() => {
+    this.reconnectTimeout = setTimeout(async () => {
       console.log(`Reconnecting... (attempt ${this.reconnectAttempts})`);
+      await ensureFreshToken();
       this.connectToPrivateChat(otherUserId);
     }, delay);
   }
