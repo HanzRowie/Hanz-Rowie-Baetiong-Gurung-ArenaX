@@ -572,10 +572,26 @@ def assign_referee_to_tournament(request, tournament_id):
     
     tournament = get_object_or_404(Tournament, id=tournament_id, organizer=user)
 
+    # Block assignment to unapproved tournaments
+    if tournament.approval_status != 'APPROVED':
+        return Response(
+            {'error': 'Cannot assign referees to a tournament that has not been approved by admin.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     # Block modifications to completed or cancelled tournaments
     if tournament.status in ('COMPLETED', 'CANCELLED'):
         return Response(
             {'error': f'Cannot assign referees to a {tournament.status.lower()} tournament.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Block assignment to tournaments that have already passed
+    from django.utils import timezone as tz
+    tournament_datetime = datetime.combine(tournament.date, tournament.start_time)
+    if tournament_datetime < datetime.now():
+        return Response(
+            {'error': 'Cannot assign referees to a tournament that has already taken place.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 

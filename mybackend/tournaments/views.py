@@ -672,16 +672,15 @@ def withdraw_from_tournament(request, tournament_id):
             player=user
         )
 
-        # Check if tournament has started
+        # Check if tournament has started using the actual start time
         from django.utils import timezone
-        from datetime import datetime, time
+        from datetime import datetime
         
-        # Convert tournament date to datetime for comparison
-        tournament_datetime = datetime.combine(tournament.date, time.min)
+        tournament_datetime = datetime.combine(tournament.date, tournament.start_time)
         tournament_datetime = timezone.make_aware(tournament_datetime)
         
         if timezone.now() >= tournament_datetime:
-            return Response({'error': 'Cannot withdraw from an ongoing tournament'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Cannot withdraw from a tournament that has already started'}, status=status.HTTP_400_BAD_REQUEST)
 
         registration.delete()
 
@@ -748,6 +747,14 @@ def create_tournament(request):
         logger = logging.getLogger(__name__)
 
         data = request.data.copy()
+
+        # Backend enforcement: Futsal must always be TEAM registration
+        if data.get('sport_type') == 'FUTSAL' and data.get('registration_type') == 'INDIVIDUAL':
+            return Response(
+                {'error': 'Futsal tournaments must use TEAM registration type.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         linked_venue_id = data.get('linked_venue_id')
 
         # Log incoming files for debugging
@@ -1103,6 +1110,15 @@ def update_match_result(request, tournament_id, match_id):
         # Get the data from request
         data = request.data
 
+        # Prevent scoring a match before its scheduled time (skip for rescheduling/venue-only updates)
+        score_keys = {'team1_score', 'team2_score', 'player1_score', 'player2_score', 'winner_id'}
+        if score_keys.intersection(data.keys()):
+            from django.utils import timezone as tz
+            if match.scheduled_time and tz.now() < match.scheduled_time:
+                return Response({
+                    'error': f'Cannot enter scores before the match has started. Match is scheduled for {match.scheduled_time.strftime("%Y-%m-%d %H:%M")}.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
         # Update scheduled_time if provided (for rescheduling matches)
         # Scheduling is allowed as long as the match hasn't started yet
         if 'scheduled_time' in data and len(data) == 1:
@@ -1115,6 +1131,21 @@ def update_match_result(request, tournament_id, match_id):
             if not scheduled_time:
                 return Response({
                     'error': 'Invalid datetime format. Use ISO 8601 (e.g. 2026-04-01T14:30:00).'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            # Prevent scheduling a match outside the tournament's date
+            from django.utils import timezone as tz
+            from datetime import datetime, time
+            tournament_start = tz.make_aware(datetime.combine(tournament.date, time.min))
+            tournament_end = tz.make_aware(datetime.combine(tournament.date, time.max))
+            if tournament.end_time:
+                tournament_end = tz.make_aware(datetime.combine(tournament.date, tournament.end_time))
+            if scheduled_time.date() < tournament.date:
+                return Response({
+                    'error': 'Cannot schedule a match before the tournament start date.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if scheduled_time.date() > tournament.date:
+                return Response({
+                    'error': 'Cannot schedule a match after the tournament end date.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             match.scheduled_time = scheduled_time
             match.save()
@@ -1304,6 +1335,13 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
         if match.status == 'COMPLETED':
             return Response({
                 'error': 'This match has already been completed and cannot be edited.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Prevent scoring before match scheduled time
+        from django.utils import timezone as tz
+        if match.scheduled_time and tz.now() < match.scheduled_time:
+            return Response({
+                'error': f'Cannot enter scores before the match has started. Match is scheduled for {match.scheduled_time.strftime("%Y-%m-%d %H:%M")}.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate tournament type
@@ -3319,3 +3357,62 @@ def public_tournament_detail(request, share_token):
     tournament = get_object_or_404(Tournament, share_token=share_token, approval_status='APPROVED')
     serializer = PublicTournamentSerializer(tournament, context={'request': request})
     return Response(serializer.data)
+
+
+@api_view(['POST'])
+@jwt_required
+def complete_tournament(request, tournament_id):
+    """
+    Manually mark a tournament as COMPLETED and release referee escrow payments.
+    Required for league tournaments (which have no automatic final-match trigger).
+    Also available as a manual override for knockout tournaments if needed.
+    """
+    from accounts.models import CustomUser
+    user = CustomUser.objects.get(id=request.user_id)
+
+    if user.role != 'ORGANIZER':
+        return Response({'error': 'Only organizers can complete tournaments.'}, status=status.HTTP_403_FORBIDDEN)
+
+    tournament = get_object_or_404(Tournament, id=tournament_id, organizer=user)
+
+    if tournament.status == 'COMPLETED':
+        return Response({'error': 'Tournament is already marked as completed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if tournament.status == 'CANCELLED':
+        return Response({'error': 'Cannot complete a cancelled tournament.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Ensure the tournament date has actually passed before allowing manual completion
+    from datetime import datetime
+    tournament_datetime = datetime.combine(tournament.date, tournament.start_time)
+    if tournament_datetime > datetime.now():
+        return Response(
+            {'error': 'Cannot mark a tournament as completed before it has started.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # For league tournaments, check all matches are completed
+    if tournament.tournament_type == 'league':
+        incomplete_matches = Match.objects.filter(
+            tournament=tournament
+        ).exclude(status='COMPLETED').exclude(notes='BYE')
+        if incomplete_matches.exists():
+            return Response({
+                'error': f'Cannot complete tournament — {incomplete_matches.count()} match(es) are still pending.',
+                'incomplete_match_count': incomplete_matches.count()
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    tournament.status = 'COMPLETED'
+    tournament.save(update_fields=['status'])
+
+    # Release referee escrow payments
+    try:
+        _release_referee_escrow_for_tournament(tournament)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error releasing referee escrow for tournament {tournament.id}: {e}")
+
+    return Response({
+        'message': f'Tournament "{tournament.title}" has been marked as completed and referee payments have been released.',
+        'tournament_id': str(tournament.id),
+        'status': 'COMPLETED'
+    }, status=status.HTTP_200_OK)

@@ -137,9 +137,14 @@ class Tournament(models.Model):
     @property
     def is_registration_open(self):
         from django.utils import timezone
+        from datetime import datetime
+        tournament_start = datetime.combine(self.date, self.start_time)
+        aware_start = timezone.make_aware(tournament_start) if timezone.is_naive(tournament_start) else tournament_start
         return (
             self.status == 'UPCOMING' and
+            self.approval_status == 'APPROVED' and
             timezone.now() < self.registration_deadline and
+            timezone.now() < aware_start and
             self.registered_count < self.max_participants
         )
 
@@ -204,12 +209,23 @@ class Tournament(models.Model):
     def clean(self):
         """Validate model fields before saving"""
         from django.core.exceptions import ValidationError
+        from django.utils import timezone
+        from datetime import datetime
         
         # Validate that Futsal tournaments are always team-based
         if self.sport_type == 'FUTSAL' and self.registration_type == 'INDIVIDUAL':
             raise ValidationError({
                 'registration_type': 'Futsal tournaments must be team-based. Please select TEAM registration type.'
             })
+        
+        # Validate registration deadline is before tournament start
+        if self.registration_deadline and self.date and self.start_time:
+            tournament_start = datetime.combine(self.date, self.start_time)
+            aware_start = timezone.make_aware(tournament_start) if timezone.is_naive(tournament_start) else tournament_start
+            if self.registration_deadline >= aware_start:
+                raise ValidationError({
+                    'registration_deadline': 'Registration deadline must be before the tournament start date and time.'
+                })
         
         # Validate tournament_type is one of the allowed values
         valid_types = ['knockout', 'league', 'SINGLE_ELIMINATION']

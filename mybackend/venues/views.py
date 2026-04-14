@@ -186,6 +186,13 @@ class VenueBookingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # Proactively expire stale PENDING bookings before returning results
+        from django.utils import timezone as tz
+        VenueBooking.objects.filter(
+            status='PENDING',
+            payment_expires_at__lt=tz.now()
+        ).update(status='CANCELLED')
+
         if self.request.user.role == 'VENUE_OWNER':
             # Venue owners see bookings for their venues
             return VenueBooking.objects.filter(venue__owner=self.request.user)
@@ -519,6 +526,15 @@ def venue_availability(request, venue_id):
 
     if not date:
         return Response({'error': 'Date parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Proactively expire stale PENDING bookings before checking availability
+    from django.utils import timezone as tz
+    VenueBooking.objects.filter(
+        venue=venue,
+        date=date,
+        status='PENDING',
+        payment_expires_at__lt=tz.now()
+    ).update(status='CANCELLED')
 
     # Get existing bookings for the date
     bookings = VenueBooking.objects.filter(

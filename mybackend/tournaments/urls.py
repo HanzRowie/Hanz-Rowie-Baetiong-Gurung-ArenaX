@@ -59,6 +59,7 @@ urlpatterns = [
     
     # Router patterns last
     path('', include(router.urls)),
+    path('<uuid:tournament_id>/complete/', views.complete_tournament, name='complete_tournament'),
     path('<uuid:tournament_id>/upload-documents/', upload_tournament_documents, name='upload_tournament_documents'),
     path('<uuid:tournament_id>/document-status/', get_tournament_document_status, name='tournament_document_status'),
 ]
