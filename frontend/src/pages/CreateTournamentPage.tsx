@@ -158,7 +158,7 @@ export default function CreateTournamentPage() {
   // Filter by tournament date if set — only show bookings for that specific date
   useEffect(() => {
     const loadOrganizerBookings = async () => {
-      if (formData.tournament_type === 'league' || useCustomVenue) {
+      if (useCustomVenue) {
         setAvailableVenues([]);
         return;
       }
@@ -721,18 +721,7 @@ export default function CreateTournamentPage() {
             </div>
 
             {/* Venue Information */}
-            {formData.tournament_type === 'league' ? (
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium text-gray-900">Venue</h3>
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
-                  <MapPin className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">Venues are assigned per match for league tournaments</p>
-                    <p className="text-xs text-blue-700 mt-1">After generating the schedule, you can assign a venue to each individual match from the Schedule tab.</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
+            {false ? null : (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-medium text-gray-900">Venue Selection</h3>

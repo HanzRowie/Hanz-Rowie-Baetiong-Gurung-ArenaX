@@ -1353,7 +1353,6 @@ export default function TournamentDetailPage() {
                         editable={isOrganizer()}
                         onEditMatch={isOrganizer() ? handleEditMatch : undefined}
                         onEnterScore={isOrganizer() ? (matchId) => navigate(`/match-scoring?tournamentId=${tournamentId}&matchId=${matchId}`) : undefined}
-                        onAssignVenue={isOrganizer() ? handleAssignVenue : undefined}
                         tournamentStartDate={tournament?.date}
                       />
                     ) : (

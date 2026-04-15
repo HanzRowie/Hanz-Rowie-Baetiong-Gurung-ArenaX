@@ -189,7 +189,9 @@ class RoundRobinScheduleGenerator:
                     match_number=match_num,
                     team1=pairing.home_team,
                     team2=pairing.away_team,
-                    status='SCHEDULED'
+                    status='SCHEDULED',
+                    match_venue=tournament.linked_venue,
+                    match_venue_name=tournament.venue or '',
                 )
                 matches.append(match)
         

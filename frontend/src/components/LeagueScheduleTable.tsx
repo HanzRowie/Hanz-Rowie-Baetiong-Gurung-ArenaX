@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, Edit2, Check, X, Trophy, Building2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Edit2, Check, X, Trophy } from 'lucide-react';
 import MatchDetailModal from './MatchDetailModal';
 
 export interface LeagueMatch {
@@ -29,7 +29,6 @@ interface LeagueScheduleTableProps {
   editable?: boolean;
   onEditMatch?: (matchId: string, updates: Partial<LeagueMatch>) => void;
   onEnterScore?: (matchId: string) => void;
-  onAssignVenue?: (matchId: string) => void;
   loading?: boolean;
   tournamentStartDate?: string;
   isTeamTournament?: boolean;
@@ -89,7 +88,6 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
   editable = false,
   onEditMatch,
   onEnterScore,
-  onAssignVenue,
   loading = false,
   tournamentStartDate,
   isTeamTournament = true,
@@ -297,40 +295,11 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
                   >
                     <Edit2 className="w-3 h-3 md:w-4 md:h-4" />
                   </button>
-                  {onAssignVenue && (
-                    <button
-                      onClick={() => {
-                        if (!match.scheduled_time) {
-                          return; // disabled — tooltip explains
-                        }
-                        onAssignVenue(match.id);
-                      }}
-                      disabled={!match.scheduled_time}
-                      className={`p-1 rounded transition-colors ${
-                        !match.scheduled_time
-                          ? 'text-gray-300 cursor-not-allowed'
-                          : 'text-blue-600 hover:bg-blue-50'
-                      }`}
-                      title={!match.scheduled_time ? 'Set date/time before assigning venue' : 'Assign venue'}
-                      aria-label="Assign venue for this match"
-                    >
-                      <Building2 className="w-3 h-3 md:w-4 md:h-4" />
-                    </button>
-                  )}
                   {onEnterScore && (
                     <button
                       onClick={() => {
-                        const hasDateTime = !!match.scheduled_time;
-                        // A venue is present if any of the venue fields has a real value
-                        const venueDisplay = match.match_venue_display || match.match_venue_name;
-                        const hasVenue = !!(venueDisplay && venueDisplay !== 'TBD - Assigned per match');
-
-                        if (!hasDateTime) {
+                        if (!match.scheduled_time) {
                           alert('Please set a date and time for this match before scoring.');
-                          return;
-                        }
-                        if (!hasVenue) {
-                          alert('Please assign a venue to this match before scoring.');
                           return;
                         }
                         onEnterScore(match.id);
