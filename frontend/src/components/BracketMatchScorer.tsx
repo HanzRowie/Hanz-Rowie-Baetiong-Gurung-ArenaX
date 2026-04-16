@@ -216,26 +216,54 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
               {/* Score inputs */}
               {!isBadminton ? (
                 <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Match Score</h3>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">{homeName}</label>
-                      <input type="number" min="0" value={homeScore}
-                        onChange={e => setHomeScore(parseInt(e.target.value) || 0)}
-                        className="w-full px-4 py-3 text-3xl font-bold border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        disabled={isReadOnly} />
+                  <h3 className="text-base font-semibold text-gray-900 mb-5">Match Score</h3>
+                  <div className="flex items-center justify-center gap-6">
+                    {/* Home score */}
+                    <div className="flex flex-col items-center gap-2 flex-1">
+                      <span className="text-sm font-medium text-gray-600 text-center truncate w-full text-center">{homeName}</span>
+                      <div className="flex items-center gap-3">
+                        <button type="button"
+                          onClick={() => setHomeScore(s => Math.max(0, s - 1))}
+                          disabled={isReadOnly || homeScore === 0}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          −
+                        </button>
+                        <span className="text-4xl font-black text-gray-900 tabular-nums w-12 text-center">{homeScore}</span>
+                        <button type="button"
+                          onClick={() => setHomeScore(s => s + 1)}
+                          disabled={isReadOnly}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-700 text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          +
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">{awayName}</label>
-                      <input type="number" min="0" value={awayScore}
-                        onChange={e => setAwayScore(parseInt(e.target.value) || 0)}
-                        className="w-full px-4 py-3 text-3xl font-bold border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        disabled={isReadOnly} />
+
+                    <span className="text-2xl font-light text-gray-300 flex-shrink-0">–</span>
+
+                    {/* Away score */}
+                    <div className="flex flex-col items-center gap-2 flex-1">
+                      <span className="text-sm font-medium text-gray-600 text-center truncate w-full text-center">{awayName}</span>
+                      <div className="flex items-center gap-3">
+                        <button type="button"
+                          onClick={() => setAwayScore(s => Math.max(0, s - 1))}
+                          disabled={isReadOnly || awayScore === 0}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          −
+                        </button>
+                        <span className="text-4xl font-black text-gray-900 tabular-nums w-12 text-center">{awayScore}</span>
+                        <button type="button"
+                          onClick={() => setAwayScore(s => s + 1)}
+                          disabled={isReadOnly}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-700 text-lg font-bold disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
+
                   {winnerName && (
-                    <div className="mt-4 flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-                      <Trophy className="w-4 h-4" />
+                    <div className="mt-5 flex items-center justify-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+                      <Trophy className="w-4 h-4 flex-shrink-0" />
                       <span className="text-sm font-semibold">Winner: {winnerName}</span>
                     </div>
                   )}
@@ -282,13 +310,13 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
 
               {/* Player stats for futsal team matches */}
               {isFutsal && isTeam && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
                     <PlayerStatsInput teamName={homeName} teamScore={homeScore}
                       availablePlayers={homePlayers} playerStats={homePlayerStats}
                       onChange={setHomePlayerStats} disabled={isReadOnly} />
                   </div>
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+                  <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
                     <PlayerStatsInput teamName={awayName} teamScore={awayScore}
                       availablePlayers={awayPlayers} playerStats={awayPlayerStats}
                       onChange={setAwayPlayerStats} disabled={isReadOnly} />

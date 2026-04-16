@@ -105,8 +105,8 @@ export const PlayerStatsInput: React.FC<PlayerStatsInputProps> = ({
       {/* Column headers — only show when there are rows */}
       {playerStats.length > 0 && (
         <div className="grid grid-cols-12 gap-2 px-1">
-          <div className="col-span-5 text-xs font-medium text-gray-500 uppercase tracking-wide">Player</div>
-          <div className="col-span-3 text-xs font-medium text-gray-500 uppercase tracking-wide text-center">Goals</div>
+          <div className="col-span-6 text-xs font-medium text-gray-500 uppercase tracking-wide">Player</div>
+          <div className="col-span-2 text-xs font-medium text-gray-500 uppercase tracking-wide text-center">Goals</div>
           <div className="col-span-3 text-xs font-medium text-gray-500 uppercase tracking-wide text-center">Assists</div>
           <div className="col-span-1" />
         </div>
@@ -117,7 +117,7 @@ export const PlayerStatsInput: React.FC<PlayerStatsInputProps> = ({
         {playerStats.map((stat, index) => (
           <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
             {/* Player dropdown */}
-            <div className="col-span-5">
+            <div className="col-span-6">
               <select
                 value={stat.player_id}
                 onChange={(e) => updatePlayerStat(index, 'player_id', e.target.value)}
@@ -134,7 +134,7 @@ export const PlayerStatsInput: React.FC<PlayerStatsInputProps> = ({
             </div>
 
             {/* Goals stepper */}
-            <div className="col-span-3 flex items-center justify-center gap-1">
+            <div className="col-span-2 flex items-center justify-center gap-1">
               <button
                 type="button"
                 onClick={() => decrement(index, 'goals')}
