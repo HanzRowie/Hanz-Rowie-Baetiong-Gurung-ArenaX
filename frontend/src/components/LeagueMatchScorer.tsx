@@ -20,14 +20,8 @@ interface Match {
   round_number: number;
   match_number: number;
   status: string;
-  team1?: {
-    id: string;
-    name: string;
-  };
-  team2?: {
-    id: string;
-    name: string;
-  };
+  team1?: { id: string; name: string };
+  team2?: { id: string; name: string };
   team1_score?: number;
   team2_score?: number;
   team1_members?: Player[];
@@ -51,20 +45,22 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
   onSubmit,
   onCancel,
   isLoading = false,
-  isReadOnly = false
+  isReadOnly = false,
 }) => {
-  const [homeScore, setHomeScore] = useState<number>(0);
-  const [awayScore, setAwayScore] = useState<number>(0);
   const [homePlayerStats, setHomePlayerStats] = useState<PlayerStat[]>([]);
   const [awayPlayerStats, setAwayPlayerStats] = useState<PlayerStat[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-
-  const homeTeamName = match.team1?.name || 'Home Team';
-  const awayTeamName = match.team2?.name || 'Away Team';
   const [homePlayers, setHomePlayers] = useState<Player[]>(match.team1_members || []);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>(match.team2_members || []);
 
-  // Fetch team members if not provided in match data
+  const homeTeamName = match.team1?.name || 'Home Team';
+  const awayTeamName = match.team2?.name || 'Away Team';
+
+  // Derive scores from player stats — single source of truth
+  const homeScore = homePlayerStats.reduce((sum, s) => sum + s.goals, 0);
+  const awayScore = awayPlayerStats.reduce((sum, s) => sum + s.goals, 0);
+
+  // Fetch team members if not provided
   useEffect(() => {
     const isFutsal = match.tournament?.sport_type === 'FUTSAL';
     if (!isFutsal) return;
@@ -73,11 +69,13 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
       try {
         const res = await api.get(`/api/teams/${teamId}/members/`);
         const membersData = res.data.data || res.data.members || (Array.isArray(res.data) ? res.data : []);
-        const members = membersData.map((m: any) => ({
-          id: m.player?.id || m.id,
-          name: m.player?.full_name || m.full_name || m.name,
-          full_name: m.player?.full_name || m.full_name || m.name,
-        })).filter((p: Player) => p.id && p.name);
+        const members = membersData
+          .map((m: any) => ({
+            id: m.player?.id || m.id,
+            name: m.player?.full_name || m.full_name || m.name,
+            full_name: m.player?.full_name || m.full_name || m.name,
+          }))
+          .filter((p: Player) => p.id && p.name);
         if (members.length > 0) setter(members);
       } catch {
         // silently fail — user can still add stats manually
@@ -92,88 +90,25 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
     }
   }, [match.team1?.id, match.team2?.id]);
 
-  // Load existing scores if available
-  useEffect(() => {
-    if (match.team1_score !== undefined && match.team1_score !== null) {
-      setHomeScore(match.team1_score);
-    }
-    if (match.team2_score !== undefined && match.team2_score !== null) {
-      setAwayScore(match.team2_score);
-    }
-  }, [match]);
-
   const validateForm = (): boolean => {
     const newErrors: string[] = [];
 
-    // Validate scores are non-negative integers
-    if (homeScore < 0) {
-      newErrors.push('Home score must be a non-negative number (0 or greater)');
-    }
-    if (awayScore < 0) {
-      newErrors.push('Away score must be a non-negative number (0 or greater)');
-    }
-    if (!Number.isInteger(homeScore)) {
-      newErrors.push('Home score must be a whole number');
-    }
-    if (!Number.isInteger(awayScore)) {
-      newErrors.push('Away score must be a whole number');
-    }
-
-    // Validate player goals sum equals team score
-    const homeGoalsSum = homePlayerStats.reduce((sum, stat) => sum + stat.goals, 0);
-    const awayGoalsSum = awayPlayerStats.reduce((sum, stat) => sum + stat.goals, 0);
-
-    if (homeGoalsSum !== homeScore) {
-      newErrors.push(`Home team: Sum of player goals (${homeGoalsSum}) must equal team score (${homeScore})`);
-    }
-    if (awayGoalsSum !== awayScore) {
-      newErrors.push(`Away team: Sum of player goals (${awayGoalsSum}) must equal team score (${awayScore})`);
-    }
-
-    // Validate all player stats have a player selected
-    homePlayerStats.forEach((stat, index) => {
-      if (!stat.player_id) {
-        newErrors.push(`Home team player ${index + 1}: Player must be selected`);
-      }
-      // Validate non-negative goals and assists
-      if (stat.goals < 0) {
-        newErrors.push(`Home team player ${index + 1}: Goals cannot be negative`);
-      }
-      if (stat.assists < 0) {
-        newErrors.push(`Home team player ${index + 1}: Assists cannot be negative`);
-      }
-    });
-    awayPlayerStats.forEach((stat, index) => {
-      if (!stat.player_id) {
-        newErrors.push(`Away team player ${index + 1}: Player must be selected`);
-      }
-      // Validate non-negative goals and assists
-      if (stat.goals < 0) {
-        newErrors.push(`Away team player ${index + 1}: Goals cannot be negative`);
-      }
-      if (stat.assists < 0) {
-        newErrors.push(`Away team player ${index + 1}: Assists cannot be negative`);
-      }
+    homePlayerStats.forEach((stat, i) => {
+      if (!stat.player_id) newErrors.push(`Home team player ${i + 1}: Select a player`);
+      if (stat.goals < 0) newErrors.push(`Home team player ${i + 1}: Goals cannot be negative`);
+      if (stat.assists < 0) newErrors.push(`Home team player ${i + 1}: Assists cannot be negative`);
     });
 
-    // Validate no duplicate players
-    const homePlayerIds = homePlayerStats.map(s => s.player_id).filter(id => id);
-    const awayPlayerIds = awayPlayerStats.map(s => s.player_id).filter(id => id);
-    
-    if (new Set(homePlayerIds).size !== homePlayerIds.length) {
-      newErrors.push('Home team: Each player can only be selected once');
-    }
-    if (new Set(awayPlayerIds).size !== awayPlayerIds.length) {
-      newErrors.push('Away team: Each player can only be selected once');
-    }
+    awayPlayerStats.forEach((stat, i) => {
+      if (!stat.player_id) newErrors.push(`Away team player ${i + 1}: Select a player`);
+      if (stat.goals < 0) newErrors.push(`Away team player ${i + 1}: Goals cannot be negative`);
+      if (stat.assists < 0) newErrors.push(`Away team player ${i + 1}: Assists cannot be negative`);
+    });
 
-    // Validate that if there are player stats, at least one player is selected
-    if (homeScore > 0 && homePlayerStats.length === 0) {
-      newErrors.push('Home team: Please add player statistics for goals scored');
-    }
-    if (awayScore > 0 && awayPlayerStats.length === 0) {
-      newErrors.push('Away team: Please add player statistics for goals scored');
-    }
+    const homeIds = homePlayerStats.map(s => s.player_id).filter(Boolean);
+    const awayIds = awayPlayerStats.map(s => s.player_id).filter(Boolean);
+    if (new Set(homeIds).size !== homeIds.length) newErrors.push('Home team: Each player can only appear once');
+    if (new Set(awayIds).size !== awayIds.length) newErrors.push('Away team: Each player can only appear once');
 
     setErrors(newErrors);
     return newErrors.length === 0;
@@ -181,19 +116,14 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) {
       toast.error('Please fix validation errors');
       return;
     }
-
-    // Combine player stats from both teams
-    const allPlayerStats = [...homePlayerStats, ...awayPlayerStats];
-
     onSubmit({
       home_score: homeScore,
       away_score: awayScore,
-      player_stats: allPlayerStats
+      player_stats: [...homePlayerStats, ...awayPlayerStats],
     });
   };
 
@@ -201,30 +131,32 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
     <div className="flex flex-col h-[85vh] max-h-[800px]">
       {/* Fixed Header */}
       <div className="flex-none p-6 border-b border-gray-200 bg-white">
-        <div className="text-sm text-gray-600 mb-1">
-          <span>ArenaX</span>
-          <span className="mx-2">/</span>
-          <span>{match.tournament?.title || 'League Tournament'}</span>
-          <span className="mx-2">/</span>
-          <span className="text-gray-900 font-medium">Match #{match.match_number} Scoring</span>
+        <div className="text-xs text-gray-500 mb-2">
+          {match.tournament?.title || 'League Tournament'}
+          <span className="mx-1.5">·</span>
+          Round {match.round_number}, Match #{match.match_number}
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {homeTeamName} vs. {awayTeamName}
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Record match result with individual player statistics.
-          </p>
+
+        {/* Live scoreboard */}
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-lg font-bold text-gray-900 truncate flex-1 text-right">{homeTeamName}</span>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <span className="text-3xl font-black text-purple-700 tabular-nums w-8 text-center">{homeScore}</span>
+            <span className="text-lg font-semibold text-gray-400">–</span>
+            <span className="text-3xl font-black text-purple-700 tabular-nums w-8 text-center">{awayScore}</span>
+          </div>
+          <span className="text-lg font-bold text-gray-900 truncate flex-1 text-left">{awayTeamName}</span>
         </div>
+        <p className="text-xs text-gray-400 text-center mt-1">Score updates as you add player goals below</p>
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-        <form id="league-match-score-form" onSubmit={handleSubmit} className="space-y-6">
+        <form id="league-match-score-form" onSubmit={handleSubmit} className="space-y-4">
           {/* Errors */}
           {errors.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</h4>
+              <h4 className="text-sm font-medium text-red-800 mb-2">Please fix the following:</h4>
               <ul className="text-sm text-red-700 space-y-1">
                 {errors.map((error, index) => (
                   <li key={index}>• {error}</li>
@@ -233,48 +165,9 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
             </div>
           )}
 
-          {/* Score Input Section */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Match Score</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Home Score */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {homeTeamName} Score
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  value={homeScore}
-                  onChange={(e) => setHomeScore(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-3 text-2xl font-bold border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={isReadOnly}
-                />
-              </div>
-
-              {/* Away Score */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {awayTeamName} Score
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="50"
-                  value={awayScore}
-                  onChange={(e) => setAwayScore(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-3 text-2xl font-bold border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={isReadOnly}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Player Statistics Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Home Team Player Stats */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+          {/* Player Statistics — two columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
               <PlayerStatsInput
                 teamName={homeTeamName}
                 teamScore={homeScore}
@@ -284,9 +177,7 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
                 disabled={isReadOnly}
               />
             </div>
-
-            {/* Away Team Player Stats */}
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
               <PlayerStatsInput
                 teamName={awayTeamName}
                 teamScore={awayScore}
@@ -297,31 +188,41 @@ export const LeagueMatchScorer: React.FC<LeagueMatchScorerProps> = ({
               />
             </div>
           </div>
+
+          {/* Match Notes */}
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Match Notes <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Add any notes about this match…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              disabled={isReadOnly}
+            />
+          </div>
         </form>
       </div>
 
-      {/* Fixed Footer Actions */}
+      {/* Fixed Footer */}
       {!isReadOnly && (
-        <div className="flex-none p-6 border-t border-gray-200 bg-white">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="text-sm text-gray-600 hover:text-gray-900 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              form="league-match-score-form"
-              disabled={isLoading}
-              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30"
-            >
-              {isLoading ? 'Submitting...' : 'Submit Result'}
-            </button>
-          </div>
+        <div className="flex-none px-6 py-4 border-t border-gray-200 bg-white flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-gray-600 hover:text-gray-900 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg transition-colors"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="league-match-score-form"
+            disabled={isLoading}
+            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-500/30"
+          >
+            {isLoading ? 'Submitting…' : 'Submit Result'}
+          </button>
         </div>
       )}
     </div>

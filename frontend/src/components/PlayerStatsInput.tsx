@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React from 'react';
+import { Plus, Trash2, Minus } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -29,177 +29,182 @@ export const PlayerStatsInput: React.FC<PlayerStatsInputProps> = ({
   availablePlayers,
   playerStats,
   onChange,
-  disabled = false
+  disabled = false,
 }) => {
-  const [validationError, setValidationError] = useState<string>('');
-
-  // Calculate running total of goals
   const totalGoals = playerStats.reduce((sum, stat) => sum + stat.goals, 0);
-
-  // Validate goals match team score
-  useEffect(() => {
-    if (totalGoals !== teamScore) {
-      setValidationError(`Total goals (${totalGoals}) must equal team score (${teamScore})`);
-    } else {
-      setValidationError('');
-    }
-  }, [totalGoals, teamScore]);
+  const goalsMatch = totalGoals === teamScore;
 
   const addPlayerStat = () => {
-    const newStat: PlayerStat = {
-      player_id: '',
-      player_name: '',
-      goals: 0,
-      assists: 0
-    };
-    onChange([...playerStats, newStat]);
+    onChange([...playerStats, { player_id: '', player_name: '', goals: 0, assists: 0 }]);
   };
 
   const removePlayerStat = (index: number) => {
-    const updated = playerStats.filter((_, i) => i !== index);
-    onChange(updated);
+    onChange(playerStats.filter((_, i) => i !== index));
   };
 
   const updatePlayerStat = (index: number, field: keyof PlayerStat, value: string | number) => {
     const updated = playerStats.map((stat, i) => {
-      if (i === index) {
-        const updatedStat = { ...stat, [field]: value };
-        
-        // Auto-fill player name when player is selected
-        if (field === 'player_id' && value) {
-          const player = availablePlayers.find(p => p.id === value);
-          if (player) {
-            updatedStat.player_name = player.full_name || player.name;
-          }
-        }
-        
-        return updatedStat;
+      if (i !== index) return stat;
+      const updatedStat = { ...stat, [field]: value };
+      if (field === 'player_id' && value) {
+        const player = availablePlayers.find(p => p.id === value);
+        if (player) updatedStat.player_name = player.full_name || player.name;
       }
-      return stat;
+      return updatedStat;
     });
     onChange(updated);
   };
 
+  const increment = (index: number, field: 'goals' | 'assists') => {
+    const max = field === 'goals' ? 20 : 20;
+    const current = playerStats[index][field];
+    if (current < max) updatePlayerStat(index, field, current + 1);
+  };
+
+  const decrement = (index: number, field: 'goals' | 'assists') => {
+    const current = playerStats[index][field];
+    if (current > 0) updatePlayerStat(index, field, current - 1);
+  };
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-lg font-semibold text-gray-900">{teamName} Player Statistics</h4>
-          <p className="text-sm text-gray-600">
-            Running total: <span className={`font-semibold ${totalGoals === teamScore ? 'text-green-600' : 'text-red-600'}`}>
-              {totalGoals} / {teamScore} goals
+          <h4 className="text-base font-semibold text-gray-900">{teamName}</h4>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Goals entered:{' '}
+            <span className={`font-semibold ${goalsMatch ? 'text-green-600' : 'text-amber-600'}`}>
+              {totalGoals} / {teamScore}
             </span>
+            {!goalsMatch && teamScore > 0 && (
+              <span className="ml-1 text-amber-600">— add {teamScore - totalGoals} more</span>
+            )}
           </p>
         </div>
         <button
           type="button"
           onClick={addPlayerStat}
           disabled={disabled}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           Add Player
         </button>
       </div>
 
-      {/* Validation Error */}
-      {validationError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-800">⚠️ {validationError}</p>
-        </div>
-      )}
-
       {/* No players warning */}
       {availablePlayers.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <p className="text-sm text-yellow-800">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <p className="text-xs text-yellow-800">
             ⚠️ No players found for this team. Make sure the team has registered members.
           </p>
         </div>
       )}
 
-      {/* Player Stats List */}
-      <div className="space-y-3">
+      {/* Column headers — only show when there are rows */}
+      {playerStats.length > 0 && (
+        <div className="grid grid-cols-12 gap-2 px-1">
+          <div className="col-span-5 text-xs font-medium text-gray-500 uppercase tracking-wide">Player</div>
+          <div className="col-span-3 text-xs font-medium text-gray-500 uppercase tracking-wide text-center">Goals</div>
+          <div className="col-span-3 text-xs font-medium text-gray-500 uppercase tracking-wide text-center">Assists</div>
+          <div className="col-span-1" />
+        </div>
+      )}
+
+      {/* Player rows */}
+      <div className="space-y-2">
         {playerStats.map((stat, index) => (
-          <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <div className="grid grid-cols-12 gap-3 items-start">
-              {/* Player Selection */}
-              <div className="col-span-5">
-                <label className="block text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
-                  Player
-                </label>
-                <select
-                  value={stat.player_id}
-                  onChange={(e) => updatePlayerStat(index, 'player_id', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={disabled}
-                >
-                  <option value="">Select player</option>
-                  {availablePlayers.map(player => (
-                    <option key={player.id} value={player.id}>
-                      {player.full_name || player.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div key={index} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+            {/* Player dropdown */}
+            <div className="col-span-5">
+              <select
+                value={stat.player_id}
+                onChange={(e) => updatePlayerStat(index, 'player_id', e.target.value)}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white truncate"
+                disabled={disabled}
+              >
+                <option value="">Select…</option>
+                {availablePlayers.map(player => (
+                  <option key={player.id} value={player.id}>
+                    {player.full_name || player.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              {/* Goals */}
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
-                  Goals
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={stat.goals}
-                  onChange={(e) => updatePlayerStat(index, 'goals', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={disabled}
-                />
-              </div>
+            {/* Goals stepper */}
+            <div className="col-span-3 flex items-center justify-center gap-1">
+              <button
+                type="button"
+                onClick={() => decrement(index, 'goals')}
+                disabled={disabled || stat.goals === 0}
+                className="w-6 h-6 flex items-center justify-center rounded-md bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">
+                {stat.goals}
+              </span>
+              <button
+                type="button"
+                onClick={() => increment(index, 'goals')}
+                disabled={disabled || stat.goals >= 20}
+                className="w-6 h-6 flex items-center justify-center rounded-md bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
 
-              {/* Assists */}
-              <div className="col-span-3">
-                <label className="block text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
-                  Assists
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={stat.assists}
-                  onChange={(e) => updatePlayerStat(index, 'assists', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  disabled={disabled}
-                />
-              </div>
+            {/* Assists stepper */}
+            <div className="col-span-3 flex items-center justify-center gap-1">
+              <button
+                type="button"
+                onClick={() => decrement(index, 'assists')}
+                disabled={disabled || stat.assists === 0}
+                className="w-6 h-6 flex items-center justify-center rounded-md bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">
+                {stat.assists}
+              </span>
+              <button
+                type="button"
+                onClick={() => increment(index, 'assists')}
+                disabled={disabled || stat.assists >= 20}
+                className="w-6 h-6 flex items-center justify-center rounded-md bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
 
-              {/* Delete Button */}
-              <div className="col-span-1 flex items-end justify-center">
-                <button
-                  type="button"
-                  onClick={() => removePlayerStat(index)}
-                  disabled={disabled}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Remove player"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
-              </div>
+            {/* Delete */}
+            <div className="col-span-1 flex justify-center">
+              <button
+                type="button"
+                onClick={() => removePlayerStat(index)}
+                disabled={disabled}
+                className="p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Remove player"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
         ))}
 
+        {/* Empty state */}
         {playerStats.length === 0 && (
-          <div className="text-center py-8 text-gray-400">
-            <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </div>
-            <p className="text-sm">Add player statistics for {teamName}</p>
-          </div>
+          <button
+            type="button"
+            onClick={addPlayerStat}
+            disabled={disabled}
+            className="w-full py-6 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-purple-300 hover:text-purple-500 hover:bg-purple-50 transition-colors disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+          >
+            <Plus className="h-5 w-5 mx-auto mb-1" />
+            <p className="text-sm">Add player stats for {teamName}</p>
+          </button>
         )}
       </div>
     </div>
