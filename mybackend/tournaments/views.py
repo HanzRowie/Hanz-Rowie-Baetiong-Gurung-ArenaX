@@ -215,7 +215,26 @@ class TournamentViewSet(viewsets.ModelViewSet):
                     )
         
         return response
-    
+
+    def destroy(self, request, *args, **kwargs):
+        """Only the organizer can delete their own tournament."""
+        tournament = self.get_object()
+
+        if tournament.organizer != request.user:
+            return Response(
+                {'error': 'Only the tournament organizer can delete this tournament.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if tournament.status in ('ONGOING', 'COMPLETED'):
+            return Response(
+                {'error': f'Cannot delete a tournament that is {tournament.status.lower()}.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tournament.delete()
+        return Response({'message': 'Tournament deleted successfully.'}, status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'])
     def generate_schedule(self, request, pk=None):
         """Generate round-robin schedule for league tournament"""
@@ -1113,8 +1132,13 @@ def update_match_result(request, tournament_id, match_id):
         # Prevent scoring a match before its scheduled time (skip for rescheduling/venue-only updates)
         score_keys = {'team1_score', 'team2_score', 'player1_score', 'player2_score', 'winner_id'}
         if score_keys.intersection(data.keys()):
+            # Block scoring entirely if no date has been set
+            if not match.scheduled_time:
+                return Response({
+                    'error': 'Cannot score this match — no date and time has been set. Please schedule the match first.'
+                }, status=status.HTTP_400_BAD_REQUEST)
             from django.utils import timezone as tz
-            if match.scheduled_time and tz.now() < match.scheduled_time:
+            if tz.now() < match.scheduled_time:
                 return Response({
                     'error': f'Cannot enter scores before the match has started. Match is scheduled for {match.scheduled_time.strftime("%Y-%m-%d %H:%M")}.'
                 }, status=status.HTTP_400_BAD_REQUEST)

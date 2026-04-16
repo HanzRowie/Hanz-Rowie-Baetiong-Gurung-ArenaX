@@ -298,19 +298,17 @@ const LeagueScheduleTable: React.FC<LeagueScheduleTableProps> = ({
                   {onEnterScore && (
                     <button
                       onClick={() => {
-                        if (!match.scheduled_time) {
-                          alert('Please set a date and time for this match before scoring.');
-                          return;
-                        }
+                        if (!match.scheduled_time) return;
                         onEnterScore(match.id);
                       }}
+                      disabled={!match.scheduled_time}
                       className={`p-1 rounded transition-colors ${
-                        !match.scheduled_time
-                          ? 'text-gray-300 cursor-not-allowed'
-                          : 'text-green-600 hover:bg-green-50'
+                        match.scheduled_time
+                          ? 'text-green-600 hover:bg-green-50 cursor-pointer'
+                          : 'text-gray-300 cursor-not-allowed'
                       }`}
-                      title={!match.scheduled_time ? 'Set date/time first' : 'Enter score'}
-                      aria-label="Enter match score and statistics"
+                      title={match.scheduled_time ? 'Enter score' : 'Set a date and time before scoring'}
+                      aria-label={match.scheduled_time ? 'Enter match score' : 'Cannot score — no date set'}
                     >
                       <Trophy className="w-3 h-3 md:w-4 md:h-4" />
                     </button>

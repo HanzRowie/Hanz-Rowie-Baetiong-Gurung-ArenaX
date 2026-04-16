@@ -447,7 +447,7 @@ export default function TournamentDetailPage() {
       }
 
       await loadMatches();
-      if (tournament.tournament_type === 'league') {
+      if (tournament?.tournament_type === 'league') {
         await loadStandings();
       }
     } catch (err: any) {
@@ -588,7 +588,8 @@ export default function TournamentDetailPage() {
           toastService.success('Tournament deleted successfully!');
           navigate('/my-tournaments');
         } catch (err: any) {
-          toastService.error(err.response?.data?.error || 'Failed to delete tournament');
+          const msg = err.response?.data?.error || 'Failed to delete tournament';
+          toastService.error(msg);
         }
       },
     });
@@ -827,6 +828,16 @@ export default function TournamentDetailPage() {
                     >
                       <Edit className="h-4 w-4" />
                       Edit
+                    </button>
+                  )}
+
+                  {tournament.status !== 'COMPLETED' && (
+                    <button
+                      onClick={handleDeleteTournament}
+                      className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors px-3 py-2 rounded-lg hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
                     </button>
                   )}
                 </>
