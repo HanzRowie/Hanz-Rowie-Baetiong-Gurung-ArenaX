@@ -5,9 +5,10 @@ from decouple import config, Csv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-change-in-production')
-DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+# Removed the insecure default. If missing from .env, the app will safely fail to start.
+SECRET_KEY = config('SECRET_KEY') 
+DEBUG = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=Csv())
 
 # Applications
 INSTALLED_APPS = [
@@ -52,7 +53,7 @@ MIDDLEWARE = [
 APPEND_SLASH = False
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3002', cast=Csv())
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Allow all origins in development
 CORS_ALLOWED_HEADERS = [
@@ -93,8 +94,12 @@ WSGI_APPLICATION = "backendapi.wsgi.application"
 # Database
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "arenax_db",
+        "USER": "postgres",
+        "PASSWORD": "1234",
+        "HOST": "localhost",
+        "PORT": "5433",
     }
 }
 
@@ -160,16 +165,16 @@ REST_FRAMEWORK = {
 }
 
 # CSRF exemption for API endpoints
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3002', cast=Csv())
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
 # Email Configuration (SMTP)
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='hanzrowiegurung@gmail.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='ozdv aspr htat jojk')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='hanzrowiegurung@gmail.com')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='')
 
 # Frontend URL for password reset links
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
@@ -201,11 +206,12 @@ else:
     }
 
 # Khalti Payment Gateway Configuration
+# Secure: Defaults are now empty strings. Data must come from .env!
 KHALTI_CONFIG = {
-    'TEST_PUBLIC_KEY': config('KHALTI_TEST_PUBLIC_KEY', default='test_public_key'),
-    'TEST_SECRET_KEY': config('KHALTI_TEST_SECRET_KEY', default='test_secret_key'),
-    'LIVE_PUBLIC_KEY': config('KHALTI_LIVE_PUBLIC_KEY', default='482adc2751a04eee978d023156a36f67'),
-    'LIVE_SECRET_KEY': config('KHALTI_LIVE_SECRET_KEY', default='ac9aa96a1ac046bb8cfde86d475fe133'),
+    'TEST_PUBLIC_KEY': config('KHALTI_TEST_PUBLIC_KEY', default=''),
+    'TEST_SECRET_KEY': config('KHALTI_TEST_SECRET_KEY', default=''),
+    'LIVE_PUBLIC_KEY': config('KHALTI_LIVE_PUBLIC_KEY', default=''),
+    'LIVE_SECRET_KEY': config('KHALTI_LIVE_SECRET_KEY', default=''),
     'IS_LIVE': config('KHALTI_IS_LIVE', default=False, cast=bool),
     'WEBSITE_URL': config('WEBSITE_URL', default='http://localhost:3000'),
     'RETURN_URL': config('KHALTI_RETURN_URL', default='http://localhost:3000/payment/success'),
@@ -222,8 +228,9 @@ logger.info("=" * 60)
 logger.info("KHALTI CONFIGURATION LOADED:")
 logger.info(f"  IS_LIVE: {KHALTI_CONFIG['IS_LIVE']}")
 logger.info(f"  MOCK_MODE: {PAYMENT_MOCK_MODE}")
-logger.info(f"  TEST_PUBLIC_KEY: {KHALTI_CONFIG['TEST_PUBLIC_KEY'][:15]}...")
-logger.info(f"  LIVE_PUBLIC_KEY: {KHALTI_CONFIG['LIVE_PUBLIC_KEY'][:15]}...")
+# Safe logging: only show the first 10 characters so full keys aren't printed to the console
+logger.info(f"  TEST_PUBLIC_KEY: {KHALTI_CONFIG['TEST_PUBLIC_KEY'][:10]}...")
+logger.info(f"  LIVE_PUBLIC_KEY: {KHALTI_CONFIG['LIVE_PUBLIC_KEY'][:10]}...")
 logger.info(f"  WEBSITE_URL: {KHALTI_CONFIG['WEBSITE_URL']}")
 logger.info("=" * 60)
 
