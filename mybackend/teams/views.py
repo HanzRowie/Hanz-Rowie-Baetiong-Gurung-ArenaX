@@ -1910,7 +1910,11 @@ def request_to_join_team(request, team_id):
                 'request_id': str(join_request.id)
             }
         )
-        
+
+        # Notify team owners and leaders
+        from .services.notification_service import TeamNotificationService
+        TeamNotificationService.send_join_request_notification(join_request)
+
         # Return join request data
         join_request_serializer = TeamJoinRequestSerializer(join_request)
         return Response({
@@ -2111,7 +2115,11 @@ def respond_to_join_request(request, request_id):
         join_request.responded_at = timezone.now()
         join_request.responded_by = request.user
         join_request.save()
-        
+
+        # Notify the player of the decision
+        from .services.notification_service import TeamNotificationService
+        TeamNotificationService.send_join_request_response_notification(join_request, response_action)
+
         response_text = 'accepted' if response_action == 'ACCEPTED' else 'declined'
         return Response({
             'success': True,

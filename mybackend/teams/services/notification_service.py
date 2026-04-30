@@ -20,6 +20,8 @@ class TeamNotificationService:
     TEAM_MEMBER_ADDED = 'TEAM_MEMBER_ADDED'
     TEAM_MEMBER_REMOVED = 'TEAM_MEMBER_REMOVED'
     TEAM_ROLE_CHANGED = 'TEAM_ROLE_CHANGED'
+    TEAM_JOIN_REQUEST_RECEIVED = 'TEAM_JOIN_REQUEST_RECEIVED'
+    TEAM_JOIN_REQUEST_RESPONDED = 'TEAM_JOIN_REQUEST_RESPONDED'
 
     @staticmethod
     def send_invitation_notification(invitation: Invitation) -> bool:
@@ -193,6 +195,74 @@ class TeamNotificationService:
 
         except Exception as e:
             print(f"Error sending role changed notification: {e}")
+            return False
+
+    @staticmethod
+    def send_join_request_notification(join_request) -> bool:
+        """
+        Notify team owners and leaders when a player requests to join.
+
+        Args:
+            join_request: The TeamJoinRequest instance
+
+        Returns:
+            bool: True if at least one notification was created
+        """
+        try:
+            from ..models import TeamMembership
+            leaders = TeamMembership.objects.filter(
+                team=join_request.team,
+                role__in=['OWNER', 'LEADER'],
+                is_active=True,
+            ).select_related('player')
+
+            for membership in leaders:
+                Notification.objects.create(
+                    user=membership.player,
+                    notification_type='GENERAL',
+                    title=f"Join Request: {join_request.team.name}",
+                    message=(
+                        f"{join_request.player.full_name} has requested to join your team "
+                        f"'{join_request.team.name}'."
+                        + (f" Message: {join_request.message}" if join_request.message else "")
+                    ),
+                    related_id=join_request.id,
+                )
+
+            return True
+
+        except Exception as e:
+            print(f"Error sending join request notification: {e}")
+            return False
+
+    @staticmethod
+    def send_join_request_response_notification(join_request, response: str) -> bool:
+        """
+        Notify the player when their join request is accepted or declined.
+
+        Args:
+            join_request: The TeamJoinRequest instance
+            response: 'ACCEPTED' or 'DECLINED'
+
+        Returns:
+            bool: True if notification was created
+        """
+        try:
+            action_text = "accepted" if response == 'ACCEPTED' else "declined"
+            Notification.objects.create(
+                user=join_request.player,
+                notification_type='GENERAL',
+                title=f"Join Request {action_text.title()}: {join_request.team.name}",
+                message=(
+                    f"Your request to join '{join_request.team.name}' has been {action_text} "
+                    f"by {join_request.responded_by.full_name}."
+                ),
+                related_id=join_request.id,
+            )
+            return True
+
+        except Exception as e:
+            print(f"Error sending join request response notification: {e}")
             return False
 
     @staticmethod

@@ -18,7 +18,11 @@ import {
   UserMinus,
   LogOut,
   Edit,
-  MessageSquare
+  MessageSquare,
+  Inbox,
+  CheckCircle,
+  XCircle,
+  Clock
 } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import { tournamentService, toastService } from '@/services';
@@ -42,7 +46,12 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'tournaments' | 'stats' | 'chat'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'tournaments' | 'stats' | 'chat' | 'requests'>('overview');
+
+  // Join requests state
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(false);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
 
   // Modal states
   const [showTournamentSelection, setShowTournamentSelection] = useState(false);
@@ -63,6 +72,12 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
     }
   }, [teamId]);
 
+  useEffect(() => {
+    if (activeTab === 'requests' && teamId) {
+      loadJoinRequests();
+    }
+  }, [activeTab, teamId]);
+
   const loadTeamDetails = async () => {
     if (!teamId) return;
 
@@ -70,7 +85,19 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
     try {
       const response = await TeamService.getTeam(teamId);
       if (response.success && response.data) {
-        setTeam(response.data);
+        const teamData = response.data;
+        setTeam(teamData);
+
+        // Fetch join requests immediately if the current user is an owner/leader
+        const membership = teamData.memberships.find(
+          (m: any) => m.player.id === user?.id && m.is_active
+        );
+        if (membership?.role === 'OWNER' || membership?.role === 'LEADER') {
+          // Fire-and-forget — don't block the page render
+          TeamService.getTeamJoinRequests(teamId, 'PENDING')
+            .then(jr => { if (jr.success) setJoinRequests(jr.data || []); })
+            .catch(() => {});
+        }
       } else {
         setError('Failed to load team details');
       }
@@ -79,6 +106,40 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
       setError('Failed to load team details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadJoinRequests = async () => {
+    if (!teamId) return;
+    setJoinRequestsLoading(true);
+    try {
+      const response = await TeamService.getTeamJoinRequests(teamId, 'PENDING');
+      if (response.success) {
+        setJoinRequests(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading join requests:', error);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  };
+
+  const handleRespondToRequest = async (requestId: string, action: 'ACCEPTED' | 'DECLINED') => {
+    setRespondingTo(requestId);
+    try {
+      const response = await TeamService.respondToJoinRequest(requestId, action);
+      if (response.success) {
+        toastService.success(action === 'ACCEPTED' ? 'Player added to team!' : 'Request declined.');
+        // Remove from list and refresh team if accepted
+        setJoinRequests(prev => prev.filter(r => r.id !== requestId));
+        if (action === 'ACCEPTED') loadTeamDetails();
+      } else {
+        toastService.error(response.error || 'Failed to respond to request');
+      }
+    } catch (error: any) {
+      toastService.error('Failed to respond to request');
+    } finally {
+      setRespondingTo(null);
     }
   };
 
@@ -139,8 +200,8 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
         loadTeamDetails(); // Refresh team data
         
         // Show any failures if present
-        if (response.failed && response.failed.length > 0) {
-          toastService.warning(`${response.failed.length} player(s) could not be added`);
+        if (response.data?.failed && response.data.failed.length > 0) {
+          toastService.warning(`${response.data.failed.length} player(s) could not be added`);
         }
       } else {
         toastService.error(response.error || 'Failed to add players');
@@ -355,17 +416,23 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                     { key: 'tournaments', label: 'Tournaments', icon: Trophy },
                     { key: 'stats', label: 'Statistics', icon: TrendingUp },
                     ...(userRole ? [{ key: 'chat', label: 'Chat', icon: MessageSquare }] : []),
-                  ].map(({ key, label, icon: Icon }) => (
+                    ...(canManage ? [{ key: 'requests', label: 'Join Requests', icon: Inbox, badge: joinRequests.length }] : []),
+                  ].map(({ key, label, icon: Icon, badge }: any) => (
                     <button
                       key={key}
                       onClick={() => setActiveTab(key as any)}
-                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === key
+                      className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors relative ${activeTab === key
                           ? 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                     >
                       <Icon className="w-4 h-4" />
                       {label}
+                      {badge !== undefined && badge > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
+                          {badge}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </nav>
@@ -730,6 +797,92 @@ export const TeamDetailsPage: React.FC<TeamDetailsPageProps> = () => {
                       teamId={team.id}
                       teamName={team.name}
                     />
+                  </div>
+                )}
+
+                {activeTab === 'requests' && canManage && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-semibold text-gray-900">Join Requests</h3>
+                      <button
+                        onClick={loadJoinRequests}
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+
+                    {joinRequestsLoading ? (
+                      <div className="space-y-3">
+                        {[1, 2, 3].map(i => (
+                          <div key={i} className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+                        ))}
+                      </div>
+                    ) : joinRequests.length === 0 ? (
+                      <div className="bg-gray-50 rounded-lg p-10 text-center">
+                        <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-600 font-medium">No pending join requests</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          When players request to join your team, they'll appear here.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {joinRequests.map((req) => (
+                          <div
+                            key={req.id}
+                            className="flex items-start justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                          >
+                            <div className="flex items-start gap-4 flex-1 min-w-0">
+                              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-lg font-semibold text-white">
+                                  {req.player?.full_name?.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-semibold text-gray-900 truncate">
+                                    {req.player?.full_name}
+                                  </p>
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 border border-yellow-200 rounded-full text-xs font-medium flex-shrink-0">
+                                    <Clock className="w-3 h-3" />
+                                    Pending
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-500 truncate">{req.player?.email}</p>
+                                {req.message && (
+                                  <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded px-3 py-2 italic">
+                                    "{req.message}"
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Requested {new Date(req.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                              <button
+                                onClick={() => handleRespondToRequest(req.id, 'ACCEPTED')}
+                                disabled={respondingTo === req.id}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleRespondToRequest(req.id, 'DECLINED')}
+                                disabled={respondingTo === req.id}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-white text-red-600 border border-red-200 text-sm font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

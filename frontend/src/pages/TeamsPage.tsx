@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users, Trophy, Calendar, Search, Crown, Shield, Star } from 'lucide-react';
+import { Plus, Users, Trophy, Calendar, Search, Crown, Shield, Star, Clock } from 'lucide-react';
 import TeamService from '@/services/teamService';
 import { TeamCreationForm } from '@/components/team/TeamCreationForm';
 import { InvitationList } from '@/components/team/InvitationList';
@@ -46,6 +46,13 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
     enabled: !!user,
   });
 
+  // Fetch user's pending join requests
+  const { data: myJoinRequestsData } = useQuery({
+    queryKey: ['teams', 'my-join-requests'],
+    queryFn: () => TeamService.getMyJoinRequests(),
+    enabled: !!user,
+  });
+
   // Fetch discoverable teams
   const { data: discoverableTeamsData, isLoading: discoverLoading } = useQuery({
     queryKey: ['teams', 'discover', searchQuery, sportFilter],
@@ -56,6 +63,13 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
   const myTeams = myTeamsData?.data || [];
   const invitations = invitationsData?.data || [];
   const discoverableTeams = discoverableTeamsData?.data || [];
+
+  // Set of team IDs the user has already sent a pending request to
+  const pendingRequestTeamIds = new Set<string>(
+    (myJoinRequestsData?.data || [])
+      .filter((r: any) => r.status === 'PENDING')
+      .map((r: any) => r.team?.id)
+  );
 
   const handleCreateTeam = () => {
     setShowCreateForm(false);
@@ -104,8 +118,8 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
       
       if (response.success) {
         toastService.success('Join request sent successfully!');
-        // Refresh the discoverable teams list
         queryClient.invalidateQueries({ queryKey: ['teams', 'discover'] });
+        queryClient.invalidateQueries({ queryKey: ['teams', 'my-join-requests'] });
       } else {
         toastService.error(response.error || 'Failed to send join request');
       }
@@ -213,7 +227,7 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
     </div>
   );
 
-  const DiscoverableTeamCard: React.FC<{ team: Team }> = ({ team }) => (
+  const DiscoverableTeamCard: React.FC<{ team: Team; hasPendingRequest: boolean }> = ({ team, hasPendingRequest }) => (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-lg transition-shadow">
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -267,12 +281,19 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
             View Details
           </button>
           {!team.is_full && (
-            <button 
-              onClick={() => handleRequestToJoin(team.id)}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-            >
-              Request to Join
-            </button>
+            hasPendingRequest ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 text-sm bg-yellow-50 text-yellow-700 border border-yellow-300 rounded cursor-default">
+                <Clock className="w-3.5 h-3.5" />
+                Request Pending
+              </span>
+            ) : (
+              <button 
+                onClick={() => handleRequestToJoin(team.id)}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+              >
+                Request to Join
+              </button>
+            )
           )}
         </div>
       </div>
@@ -420,7 +441,11 @@ export const TeamsPage: React.FC<TeamsPageProps> = () => {
               ) : discoverableTeams && discoverableTeams.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {discoverableTeams.map((team: any) => (
-                    <DiscoverableTeamCard key={team.id} team={team} />
+                    <DiscoverableTeamCard
+                      key={team.id}
+                      team={team}
+                      hasPendingRequest={pendingRequestTeamIds.has(team.id)}
+                    />
                   ))}
                 </div>
               ) : (
