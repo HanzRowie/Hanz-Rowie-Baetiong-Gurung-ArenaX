@@ -7,7 +7,7 @@ from django.http import Http404
 from django.db.models import Q
 from django.utils import timezone
 from .models import Team, TeamMembership, Invitation, ActivityHistory, TeamJoinRequest
-from .services import ActivityHistoryService, TeamManager, RoleManager, InvitationManager, MatchScorer
+from .services import ActivityHistoryService, TeamManager, RoleManager, InvitationManager, MatchScorer, MatchNotFoundError, UnauthorizedScoringError, InvalidScoreError, MatchAlreadyScoredError
 from tournaments.models import Match
 from .serializers import (
     TeamSerializer, TeamCreateSerializer, TeamUpdateSerializer, TeamListSerializer,
@@ -1382,25 +1382,25 @@ def record_futsal_match_score(request, match_id):
             'message': 'Futsal match score recorded successfully'
         })
         
-    except MatchScorer.MatchNotFoundError as e:
+    except MatchNotFoundError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_404_NOT_FOUND)
     
-    except MatchScorer.UnauthorizedScoringError as e:
+    except UnauthorizedScoringError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_403_FORBIDDEN)
     
-    except MatchScorer.InvalidScoreError as e:
+    except InvalidScoreError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    except MatchScorer.MatchAlreadyScoredError as e:
+    except MatchAlreadyScoredError as e:
         return Response({
             'success': False,
             'error': str(e)
@@ -1508,25 +1508,25 @@ def record_badminton_match_score(request, match_id):
             'message': 'Badminton match score recorded successfully'
         })
         
-    except MatchScorer.MatchNotFoundError as e:
+    except MatchNotFoundError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_404_NOT_FOUND)
     
-    except MatchScorer.UnauthorizedScoringError as e:
+    except UnauthorizedScoringError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_403_FORBIDDEN)
     
-    except MatchScorer.InvalidScoreError as e:
+    except InvalidScoreError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    except MatchScorer.MatchAlreadyScoredError as e:
+    except MatchAlreadyScoredError as e:
         return Response({
             'success': False,
             'error': str(e)
@@ -1631,19 +1631,19 @@ def update_match_score(request, match_id):
             'message': 'Match score updated successfully'
         })
         
-    except MatchScorer.MatchNotFoundError as e:
+    except MatchNotFoundError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_404_NOT_FOUND)
     
-    except MatchScorer.UnauthorizedScoringError as e:
+    except UnauthorizedScoringError as e:
         return Response({
             'success': False,
             'error': str(e)
         }, status=status.HTTP_403_FORBIDDEN)
     
-    except MatchScorer.InvalidScoreError as e:
+    except InvalidScoreError as e:
         return Response({
             'success': False,
             'error': str(e)

@@ -71,29 +71,31 @@ export const BadmintonScoreForm: React.FC<BadmintonScoreFormProps> = ({
       newErrors.push('Badminton match must have 2 or 3 sets');
     }
 
-    // Validate each set
+    // Validate each set using BWF rules (same logic as getSetWinner)
     setsData.forEach((set, index) => {
-      if (set.home_score < 0 || set.away_score < 0) {
-        newErrors.push(`Set ${index + 1}: Scores cannot be negative`);
-      }
-      if (set.home_score > 30 || set.away_score > 30) {
-        newErrors.push(`Set ${index + 1}: Score cannot exceed 30`);
+      if (!validateBWFRules(set.home_score, set.away_score)) {
+        newErrors.push(
+          `Set ${index + 1}: Invalid score ${set.home_score}-${set.away_score}. ` +
+          `A set must be won 21-x (with 2-point lead) or 30-29.`
+        );
       }
     });
 
-    // Validate match result only if sets are complete
-    if (setsData.length > 0) {
-      const homeSetsWon = setsData.filter(set => set.home_score > set.away_score).length;
-      const awaySetsWon = setsData.filter(set => set.away_score > set.home_score).length;
-      const totalDecided = homeSetsWon + awaySetsWon;
+    // Only check match result if all individual sets are valid
+    if (newErrors.length === 0) {
+      // Use getSetWinner (BWF-aware) — not raw score comparison
+      const homeSetsWon = setsData.filter(set => getSetWinner(set) === 'home').length;
+      const awaySetsWon = setsData.filter(set => getSetWinner(set) === 'away').length;
 
-      if (totalDecided > 0 && setsData.length === 2 && totalDecided === 2) {
+      if (setsData.length === 2) {
+        // 2 sets: must be 2-0
         if (!((homeSetsWon === 2 && awaySetsWon === 0) || (homeSetsWon === 0 && awaySetsWon === 2))) {
-          newErrors.push('For 2-set match, one player/team must win both sets');
+          newErrors.push('With 2 sets, one side must win both (2-0). Add a 3rd set if the match went to a decider.');
         }
-      } else if (setsData.length === 3 && totalDecided === 3) {
+      } else if (setsData.length === 3) {
+        // 3 sets: must be 2-1
         if (!((homeSetsWon === 2 && awaySetsWon === 1) || (homeSetsWon === 1 && awaySetsWon === 2))) {
-          newErrors.push('For 3-set match, final result must be 2-1');
+          newErrors.push('With 3 sets, the final result must be 2-1.');
         }
       }
     }
@@ -120,6 +122,14 @@ export const BadmintonScoreForm: React.FC<BadmintonScoreFormProps> = ({
 
   const addSet = () => {
     if (setsData.length < 3) {
+      // Don't allow adding a 3rd set if the match is already decided 2-0
+      const homeSetsWon = setsData.filter(set => getSetWinner(set) === 'home').length;
+      const awaySetsWon = setsData.filter(set => getSetWinner(set) === 'away').length;
+      if (homeSetsWon === 2 || awaySetsWon === 2) {
+        setErrors(['Match is already decided 2-0. A 3rd set is not needed.']);
+        return;
+      }
+      setErrors([]);
       setSetsData(prev => [
         ...prev,
         {

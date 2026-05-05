@@ -496,6 +496,70 @@ class BadmintonSet(models.Model):
     def __str__(self):
         return f"Set {self.set_number}: {self.home_score}-{self.away_score}"
 
+    def is_valid_score(self):
+        """
+        Validate badminton scoring rules according to BWF guidelines:
+        - 21-point system
+        - Must win by 2 points
+        - First to 30 points wins at 29-all
+        - Scores cannot be negative
+        """
+        if self.home_score < 0 or self.away_score < 0:
+            return False
+
+        if self.home_score > 30 or self.away_score > 30:
+            return False
+
+        max_score = max(self.home_score, self.away_score)
+        min_score = min(self.home_score, self.away_score)
+
+        if max_score >= 21 and (max_score - min_score) >= 2:
+            return True
+
+        if max_score == 30 and min_score >= 29:
+            return True
+
+        return False
+
+    def get_winner(self):
+        """Returns 'home', 'away', or None if set is not complete."""
+        if not self.is_valid_score():
+            return None
+        if self.home_score > self.away_score:
+            return 'home'
+        elif self.away_score > self.home_score:
+            return 'away'
+        return None
+
+    @classmethod
+    def validate_match_sets(cls, sets):
+        """Validate a complete badminton match (best of 3 sets)."""
+        if not sets or len(sets) < 2 or len(sets) > 3:
+            return False
+
+        home_sets_won = 0
+        away_sets_won = 0
+
+        for set_obj in sets:
+            if not set_obj.is_valid_score():
+                return False
+            winner = set_obj.get_winner()
+            if winner == 'home':
+                home_sets_won += 1
+            elif winner == 'away':
+                away_sets_won += 1
+            else:
+                return False
+
+        if len(sets) == 2:
+            return (home_sets_won == 2 and away_sets_won == 0) or \
+                   (home_sets_won == 0 and away_sets_won == 2)
+        elif len(sets) == 3:
+            return (home_sets_won == 2 and away_sets_won == 1) or \
+                   (home_sets_won == 1 and away_sets_won == 2)
+
+        return False
+
 
 class FutsalGoal(models.Model):
     """Individual goal records with scorer and assist details"""
@@ -561,81 +625,3 @@ class FutsalCard(models.Model):
 
     def __str__(self):
         return f"{self.player.full_name} - {self.card_type} card ({self.minute}')"
-
-    def is_valid_score(self):
-        """
-        Validate badminton scoring rules according to BWF guidelines:
-        - 21-point system
-        - Must win by 2 points
-        - First to 30 points wins at 29-all
-        - Scores cannot be negative
-        """
-        if self.home_score < 0 or self.away_score < 0:
-            return False
-        
-        if self.home_score > 30 or self.away_score > 30:
-            return False
-        
-        max_score = max(self.home_score, self.away_score)
-        min_score = min(self.home_score, self.away_score)
-        
-        # Standard win: 21+ points with 2-point lead
-        if max_score >= 21 and (max_score - min_score) >= 2:
-            return True
-        
-        # Special case: first to 30 at 29-all or higher
-        if max_score == 30 and min_score >= 29:
-            return True
-        
-        return False
-
-    def get_winner(self):
-        """
-        Get the winner of this set based on scores.
-        Returns 'home', 'away', or None if set is not complete.
-        """
-        if not self.is_valid_score():
-            return None
-        
-        if self.home_score > self.away_score:
-            return 'home'
-        elif self.away_score > self.home_score:
-            return 'away'
-        
-        return None
-
-    @classmethod
-    def validate_match_sets(cls, sets):
-        """
-        Validate a complete badminton match (best of 3 sets).
-        Returns True if the match result is valid.
-        """
-        if not sets or len(sets) < 2 or len(sets) > 3:
-            return False
-        
-        home_sets_won = 0
-        away_sets_won = 0
-        
-        for set_obj in sets:
-            if not set_obj.is_valid_score():
-                return False
-            
-            winner = set_obj.get_winner()
-            if winner == 'home':
-                home_sets_won += 1
-            elif winner == 'away':
-                away_sets_won += 1
-            else:
-                return False
-        
-        # Check if match is properly concluded
-        if len(sets) == 2:
-            # 2-0 result
-            return (home_sets_won == 2 and away_sets_won == 0) or \
-                   (home_sets_won == 0 and away_sets_won == 2)
-        elif len(sets) == 3:
-            # 2-1 result
-            return (home_sets_won == 2 and away_sets_won == 1) or \
-                   (home_sets_won == 1 and away_sets_won == 2)
-        
-        return False

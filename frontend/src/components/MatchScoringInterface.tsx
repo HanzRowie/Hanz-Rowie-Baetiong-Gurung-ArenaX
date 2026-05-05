@@ -235,10 +235,23 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
             onSubmit={async (payload: any) => {
               try {
                 const { api: apiClient } = await import('@/services/api');
-                await apiClient.put(
-                  `/api/tournaments/${selectedMatch.tournament.id}/matches/${selectedMatch.id}/result/`,
-                  payload
-                );
+
+                if (payload._isBadminton) {
+                  // Route to the dedicated badminton endpoint which validates BWF rules
+                  // and saves individual BadmintonSet records
+                  console.log('[MatchScoringInterface] Routing badminton to /api/teams/matches/.../score/badminton/');
+                  await apiClient.post(
+                    `/api/teams/matches/${selectedMatch.id}/score/badminton/`,
+                    { sets_data: payload.sets_data }
+                  );
+                } else {
+                  // Generic endpoint for futsal / other sports
+                  await apiClient.put(
+                    `/api/tournaments/${selectedMatch.tournament.id}/matches/${selectedMatch.id}/result/`,
+                    payload
+                  );
+                }
+
                 handleMatchScored({ ...selectedMatch, status: 'COMPLETED' } as any);
               } catch (err: any) {
                 toast.error(err?.response?.data?.error || 'Failed to save score');

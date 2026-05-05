@@ -113,8 +113,19 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
 
   const determineWinner = () => {
     if (isBadminton) {
-      const homeSets = sets.filter(s => s.home_score > s.away_score).length;
-      const awaySets = sets.filter(s => s.away_score > s.home_score).length;
+      // Must use BWF-valid set wins only — raw score comparison is not enough
+      const validateBWF = (home: number, away: number): boolean => {
+        if (home < 0 || away < 0 || home > 30 || away > 30) return false;
+        const max = Math.max(home, away);
+        const min = Math.min(home, away);
+        if (max >= 21 && (max - min) >= 2) return true;
+        if (max === 30 && min >= 29) return true;
+        return false;
+      };
+      const homeSets = sets.filter(s => validateBWF(s.home_score, s.away_score) && s.home_score > s.away_score).length;
+      const awaySets = sets.filter(s => validateBWF(s.home_score, s.away_score) && s.away_score > s.home_score).length;
+      console.log('[BracketMatchScorer] Badminton sets:', sets);
+      console.log('[BracketMatchScorer] Valid sets won — home:', homeSets, 'away:', awaySets);
       if (homeSets > awaySets) return home?.id;
       if (awaySets > homeSets) return away?.id;
       return null;
@@ -124,18 +135,58 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
     return null;
   };
 
+  const validateBWFSet = (home: number, away: number): boolean => {
+    if (home < 0 || away < 0 || home > 30 || away > 30) return false;
+    const max = Math.max(home, away);
+    const min = Math.min(home, away);
+    if (max >= 21 && (max - min) >= 2) return true;
+    if (max === 30 && min >= 29) return true;
+    return false;
+  };
+
   const validate = (): boolean => {
     const errs: string[] = [];
     if (homeScore < 0 || awayScore < 0) errs.push('Scores cannot be negative');
-    if (isFutsal && isTeam) {
-      const homeGoals = homePlayerStats.reduce((s, p) => s + p.goals, 0);
-      const awayGoals = awayPlayerStats.reduce((s, p) => s + p.goals, 0);
-      if (homeGoals !== homeScore) errs.push(`${homeName}: player goals (${homeGoals}) must equal team score (${homeScore})`);
-      if (awayGoals !== awayScore) errs.push(`${awayName}: player goals (${awayGoals}) must equal team score (${awayScore})`);
+
+    if (isBadminton) {
+      // Validate each set individually
+      sets.forEach((s, i) => {
+        if (!validateBWFSet(s.home_score, s.away_score)) {
+          errs.push(
+            `Set ${i + 1}: Invalid score ${s.home_score}-${s.away_score}. ` +
+            `A set must reach 21 with a 2-point lead (or 30-29).`
+          );
+        }
+      });
+
+      if (errs.length === 0) {
+        const homeSets = sets.filter(s => validateBWFSet(s.home_score, s.away_score) && s.home_score > s.away_score).length;
+        const awaySets = sets.filter(s => validateBWFSet(s.home_score, s.away_score) && s.away_score > s.home_score).length;
+        console.log('[BracketMatchScorer] validate — homeSets:', homeSets, 'awaySets:', awaySets, 'total sets:', sets.length);
+
+        if (sets.length === 2 && !((homeSets === 2 && awaySets === 0) || (homeSets === 0 && awaySets === 2))) {
+          errs.push('With 2 sets, one side must win both (2-0). Add a 3rd set if the match went to a decider.');
+        }
+        if (sets.length === 3 && !((homeSets === 2 && awaySets === 1) || (homeSets === 1 && awaySets === 2))) {
+          errs.push('With 3 sets, the final result must be 2-1.');
+        }
+        if (homeSets === 0 && awaySets === 0) {
+          errs.push('No completed sets yet. Enter valid scores for at least 2 sets.');
+        }
+      }
+    } else {
+      if (isFutsal && isTeam) {
+        const homeGoals = homePlayerStats.reduce((s, p) => s + p.goals, 0);
+        const awayGoals = awayPlayerStats.reduce((s, p) => s + p.goals, 0);
+        if (homeGoals !== homeScore) errs.push(`${homeName}: player goals (${homeGoals}) must equal team score (${homeScore})`);
+        if (awayGoals !== awayScore) errs.push(`${awayName}: player goals (${awayGoals}) must equal team score (${awayScore})`);
+      }
+      if (!determineWinner() && homeScore === awayScore) {
+        errs.push('Bracket matches cannot end in a draw — one team must have a higher score');
+      }
     }
-    if (!determineWinner() && homeScore === awayScore) {
-      errs.push('Bracket matches cannot end in a draw — one team must have a higher score');
-    }
+
+    console.log('[BracketMatchScorer] Validation errors:', errs);
     setErrors(errs);
     return errs.length === 0;
   };
@@ -147,11 +198,24 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
     const winnerId = determineWinner();
 
     if (isBadminton) {
-      const homeSets = sets.filter(s => s.home_score > s.away_score).length;
-      const awaySets = sets.filter(s => s.away_score > s.home_score).length;
-      const payload = isTeam
-        ? { team1_score: homeSets, team2_score: awaySets, winner_id: winnerId }
-        : { player1_score: homeSets, player2_score: awaySets, winner_id: winnerId };
+      const homeSets = sets.filter(s => validateBWFSet(s.home_score, s.away_score) && s.home_score > s.away_score).length;
+      const awaySets = sets.filter(s => validateBWFSet(s.home_score, s.away_score) && s.away_score > s.home_score).length;
+      // Include full set data so the caller can route to the proper badminton endpoint
+      const setsData = sets.map(s => ({
+        set_number: s.set_number,
+        home_score: s.home_score,
+        away_score: s.away_score,
+        duration: 0, // duration not captured in this scorer
+      }));
+      const payload = {
+        _isBadminton: true,  // flag for MatchScoringInterface to route correctly
+        sets_data: setsData,
+        // summary scores for display fallback
+        ...(isTeam
+          ? { team1_score: homeSets, team2_score: awaySets, winner_id: winnerId }
+          : { player1_score: homeSets, player2_score: awaySets, winner_id: winnerId }),
+      };
+      console.log('[BracketMatchScorer] Submitting badminton payload:', payload);
       onSubmit(payload);
       return;
     }

@@ -709,15 +709,34 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                 team2: selectedMatch.team2 ? { id: String(selectedMatch.team2.id), name: (selectedMatch.team2 as any).name || (selectedMatch.team2 as any).team?.name || String(selectedMatch.team2.id) } : undefined,
               }}
               onSubmit={async (scoreData) => {
-                await handleSaveResult(
-                  selectedMatch.id,
-                  scoreData.team1_score ?? scoreData.player1_score ?? 0,
-                  scoreData.team2_score ?? scoreData.player2_score ?? 0,
-                  scoreData.winner_id ?? ''
-                );
-                setShowMatchScorer(false);
-                setSelectedMatch(null);
-                onMatchUpdate?.();
+                if (scoreData._isBadminton && scoreData.sets_data) {
+                  // Route to the dedicated badminton endpoint — saves BadmintonSet records
+                  // and runs full BWF validation on the backend
+                  try {
+                    const { api: apiClient } = await import('@/services/api');
+                    console.log('[BracketVisualization] Routing badminton to /api/teams/matches/.../score/badminton/');
+                    await apiClient.post(
+                      `/api/teams/matches/${selectedMatch.id}/score/badminton/`,
+                      { sets_data: scoreData.sets_data }
+                    );
+                    toastService.success('Match result updated successfully!');
+                    setShowMatchScorer(false);
+                    setSelectedMatch(null);
+                    onMatchUpdate?.();
+                  } catch (err: any) {
+                    toastService.error(err?.response?.data?.error || 'Failed to save badminton score');
+                  }
+                } else {
+                  await handleSaveResult(
+                    selectedMatch.id,
+                    scoreData.team1_score ?? scoreData.player1_score ?? 0,
+                    scoreData.team2_score ?? scoreData.player2_score ?? 0,
+                    scoreData.winner_id ?? ''
+                  );
+                  setShowMatchScorer(false);
+                  setSelectedMatch(null);
+                  onMatchUpdate?.();
+                }
               }}
               onCancel={() => { setShowMatchScorer(false); setSelectedMatch(null); }}
               isLoading={false}
