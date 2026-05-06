@@ -221,6 +221,35 @@ export const BracketMatchScorer: React.FC<BracketMatchScorerProps> = ({
     }
 
     const allStats = [...homePlayerStats, ...awayPlayerStats];
+
+    if (isFutsal && isTeam) {
+      // Build the home_team_data / away_team_data structure the backend expects
+      const buildTeamData = (score: number, stats: PlayerStat[]) => ({
+        goals: score,
+        player_stats: stats.map(s => ({
+          player_id: s.player_id,
+          goals: s.goals,
+          assists: s.assists,
+          minutes_played: 40, // default — not captured in this scorer
+        })),
+        goal_details: [],
+        card_details: [],
+      });
+
+      const payload = {
+        _isFutsal: true,
+        home_team_data: buildTeamData(homeScore, homePlayerStats),
+        away_team_data: buildTeamData(awayScore, awayPlayerStats),
+        // summary for fallback display
+        team1_score: homeScore,
+        team2_score: awayScore,
+        winner_id: winnerId,
+      };
+      console.log('[BracketMatchScorer] Submitting futsal team payload:', payload);
+      onSubmit(payload);
+      return;
+    }
+
     const payload = isTeam
       ? { team1_score: homeScore, team2_score: awayScore, winner_id: winnerId, player_stats: allStats, notes }
       : { player1_score: homeScore, player2_score: awayScore, winner_id: winnerId, notes };

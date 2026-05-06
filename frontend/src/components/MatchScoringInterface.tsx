@@ -244,8 +244,18 @@ export const MatchScoringInterface: React.FC<MatchScoringInterfaceProps> = ({
                     `/api/teams/matches/${selectedMatch.id}/score/badminton/`,
                     { sets_data: payload.sets_data }
                   );
+                } else if (payload._isFutsal) {
+                  // Route to the dedicated futsal endpoint — saves FutsalScore and player stats
+                  console.log('[MatchScoringInterface] Routing futsal to /api/teams/matches/.../score/futsal/');
+                  await apiClient.post(
+                    `/api/teams/matches/${selectedMatch.id}/score/futsal/`,
+                    {
+                      home_team_data: payload.home_team_data,
+                      away_team_data: payload.away_team_data,
+                    }
+                  );
                 } else {
-                  // Generic endpoint for futsal / other sports
+                  // Generic endpoint for individual (non-team) sports
                   await apiClient.put(
                     `/api/tournaments/${selectedMatch.tournament.id}/matches/${selectedMatch.id}/result/`,
                     payload

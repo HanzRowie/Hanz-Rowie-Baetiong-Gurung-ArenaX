@@ -308,9 +308,9 @@ class MatchScorer:
             if total_goals != team_data['goals']:
                 raise InvalidScoreError("Sum of player goals must equal team goals")
 
-            # Validate goal details if provided
+            # Validate goal details only if provided (optional field)
             goal_details = team_data.get('goal_details', [])
-            if len(goal_details) != team_data['goals']:
+            if goal_details and len(goal_details) != team_data['goals']:
                 raise InvalidScoreError(f"Number of goal details ({len(goal_details)}) must match team goals ({team_data['goals']})")
             
             for goal_detail in goal_details:

@@ -726,6 +726,25 @@ export default function BracketVisualization({ tournament, onMatchUpdate, isOrga
                   } catch (err: any) {
                     toastService.error(err?.response?.data?.error || 'Failed to save badminton score');
                   }
+                } else if (scoreData._isFutsal && scoreData.home_team_data) {
+                  // Route to the dedicated futsal endpoint — saves FutsalScore and player stats
+                  try {
+                    const { api: apiClient } = await import('@/services/api');
+                    console.log('[BracketVisualization] Routing futsal to /api/teams/matches/.../score/futsal/');
+                    await apiClient.post(
+                      `/api/teams/matches/${selectedMatch.id}/score/futsal/`,
+                      {
+                        home_team_data: scoreData.home_team_data,
+                        away_team_data: scoreData.away_team_data,
+                      }
+                    );
+                    toastService.success('Match result updated successfully!');
+                    setShowMatchScorer(false);
+                    setSelectedMatch(null);
+                    onMatchUpdate?.();
+                  } catch (err: any) {
+                    toastService.error(err?.response?.data?.error || 'Failed to save futsal score');
+                  }
                 } else {
                   await handleSaveResult(
                     selectedMatch.id,
